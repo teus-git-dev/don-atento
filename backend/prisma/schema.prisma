@@ -1,0 +1,459 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SubscriptionPlan {
+  id            String   @id @default(uuid())
+  name          String
+  priceMonthly  Decimal
+  maxProperties Int
+  maxUsers      Int
+  createdAt     DateTime @default(now())
+  tenants       Tenant[]
+}
+
+model Tenant {
+  id                 String              @id @default(uuid())
+  name               String
+  nit                String
+  status             TenantStatus        @default(ACTIVE)
+  subscriptionPlanId String
+  createdAt          DateTime            @default(now())
+  inventoryTemplates InventoryTemplate[]
+  properties         Property[]
+  subscriptionPlan   SubscriptionPlan    @relation(fields: [subscriptionPlanId], references: [id])
+  tickets            Ticket[]
+  users              User[]
+  workflows          Workflow[]
+  prospects          Prospect[]
+  roles              Role[]
+  aiTone             String?
+  brandManualUrl     String?
+  communicationTemplates Json?
+  brandBrain         BrandBrain?
+  providers          Provider[]
+}
+
+model BrandBrain {
+  id              String   @id @default(uuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tone            String   @default("PROFESSIONAL")
+  policies        String?  @db.Text
+  faq             Json?    // Array of {question: string, answer: string}
+  responseRules   String?  @db.Text
+  updatedAt       DateTime @updatedAt
+}
+
+model User {
+  id                     String                    @id @default(uuid())
+  tenantId               String?
+  email                  String                    @unique
+  passwordHash           String
+  firstName              String
+  lastName               String
+  governmentId           String?
+  role                   UserRole                  @default(TENANT_USER)
+  roleId                 String?
+  phone                  String?
+  whatsappId             String?
+  isActive               Boolean                   @default(true)
+  createdAt              DateTime                  @default(now())
+  additionalContacts     String?
+  personType             String?                   // NATURAL / JURIDICA
+  isTaxDeclarant         Boolean                   @default(false)
+  regimeType             String?                   // SIMPLIFIED / COMMON
+  applyReteIva           Boolean                   @default(false)
+  applyReteFuente        Boolean                   @default(false)
+  applyReteIca           Boolean                   @default(false)
+  bankName               String?
+  accountNumber          String?
+  assignments            PropertyAgentAssignment[]
+  relations              PropertyRelation[]
+  ticketsAssigned        Ticket[]                  @relation("AssignedTickets")
+  ticketsReported        Ticket[]                  @relation("ReportedTickets")
+  interactions           TicketInteraction[]
+  tenant                 Tenant?                   @relation(fields: [tenantId], references: [id])
+  workflowStatesAssigned WorkflowState[]           @relation("RoleAssignments")
+  assignedProspects      Prospect[]                @relation("AgentProspects")
+  prospectInteractions   ProspectInteraction[]     @relation("AgentProspectInteractions")
+  roleRef                Role?                     @relation(fields: [roleId], references: [id])
+  providerId             String?
+  provider               Provider?                 @relation("ProviderTechnicians", fields: [providerId], references: [id])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  permissions Json?    // Array of allowed modules ["crm", "inmuebles", "tickets", etc.]
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  users       User[]
+}
+
+model Property {
+  id                  String                    @id @default(uuid())
+  tenantId            String
+  parentPropertyId    String?
+  propertyType        PropertyType
+  title               String
+  description         String?
+  address             String
+  city                String
+  department          String
+  country             String
+  latitude            Float?
+  longitude           Float?
+  areaM2              Float?
+  rooms               Int?
+  bathrooms           Int?
+  status              PropertyStatus            @default(AVAILABLE)
+  propertyCode        String?                   @unique
+  isVip               Boolean                   @default(false)
+  isActive            Boolean                   @default(true)
+  inventoryTemplateId String?
+  rentAmount          Decimal?
+  adminAmount         Decimal?
+  taxAmount           Decimal?
+  managementName      String?
+  managementNit       String?
+  insuranceCompany    String?
+  splatUrl            String?
+  attachments         Json?                     // Array of {id, name, type, url}
+  createdAt           DateTime                  @default(now())
+  inventoryItems      InventoryItem[]
+  parentProperty      Property?                 @relation("PropertyHierarchy", fields: [parentPropertyId], references: [id])
+  childProperties     Property[]                @relation("PropertyHierarchy")
+  tenant              Tenant                    @relation(fields: [tenantId], references: [id])
+  assignments         PropertyAgentAssignment[]
+  relations           PropertyRelation[]
+  tickets             Ticket[]
+}
+
+model PropertyRelation {
+  id                  String         @id @default(uuid())
+  propertyId          String
+  userId              String
+  relationType        RelationType
+  percentageOwnership Float?
+  startDate           DateTime
+  endDate             DateTime?
+  status              RelationStatus @default(ACTIVE)
+  contractNumber      String?
+  insuranceCompany    String?
+  contractType        String?        // RESIDENTIAL / COMMERCIAL
+  property            Property       @relation(fields: [propertyId], references: [id])
+  user                User           @relation(fields: [userId], references: [id])
+}
+
+model PropertyAgentAssignment {
+  id         String   @id @default(uuid())
+  propertyId String
+  agentId    String
+  assignedAt DateTime @default(now())
+  agent      User     @relation(fields: [agentId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id])
+}
+
+model InventoryItem {
+  id                     String              @id @default(uuid())
+  propertyId             String
+  category               InventoryCategory
+  name                   String
+  condition              InventoryCondition
+  description            String?
+  expectedLifespanMonths Int?
+  lastInspectionDate     DateTime?
+  createdAt              DateTime            @default(now())
+  evidences              InventoryEvidence[]
+  property               Property            @relation(fields: [propertyId], references: [id])
+}
+
+model InventoryTemplate {
+  id          String                  @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime                @default(now())
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id])
+  items       InventoryTemplateItem[]
+}
+
+model InventoryTemplateItem {
+  id          String            @id @default(uuid())
+  templateId  String
+  name        String
+  category    InventoryCategory
+  material    String?
+  description String?
+  template    InventoryTemplate @relation(fields: [templateId], references: [id])
+}
+
+model InventoryEvidence {
+  id                 String              @id @default(uuid())
+  inventoryItemId    String
+  evidenceType       EvidenceType
+  url                String
+  aiAnalysisStatus   AIAnalysisStatus    @default(PENDING)
+  aiComparisonResult AIComparisonResult?
+  captureDate        DateTime            @default(now())
+  inventoryItem      InventoryItem       @relation(fields: [inventoryItemId], references: [id])
+}
+
+model Workflow {
+  id          String          @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime        @default(now())
+  tickets     Ticket[]
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  states      WorkflowState[]
+}
+
+model WorkflowState {
+  id            String    @id @default(uuid())
+  workflowId    String
+  name          String
+  order         Int
+  assignedRole  UserRole?
+  slaHours      Int?
+  color         String?
+  tickets       Ticket[]
+  workflow      Workflow  @relation(fields: [workflowId], references: [id])
+  assignedUsers User[]    @relation("RoleAssignments")
+}
+
+model Ticket {
+  id                   String              @id @default(uuid())
+  tenantId             String
+  propertyId           String
+  reportedByUserId     String
+  workflowId           String?
+  currentStateId       String?
+  reportedByUserPhone  String?
+  assignedTechnicianId String?
+  priority             TicketPriority      @default(MEDIUM)
+  severity             TicketSeverity      @default(MEDIUM)
+  title                String
+  description          String
+  aiDiagnosisSummary   String?
+  estimatedCost        Decimal?
+  ownerApproved        Boolean             @default(false)
+  coordinates3d        Json?
+  payerResponsible     PayerResponsible?   @default(AGENCY)
+  createdAt            DateTime            @default(now())
+  resolvedAt           DateTime?
+  satisfactionStars    Int?                // 1-5 rating
+  satisfactionComment  String?             // Feedback comment
+  assignedProviderId   String?
+  assignedProvider     Provider?           @relation("ProviderTickets", fields: [assignedProviderId], references: [id])
+  assignedTechnician   User?               @relation("AssignedTickets", fields: [assignedTechnicianId], references: [id])
+  currentState         WorkflowState?      @relation(fields: [currentStateId], references: [id])
+  property             Property            @relation(fields: [propertyId], references: [id])
+  reportedByUser       User                @relation("ReportedTickets", fields: [reportedByUserId], references: [id])
+  tenant               Tenant              @relation(fields: [tenantId], references: [id])
+  workflow             Workflow?           @relation(fields: [workflowId], references: [id])
+  interactions         TicketInteraction[]
+}
+
+model Prospect {
+  id              String               @id @default(uuid())
+  tenantId        String
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  whatsappId      String?              @unique
+  status          ProspectStatus       @default(NEW)
+  source          ProspectSource       @default(MANUAL)
+  sentiment       SentimentAnalysis    @default(NEUTRAL)
+  assignedAgentId String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  tenant          Tenant               @relation(fields: [tenantId], references: [id])
+  assignedAgent   User?                @relation("AgentProspects", fields: [assignedAgentId], references: [id])
+  interactions    ProspectInteraction[]
+}
+
+model ProspectInteraction {
+  id         String             @id @default(uuid())
+  prospectId String
+  userId     String?
+  channel    InteractionChannel
+  message    String
+  sentiment  SentimentAnalysis?
+  createdAt  DateTime           @default(now())
+  prospect   Prospect           @relation(fields: [prospectId], references: [id])
+  user       User?              @relation("AgentProspectInteractions", fields: [userId], references: [id])
+}
+
+model TicketInteraction {
+  id                String             @id @default(uuid())
+  ticketId          String
+  userId            String?
+  channel           InteractionChannel
+  message           String
+  sentimentAnalysis SentimentAnalysis?
+  sentAt            DateTime           @default(now())
+  ticket            Ticket             @relation(fields: [ticketId], references: [id])
+  user              User?              @relation(fields: [userId], references: [id])
+}
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN_TENANT
+  AGENT
+  TECHNICIAN
+  OWNER
+  TENANT_USER
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  BUILDING
+  WAREHOUSE
+  OFFICE
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  RENTED
+  UNDER_MAINTENANCE
+  FOR_SALE
+}
+
+enum RelationType {
+  OWNER
+  TENANT
+}
+
+enum RelationStatus {
+  ACTIVE
+  HISTORIC
+}
+
+enum InventoryCategory {
+  KITCHEN
+  BATHROOM
+  LIVING_ROOM
+  BEDROOM
+}
+
+enum InventoryCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  BROKEN
+}
+
+enum EvidenceType {
+  IMAGE
+  VIDEO
+}
+
+enum AIAnalysisStatus {
+  PENDING
+  ANALYZED
+}
+
+enum AIComparisonResult {
+  SAME
+  DETERIORATED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InteractionChannel {
+  WHATSAPP
+  WEB
+  SYSTEM_AI
+}
+
+enum SentimentAnalysis {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum ProspectStatus {
+  NEW
+  QUALIFIED
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum ProspectSource {
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  MANUAL
+  WEB
+}
+
+enum TicketSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PayerResponsible {
+  OWNER
+  TENANT
+  AGENCY
+}
+
+model Provider {
+  id              String             @id @default(uuid())
+  tenantId        String
+  name            String
+  nit             String?
+  email           String?
+  phone           String?
+  address         String?
+  specialty       ProviderSpecialty  @default(GENERAL)
+  status          ProviderStatus     @default(ACTIVE)
+  rating          Float?             @default(5.0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  technicians     User[]             @relation("ProviderTechnicians")
+  assignedTickets Ticket[]           @relation("ProviderTickets")
+}
+
+enum ProviderSpecialty {
+  PLUMBING
+  ELECTRICAL
+  MASONRY
+  CARPENTRY
+  PAINTING
+  AC_HEATING
+  GENERAL
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
