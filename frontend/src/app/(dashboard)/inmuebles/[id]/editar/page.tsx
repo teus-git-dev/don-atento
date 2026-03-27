@@ -46,7 +46,7 @@ export default function EditarInmueblePage() {
   const [taxAmount, setTaxAmount] = useState<number>(0);
   const [managementName, setManagementName] = useState("");
   const [managementNit, setManagementNit] = useState("");
-  const [insuranceCompany, setInsuranceCompany] = useState("");
+
   const [splatUrl, setSplatUrl] = useState("");
   
   // Owner Info
@@ -60,8 +60,7 @@ export default function EditarInmueblePage() {
   const [applyReteIva, setApplyReteIva] = useState(false);
   const [applyReteFuente, setApplyReteFuente] = useState(false);
   const [applyReteIca, setApplyReteIca] = useState(false);
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
+
   
   // Tenant Info (for RENTED status)
   const [tenantName, setTenantName] = useState("");
@@ -73,7 +72,7 @@ export default function EditarInmueblePage() {
   const [contractEnd, setContractEnd] = useState("");
   const [tenantContractNumber, setTenantContractNumber] = useState("");
   const [tenantContractType, setTenantContractType] = useState("RESIDENTIAL");
-  const [tenantInsurance, setTenantInsurance] = useState("");
+
   
   // Specs
   const [areaM2, setAreaM2] = useState<number>(0);
@@ -124,7 +123,7 @@ export default function EditarInmueblePage() {
             setTaxAmount(Number(data.taxAmount) || 0);
             setManagementName(data.managementName || "");
             setManagementNit(data.managementNit || "");
-            setInsuranceCompany(data.insuranceCompany || "");
+
             setSplatUrl(data.splatUrl || "");
             setCoordinates({ lat: data.latitude || 4.6097, lng: data.longitude || -74.0817 });
             setSelectedTemplateId(data.inventoryTemplateId || "");
@@ -143,8 +142,7 @@ export default function EditarInmueblePage() {
                 setApplyReteIva(ownerRel.user.applyReteIva || false);
                 setApplyReteFuente(ownerRel.user.applyReteFuente || false);
                 setApplyReteIca(ownerRel.user.applyReteIca || false);
-                setBankName(ownerRel.user.bankName || "");
-                setAccountNumber(ownerRel.user.accountNumber || "");
+
                 
                 if (ownerRel.user.additionalContacts) {
                     try {
@@ -164,7 +162,7 @@ export default function EditarInmueblePage() {
                 setContractEnd(tenantRel.endDate ? new Date(tenantRel.endDate).toISOString().split('T')[0] : "");
                 setTenantContractNumber(tenantRel.contractNumber || "");
                 setTenantContractType(tenantRel.contractType || "RESIDENTIAL");
-                setTenantInsurance(tenantRel.insuranceCompany || "");
+
             }
         }
     } catch (e) {
@@ -228,7 +226,7 @@ export default function EditarInmueblePage() {
                 taxAmount: Number(taxAmount),
                 managementName,
                 managementNit,
-                insuranceCompany,
+
                 splatUrl,
                 attachments: uploadedFiles,
                 ownerInfo: {
@@ -243,8 +241,7 @@ export default function EditarInmueblePage() {
                     applyReteIva,
                     applyReteFuente,
                     applyReteIca,
-                    bankName,
-                    accountNumber
+
                 },
                 latitude: coordinates.lat,
                 longitude: coordinates.lng,
@@ -258,7 +255,7 @@ export default function EditarInmueblePage() {
                     contractEnd,
                     contractNumber: tenantContractNumber,
                     contractType: tenantContractType,
-                    insuranceCompany: tenantInsurance
+
                 } : null
             })
         });
@@ -443,21 +440,7 @@ export default function EditarInmueblePage() {
               <input type="email" placeholder="Email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none" />
               <input type="tel" placeholder="WhatsApp" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none" />
             </div>
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: "Declarante", val: isTaxDeclarant, set: setIsTaxDeclarant },
-                  { label: "ReteIVA", val: applyReteIva, set: setApplyReteIva },
-                  { label: "ReteFuente", val: applyReteFuente, set: setApplyReteFuente },
-                  { label: "ReteICA", val: applyReteIca, set: setApplyReteIca },
-                ].map((item, i) => (
-                  <label key={i} className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" checked={item.val} onChange={(e) => item.set(e.target.checked)} className="w-4 h-4 accent-[var(--color-neon-cyan)]" />
-                    <span className="text-[10px] text-gray-400 uppercase">{item.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+
           </div>
         )}
 
@@ -471,10 +454,21 @@ export default function EditarInmueblePage() {
               <input type="text" placeholder="Nombres" value={tenantName} onChange={(e) => setTenantName(e.target.value)} className="bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-white" />
               <input type="text" placeholder="Documento" value={tenantId} onChange={(e) => setTenantId(e.target.value)} className="bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-white" />
             </div>
-            <div className="grid grid-cols-2 gap-4 items-end">
-                <div className="space-y-1"><label className="text-[10px] uppercase text-gray-500">N° Contrato</label><input type="text" value={tenantContractNumber} onChange={(e) => setTenantContractNumber(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white" /></div>
-                <div className="space-y-1"><label className="text-[10px] uppercase text-gray-500">Inicio</label><input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white [color-scheme:dark]" /></div>
-            </div>
+              <div className="grid grid-cols-2 gap-4 items-end">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase flex items-center gap-1">
+                    N° Contrato <Info size={10} className="text-blue-400" />
+                  </label>
+                  <input 
+                    type="text" 
+                    value={propertyCode} 
+                    readOnly 
+                    className="w-full bg-blue-500/5 border border-blue-500/20 rounded-lg px-4 py-2 text-xs text-blue-300 outline-none cursor-not-allowed font-bold" 
+                  />
+                  <p className="text-[8px] text-blue-500/60 mt-1 uppercase">Sincronizado con ID de Inmueble</p>
+                </div>
+                <div className="space-y-1"><label className="text-[10px] uppercase text-gray-500">Inicio</label><input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg px-4 py-2 text-white [color-scheme:dark]" /></div>
+              </div>
 
             {/* AI DOC UPLOAD INDICATOR */}
             <div className="mt-8 pt-8 border-t border-white/5 space-y-4">

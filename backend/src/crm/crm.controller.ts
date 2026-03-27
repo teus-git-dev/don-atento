@@ -30,6 +30,16 @@ export class CrmController {
     return this.crmService.getSentimentMetrics(tenantId);
   }
 
+  @Post('prospects/:id/tasks')
+  createTask(@Param('id') prospectId: string, @Body() data: any) {
+    return this.crmService.createTask(prospectId, data);
+  }
+
+  @Patch('tasks/:taskId')
+  updateTask(@Param('taskId') taskId: string, @Body() data: any) {
+    return this.crmService.updateTask(taskId, data);
+  }
+
   @Post('prospects/:id/convert')
   convert(@Param('id') id: string, @Query('tenantId') tenantId: string) {
     return this.crmService.convertToClient(id, tenantId);

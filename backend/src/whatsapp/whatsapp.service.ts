@@ -32,27 +32,31 @@ export class WhatsappService {
   detectIntent(input: string): Intent {
     const normalized = input.toLowerCase();
     if (normalized.includes("hola") || normalized.includes("buenos")) return Intent.GREETING;
-    if (normalized.includes("calentador") || normalized.includes("daño") || normalized.includes("roto") || normalized.includes("reparar"))
+    if (normalized.includes("calentador") || normalized.includes("daño") || normalized.includes("roto") || normalized.includes("reparar") || normalized.includes("falla"))
       return Intent.MAINTENANCE_REQUEST;
-    if (normalized.includes("foto") || normalized.includes("video") || normalized.includes("aqui esta"))
+    if (normalized.includes("foto") || normalized.includes("video") || normalized.includes("aqui esta") || normalized.includes("evidencia"))
       return Intent.PHOTO_SUBMISSION;
-    if (normalized.includes("como va") || normalized.includes("estado") || normalized.includes("mi ticket") || normalized.includes("seguimiento"))
+    if (normalized.includes("como va") || normalized.includes("estado") || normalized.includes("mi ticket") || normalized.includes("seguimiento") || normalized.includes("status"))
       return Intent.STATUS_QUERY;
     if (/^[1-5](\s|$)/.test(normalized)) return Intent.SURVEY_RESPONSE;
-    if (normalized.includes("si") || normalized.includes("claro") || normalized.includes("perfecto")) return Intent.GOODBYE; // Modified to avoid confusion with ratings
-    if (normalized.includes("no") || normalized.includes("gracias") || normalized.includes("adios")) return Intent.GOODBYE;
+    if (normalized.includes("gracias") || normalized.includes("adios") || normalized.includes("chao")) return Intent.GOODBYE;
     return Intent.UNKNOWN;
   }
 
-  async processIncomingMessage(from: string, text: string) {
+  async processIncomingMessage(from: string, text: string, mediaUrl?: string) {
     const intent = this.detectIntent(text);
     let finalResponse = "Entendido. Soy Don Atento, estoy analizando tu solicitud.";
 
     // 1. Context Lookup: Discover User and Property by phone
     const user = await this.prisma.user.findFirst({ 
       where: { phone: from },
-      include: { tenant: true }
+      include: { tenant: true, roleRef: true }
     });
+
+    let userRole = 'DESCONOCIDO';
+    if (user) {
+        userRole = user.role;
+    }
 
     let prospect = null;
     if (!user) {
@@ -97,26 +101,44 @@ export class WhatsappService {
           title: "Falla reportada vía WhatsApp",
           description: "El inquilino reportó un daño y envió evidencia multimedia.",
           reportedByUserPhone: from,
-          priority: 'MEDIUM'
+          priority: 'MEDIUM',
+          attachments: mediaUrl ? [mediaUrl] : undefined
         });
       } catch (error) {
         console.error('[WhatsappService] Error creating enriched ticket:', error);
       }
+    } else if (mediaUrl && currentTicket) {
+      // Si ya hay un ticket, añadimos la evidencia
+      await this.ticketsService.addAttachment(currentTicket.id, mediaUrl);
     }
 
     // 3. Cognitive Response Generation
     const contextTenantId = user?.tenantId || prospect?.tenantId || 'DEFAULT_TENANT';
+    let sentiment: SentimentAnalysis = 'NEUTRAL';
     
-    const { shortResponse, sentiment, alignment } = await this.cognitiveService.generateResponse(
-      currentTicket?.id || 'NO_TICKET',
-      text,
-      from,
-      contextTenantId
-    );
-    finalResponse = shortResponse;
-
-    // Add alignment hint for users during debugging/dev
-    console.log(`[Cognitive] Brand Alignment: ${alignment.score * 100}% - ${alignment.feedback}`);
+    // Si el intent es UNKNOWN o GREETING, usamos AiChatService para una respuesta más natural
+    if (intent === Intent.UNKNOWN || intent === Intent.GREETING) {
+        const aiResponse = await this.cognitiveService.generateAiChatResponse(
+            contextTenantId,
+            user?.id || prospect?.id || 'ANONYMOUS',
+            text
+        );
+        finalResponse = aiResponse.reply;
+        // Determinamos sentimiento básico si es posible
+        sentiment = finalResponse.length > 50 ? 'POSITIVE' : 'NEUTRAL';
+    } else {
+        const cognitiveResult = await this.cognitiveService.generateResponse(
+            currentTicket?.id || 'NO_TICKET',
+            text,
+            from,
+            contextTenantId
+        );
+        finalResponse = cognitiveResult.shortResponse;
+        sentiment = cognitiveResult.sentiment;
+        
+        // Add alignment hint for users during debugging/dev
+        console.log(`[Cognitive] Brand Alignment: ${cognitiveResult.alignment.score * 100}% - ${cognitiveResult.alignment.feedback}`);
+    }
 
     // 4. Special Handling: Survey Responses
     if (intent === Intent.SURVEY_RESPONSE) {
@@ -136,7 +158,9 @@ export class WhatsappService {
     // 5. Status Query Special Handling
     if (intent === Intent.STATUS_QUERY && currentTicket) {
       const status = (currentTicket as any).currentState?.name || 'En Proceso';
-      finalResponse = `Entiendo que quieras estar al tanto. Tu ticket #${currentTicket.id.split('-')[0].toUpperCase()} se encuentra en estado: **${status}**. No te preocupes, Don Atento está monitoreando los tiempos de respuesta para asegurar tu tranquilidad.`;
+      const roleName = userRole === 'TENANT_USER' ? 'Estimado Arrendatario' : (userRole === 'OWNER' ? 'Estimado Propietario' : 'Hola');
+      
+      finalResponse = `${roleName}, entiendo que quieras estar al tanto. Tu ticket #${currentTicket.id.split('-')[0].toUpperCase()} se encuentra en estado: **${status}**. No te preocupes, Don Atento está monitoreando los tiempos de respuesta para asegurar tu tranquilidad.`;
     }
 
     // 5. Logging Interactions

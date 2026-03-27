@@ -69,7 +69,7 @@ export default function ROISimulator() {
         </div>
 
         <div className="p-4 bg-[var(--color-neon-blue)]/10 border border-[var(--color-neon-blue)]/20 rounded-xl text-center">
-          <p className="text-[10px] text-[var(--color-neon-blue)] uppercase font-bold tracking-widest mb-1">Impacto Incasa AI</p>
+          <p className="text-[10px] text-[var(--color-neon-blue)] uppercase font-bold tracking-widest mb-1">Impacto Don Atento AI</p>
           <div className="flex items-center justify-center gap-2 text-[var(--color-neon-cyan)]">
             <ShieldCheck size={16} />
             <span className="font-bold">Optimización Proactiva</span>

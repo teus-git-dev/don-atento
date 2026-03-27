@@ -35,15 +35,19 @@ export class PropertiesService {
         status: propertyFields.status,
         propertyCode: propertyFields.propertyCode,
         isVip: propertyFields.isVip || false,
-        inventoryTemplateId: propertyFields.inventoryTemplateId,
+        workflowId: propertyFields.workflowId,
         rentAmount: propertyFields.rentAmount,
         adminAmount: propertyFields.adminAmount,
         taxAmount: propertyFields.taxAmount,
         managementName: propertyFields.managementName,
         managementNit: propertyFields.managementNit,
-        insuranceCompany: propertyFields.insuranceCompany,
+        managementEmail: propertyFields.managementEmail,
+        managementPhone: propertyFields.managementPhone,
+
         splatUrl: propertyFields.splatUrl,
+        visionVideoUrl: propertyFields.visionVideoUrl,
         attachments: attachments || [],
+        visionAnalysis: propertyFields.visionAnalysis,
         latitude,
         longitude
       }
@@ -77,8 +81,7 @@ export class PropertiesService {
             applyReteIva: ownerInfo.applyReteIva || false,
             applyReteFuente: ownerInfo.applyReteFuente || false,
             applyReteIca: ownerInfo.applyReteIca || false,
-            bankName: ownerInfo.bankName,
-            accountNumber: ownerInfo.accountNumber
+
           }
         });
       }
@@ -116,7 +119,8 @@ export class PropertiesService {
             role: 'TENANT_USER',
             phone: tenantInfo.phone,
             governmentId: tenantInfo.governmentId,
-            personType: tenantInfo.personType || 'NATURAL'
+            personType: tenantInfo.personType || 'NATURAL',
+
           }
         });
       }
@@ -128,9 +132,8 @@ export class PropertiesService {
           relationType: 'TENANT',
           startDate: tenantInfo.contractStart ? new Date(tenantInfo.contractStart) : new Date(),
           endDate: tenantInfo.contractEnd ? new Date(tenantInfo.contractEnd) : null,
-          contractNumber: tenantInfo.contractNumber,
+          contractNumber: propertyFields.propertyCode, // Enforce same ID
           contractType: tenantInfo.contractType,
-          insuranceCompany: tenantInfo.insuranceCompany,
           status: 'ACTIVE'
         }
       });
@@ -140,21 +143,52 @@ export class PropertiesService {
     if (data.inventoryTemplateId) {
       const template = await this.prisma.inventoryTemplate.findUnique({
         where: { id: data.inventoryTemplateId },
-        include: { items: true }
+        include: { 
+          items: true,
+          zones: { include: { templateItems: true } }
+        }
       });
-
+  
       if (template) {
-        const inventoryItems = template.items.map((item: any) => ({
+        // Handle flat items (Legacy)
+        const legacyItems = template.items.map((item: any) => ({
           propertyId: property.id,
           name: item.name,
           category: item.category,
           condition: 'GOOD' as any,
-          description: `Generado desde plantilla: ${item.material || ''} ${item.description || ''}`
+          description: `Generado desde plantilla (flat): ${item.material || ''} ${item.description || ''}`
         }));
-
-        await this.prisma.inventoryItem.createMany({
-          data: inventoryItems
-        });
+  
+        // Handle structured zones (Advanced Constructor)
+        const structuredItems: any[] = [];
+        for (const zone of template.zones) {
+          // Find or create zone for the property based on template zone name
+          const propZone = await this.prisma.zone.create({
+            data: {
+              propertyId: property.id,
+              name: zone.name,
+              type: zone.type
+            }
+          });
+  
+          for (const item of zone.templateItems) {
+            structuredItems.push({
+              propertyId: property.id,
+              zoneId: propZone.id,
+              name: item.name,
+              category: item.category,
+              condition: 'GOOD' as any,
+              description: `Generado desde zona ${zone.name}: ${item.material || ''} ${item.description || ''}`
+            });
+          }
+        }
+  
+        if (legacyItems.length > 0) {
+          await this.prisma.inventoryItem.createMany({ data: legacyItems });
+        }
+        if (structuredItems.length > 0) {
+          await this.prisma.inventoryItem.createMany({ data: structuredItems });
+        }
       }
     }
 
@@ -225,14 +259,19 @@ export class PropertiesService {
         status: propertyFields.status,
         propertyCode: propertyFields.propertyCode,
         isVip: propertyFields.isVip,
+        workflowId: propertyFields.workflowId,
         rentAmount: propertyFields.rentAmount,
         adminAmount: propertyFields.adminAmount,
         taxAmount: propertyFields.taxAmount,
         managementName: propertyFields.managementName,
         managementNit: propertyFields.managementNit,
-        insuranceCompany: propertyFields.insuranceCompany,
+        managementEmail: propertyFields.managementEmail,
+        managementPhone: propertyFields.managementPhone,
+
         splatUrl: propertyFields.splatUrl,
+        visionVideoUrl: propertyFields.visionVideoUrl,
         attachments: attachments || [],
+        visionAnalysis: propertyFields.visionAnalysis,
         latitude: propertyFields.latitude,
         longitude: propertyFields.longitude
       }
@@ -260,8 +299,7 @@ export class PropertiesService {
             applyReteIva: ownerInfo.applyReteIva,
             applyReteFuente: ownerInfo.applyReteFuente,
             applyReteIca: ownerInfo.applyReteIca,
-            bankName: ownerInfo.bankName,
-            accountNumber: ownerInfo.accountNumber
+
           }
         });
       } else {
@@ -276,12 +314,10 @@ export class PropertiesService {
                 applyReteIva: ownerInfo.applyReteIva,
                 applyReteFuente: ownerInfo.applyReteFuente,
                 applyReteIca: ownerInfo.applyReteIca,
-                bankName: ownerInfo.bankName,
-                accountNumber: ownerInfo.accountNumber
+
             }
         });
       }
-
       // Check if relation exists
       const existingRel = await this.prisma.propertyRelation.findFirst({
         where: { propertyId: id, relationType: 'OWNER' }
@@ -305,6 +341,62 @@ export class PropertiesService {
       }
     }
 
+    // Sync contractNumber for the active tenant relation
+    if (propertyFields.propertyCode) {
+      const activeTenantRel = await this.prisma.propertyRelation.findFirst({
+        where: { propertyId: id, relationType: 'TENANT', status: 'ACTIVE' }
+      });
+
+      if (activeTenantRel) {
+        await this.prisma.propertyRelation.update({
+          where: { id: activeTenantRel.id },
+          data: { contractNumber: propertyFields.propertyCode }
+        });
+      }
+    }
+
     return property;
+  }
+
+  async transferProperty(propertyId: string, data: { newOwnerId: string, newTenantId?: string, startDate: string }) {
+    // 1. Inactivate existing ACTIVE relations
+    await this.prisma.propertyRelation.updateMany({
+      where: {
+        propertyId,
+        status: 'ACTIVE'
+      },
+      data: {
+        status: 'HISTORIC',
+        endDate: new Date(data.startDate)
+      }
+    });
+
+    // 2. Create new Owner relation
+    const newOwner = await this.prisma.propertyRelation.create({
+      data: {
+        propertyId,
+        userId: data.newOwnerId,
+        relationType: 'OWNER',
+        startDate: new Date(data.startDate),
+        status: 'ACTIVE'
+      }
+    });
+
+    // 3. Create new Tenant relation if provided
+    let newTenant;
+    if (data.newTenantId) {
+      newTenant = await this.prisma.propertyRelation.create({
+        data: {
+          propertyId,
+          userId: data.newTenantId,
+          relationType: 'TENANT',
+          startDate: new Date(data.startDate),
+          status: 'ACTIVE',
+          contractNumber: (await this.findOne(propertyId))?.propertyCode // Sync code
+        }
+      });
+    }
+
+    return { newOwner, newTenant };
   }
 }

@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Building2, Search, Plus, MoreVertical, Edit2, MapPin, Eye, Loader2, Clock, Zap } from "lucide-react";
+import { Building2, Search, Plus, MoreVertical, Edit2, MapPin, Eye, Loader2, Clock, Zap, UserPlus, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
 import { TENANT_ID, API_URL } from "@/lib/config";
+import TransferModal from "./TransferModal";
 
 export default function PropertyMasterTable() {
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProperty, setSelectedProperty] = useState<any>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   useEffect(() => {
     fetchProperties();
@@ -192,6 +195,20 @@ export default function PropertyMasterTable() {
                         >
                             <Edit2 size={16} />
                         </Link>
+                        <button 
+                          onClick={() => { setSelectedProperty(prop); setIsTransferModalOpen(true); }}
+                          className="p-2 text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors" 
+                          title="Realizar Cesión"
+                        >
+                          <UserPlus size={16} />
+                        </button>
+                        <Link 
+                          href={`/inmuebles/${prop.id}/inventario`}
+                          className="p-2 text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" 
+                          title="Inventario y Ciclo de Vida"
+                        >
+                          <ClipboardCheck size={16} />
+                        </Link>
                         <button className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                         <MoreVertical size={16} />
                         </button>
@@ -203,6 +220,13 @@ export default function PropertyMasterTable() {
             </table>
         )}
       </div>
+
+      <TransferModal 
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        property={selectedProperty}
+        onSuccess={fetchProperties}
+      />
       
       {/* Pagination Footer */}
       {!loading && filteredProperties.length > 0 && (

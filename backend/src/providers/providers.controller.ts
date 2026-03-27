@@ -26,6 +26,15 @@ export class ProvidersController {
       phone?: string;
       address?: string;
       specialty: ProviderSpecialty;
+      contactName?: string;
+      contactLastName?: string;
+      contactId?: string;
+      contactPhone?: string;
+      photoUrl?: string;
+      legalArl?: string;
+      legalSst?: boolean;
+      legalPolicyNumber?: string;
+      additionalContacts?: any[];
     }
   ) {
     return this.providersService.create(tenantId, data);

@@ -33,4 +33,14 @@ export class CognitiveController {
   async validateEvidence(@Body() body: { fileName: string; fileType: string }) {
     return this.cognitiveService.validateEvidence(body.fileName, body.fileType);
   }
+
+  @Post('extract-contract')
+  async extractContract(@Body() body: { fileName: string; fileType: string; tenantId: string }) {
+    return this.cognitiveService.extractContractData(body.fileName, body.fileType, body.tenantId);
+  }
+
+  @Post('analyze-vision')
+  async analyzeVision(@Body() body: { fileName: string; fileType: string }) {
+    return this.cognitiveService.analyzePropertyVision(body.fileName, body.fileType);
+  }
 }

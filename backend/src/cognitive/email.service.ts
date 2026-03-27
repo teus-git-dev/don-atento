@@ -35,4 +35,19 @@ export class EmailService {
     
     return this.sendEmail(to, subject, formalBody);
   }
+
+  async sendSurveyRequest(to: string, ticketTitle: string, surveyLink: string) {
+    const subject = `Encuesta de Satisfacción: ${ticketTitle}`;
+    const body = `
+      Hola,
+      
+      Tu requerimiento "${ticketTitle}" ha sido resuelto. Para nosotros es muy importante conocer tu opinión.
+      
+      Por favor, califica nuestro servicio en el siguiente enlace:
+      ${surveyLink}
+      
+      ¡Gracias por confiar en Don Atento!
+    `;
+    return this.sendEmail(to, subject, body);
+  }
 }

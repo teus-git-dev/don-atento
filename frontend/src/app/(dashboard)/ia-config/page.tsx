@@ -28,6 +28,10 @@ export default function IAConfigPage() {
   });
 
   useEffect(() => {
+    if (!currentTenant) {
+      setLoading(false);
+      return;
+    }
     const fetchBrain = async () => {
       try {
         const data = await brainService.getBrain(currentTenant.id);
@@ -47,6 +51,7 @@ export default function IAConfigPage() {
   }, [currentTenant.id]);
 
   const handleSave = async () => {
+    if (!currentTenant) return;
     setSaving(true);
     try {
       await brainService.updateBrain(currentTenant.id, brain);
@@ -76,6 +81,16 @@ export default function IAConfigPage() {
   };
 
   if (loading) return <div className="p-8 text-gray-400 font-mono">Cargando Inteligencia...</div>;
+
+  if (!currentTenant) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 space-y-4">
+        <BotMessageSquare size={64} className="text-gray-700" />
+        <h2 className="text-xl font-bold text-gray-500">No hay inmobiliaria configurada</h2>
+        <p className="text-gray-600">Por favor, selecciona o crea una inmobiliaria en la Consola de Control.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">

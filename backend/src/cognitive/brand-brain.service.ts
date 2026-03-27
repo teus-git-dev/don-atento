@@ -103,4 +103,14 @@ export class BrandBrainService {
     fs.writeFileSync(filePath, content);
     return { success: true, path: filePath };
   }
+
+  async recordContractKnowledge(tenantId: string, summary: string) {
+    const brand = await this.prisma.brandBrain.findUnique({ where: { tenantId } });
+    const currentPolicies = brand?.policies || "";
+    const newPolicies = currentPolicies + `\n[CONOCIMIENTO APRENDIDO - CONTRATO]: ${summary}\n`;
+    
+    return this.updateBrain(tenantId, {
+      policies: newPolicies.substring(0, 5000) // Keep within limits
+    });
+  }
 }

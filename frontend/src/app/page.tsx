@@ -10,9 +10,14 @@ export default function Home() {
       {/* Main Glass Container */}
       <div className="glass p-10 sm:p-16 rounded-3xl max-w-4xl w-full text-center relative z-10 flex flex-col items-center gap-8">
         
+        {/* Hero Image */}
+        <div className="relative w-48 h-48 sm:w-64 sm:h-64 drop-shadow-[0_0_30px_rgba(0,112,243,0.5)]">
+          <Image src="/hero_brain.png" alt="Cerebro IA - Don IQ" fill className="object-contain" priority />
+        </div>
+
         {/* Title */}
         <h1 className="text-5xl sm:text-7xl font-bold tracking-tight">
-          Don <span className="text-glow-cyan text-[var(--color-neon-cyan)]">Atento</span>
+          Don <span className="text-glow-cyan text-[var(--color-neon-cyan)]">IQ</span>
         </h1>
         
         <h2 className="text-xl sm:text-2xl font-medium text-gray-300">
@@ -27,28 +32,12 @@ export default function Home() {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 mt-6">
-          <Link href="/dashboard" className="bg-[var(--color-neon-blue)] text-white px-8 py-3 rounded-full font-medium hover:bg-blue-600 transition-colors shadow-[0_0_15px_rgba(0,112,243,0.4)]">
+          <Link href="/login" className="bg-[var(--color-neon-blue)] text-white px-8 py-3 rounded-full font-medium hover:bg-blue-600 transition-colors shadow-[0_0_15px_rgba(0,112,243,0.4)]">
             Ingresar al Sistema
           </Link>
-          <button className="glass px-8 py-3 rounded-full font-medium hover:bg-white/5 transition-colors">
-            Documentación
-          </button>
-        </div>
-
-        {/* System Badges */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mt-10">
-          <span className="text-xs font-mono uppercase tracking-wider text-gray-400 glass px-4 py-2 rounded-full border border-white/10">
-            PostgreSQL
-          </span>
-          <span className="text-xs font-mono uppercase tracking-wider text-gray-400 glass px-4 py-2 rounded-full border border-white/10">
-            NestJS
-          </span>
-          <span className="text-xs font-mono uppercase tracking-wider text-gray-400 glass px-4 py-2 rounded-full border border-white/10">
-            Next.js
-          </span>
-          <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-neon-cyan)] glass px-4 py-2 rounded-full border border-[var(--color-neon-cyan)]/30">
-            IA Engine
-          </span>
+          <Link href="/login-teus" className="glass px-8 py-3 rounded-full font-medium hover:bg-white/5 transition-colors">
+            Acceso Teus AI
+          </Link>
         </div>
       </div>
     </main>

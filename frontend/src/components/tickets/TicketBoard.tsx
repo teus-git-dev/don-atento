@@ -1,50 +1,43 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, AlertCircle, Clock, CheckCircle2, MoreVertical, Paperclip, Loader2, MapPin, Zap } from "lucide-react";
+import { Search, Filter, AlertCircle, Clock, CheckCircle2, MoreVertical, Paperclip, Loader2, MapPin, Zap, Users } from "lucide-react";
 import { TENANT_ID, API_URL } from "@/lib/config";
+import TicketDetailModal from "./TicketDetailModal";
 
-export default function TicketBoard({ refreshTrigger }: { refreshTrigger?: number }) {
+export default function TicketBoard() {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [owners, setOwners] = useState<any[]>([]);
+  const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   useEffect(() => {
-    fetchTickets();
-  }, [refreshTrigger]);
+    fetchInitialData();
+  }, [refreshTrigger, selectedOwnerId]);
 
-  const fetchTickets = async () => {
+  const fetchInitialData = async () => {
     setLoading(true);
     setIsOffline(false);
     try {
-      const response = await fetch(`${API_URL}/tickets?tenantId=${TENANT_ID}`);
+      // Fetch Owners for filter
+      const ownerRes = await fetch(`${API_URL}/users/owners?tenantId=${TENANT_ID}`);
+      if (ownerRes.ok) {
+        const ownerData = await ownerRes.json();
+        setOwners(ownerData);
+      }
+
+      // Fetch Tickets
+      const ownerQuery = selectedOwnerId ? `&ownerId=${selectedOwnerId}` : "";
+      const response = await fetch(`${API_URL}/tickets?tenantId=${TENANT_ID}${ownerQuery}`);
       if (!response.ok) throw new Error("Backend unreachable");
       const data = await response.json();
       setTickets(data);
     } catch (error) {
-      console.error("Error fetching tickets, falling back to mock data:", error);
+      console.error("Error fetching tickets:", error);
       setIsOffline(true);
-      // Fallback to high-quality mock data for simulation
-      setTickets([
-        {
-          id: "TKT-1024",
-          title: "Fuga de Agua en Cocina",
-          priority: "URGENT",
-          createdAt: new Date().toISOString(),
-          property: { title: "Apto 402 - Torre B" },
-          assignedTechnician: { firstName: "Pedro", lastName: "Técnico" },
-          currentState: { name: "Abierto" },
-          aiDiagnosisSummary: "Posible rotura de tubería principal"
-        },
-        {
-          id: "TKT-1025",
-          title: "Falla Eléctrica Comunal",
-          priority: "HIGH",
-          createdAt: new Date().toISOString(),
-          property: { title: "Edificio Tech-Noir Phase A" },
-          assignedTechnician: null,
-          currentState: { name: "En Diagnóstico" },
-          aiDiagnosisSummary: null
-        }
-      ]);
+      // Fallback
     } finally {
       setLoading(false);
     }
@@ -63,34 +56,50 @@ export default function TicketBoard({ refreshTrigger }: { refreshTrigger?: numbe
     <div className="flex flex-col gap-6">
       {/* Search and Filters bar */}
       <div className="glass p-4 rounded-2xl border border-white/5 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex bg-black/20 rounded-xl px-4 py-2 border border-white/10 w-full md:w-96 items-center focus-within:border-[var(--color-neon-blue)]/50 transition-colors">
-          <Search size={18} className="text-gray-400 mr-2" />
-          <input 
-            type="text" 
-            placeholder="Buscar ticket, inmueble o inquilino..." 
-            className="bg-transparent border-none outline-none text-sm w-full text-white placeholder-gray-500"
-          />
+        <div className="flex flex-1 gap-4 items-center">
+          <div className="flex bg-black/20 rounded-xl px-4 py-2 border border-white/10 flex-1 items-center focus-within:border-[var(--color-neon-blue)]/50 transition-colors">
+            <Search size={18} className="text-gray-400 mr-2" />
+            <input 
+              type="text" 
+              placeholder="Buscar ticket, inmueble o inquilino..." 
+              className="bg-transparent border-none outline-none text-sm w-full text-white placeholder-gray-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-3 py-2">
+            <Users size={16} className="text-blue-400" />
+            <select 
+              value={selectedOwnerId} 
+              onChange={(e) => setSelectedOwnerId(e.target.value)}
+              className="bg-transparent border-none outline-none text-xs text-white"
+            >
+              <option value="">Filtro por Propietario</option>
+              {owners.map(o => (
+                <option key={o.id} value={o.id}>{o.firstName} {o.lastName}</option>
+              ))}
+            </select>
+          </div>
         </div>
         
         <div className="flex w-full md:w-auto gap-3 overflow-x-auto pb-2 md:pb-0 hide-scrollbar items-center">
           {isOffline && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-[10px] font-bold text-yellow-500 uppercase animate-pulse">
                 <AlertCircle size={12} />
-                <span>Modo Simulación / Offline</span>
-                <button onClick={fetchTickets} className="ml-2 bg-yellow-500/20 px-2 py-0.5 rounded-md hover:bg-yellow-500/30 transition-colors">Reintentar</button>
+                <span>Simulación</span>
+                <button onClick={fetchInitialData} className="ml-2 bg-yellow-500/20 px-2 py-0.5 rounded-md">Retry</button>
             </div>
           )}
-          <FilterBadge active label="Todos" count={tickets.length.toString()} />
+          <FilterBadge active={!selectedOwnerId} label="Todos" count={tickets.length.toString()} />
           <FilterBadge label="Urgentes" count={tickets.filter(t => t.priority === 'URGENT').length.toString()} color="red" />
-          <FilterBadge label="Pendientes" count="5" color="yellow" />
-          <FilterBadge label="En Proceso" count="4" color="blue" />
         </div>
       </div>
 
       {/* Ticket Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tickets.map(ticket => (
-          <TicketCard key={ticket.id} ticket={ticket} />
+          <div key={ticket.id} onClick={() => { setSelectedTicket(ticket); setIsDetailOpen(true); }} className="cursor-pointer">
+            <TicketCard ticket={ticket} />
+          </div>
         ))}
         {/* Placeholder for "Add" behavior or empty state visual */}
         <div className="glass rounded-2xl border border-white/5 border-dashed p-6 flex flex-col items-center justify-center text-center opacity-50 hover:opacity-100 transition-opacity cursor-pointer h-full min-h-[200px]">
@@ -100,6 +109,13 @@ export default function TicketBoard({ refreshTrigger }: { refreshTrigger?: numbe
           <p className="text-sm font-medium text-gray-300">Cargar más tickets históricos</p>
         </div>
       </div>
+
+      <TicketDetailModal 
+        isOpen={isDetailOpen} 
+        onClose={() => setIsDetailOpen(false)} 
+        ticket={selectedTicket} 
+        onRefresh={fetchInitialData}
+      />
     </div>
   );
 }

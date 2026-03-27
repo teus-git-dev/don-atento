@@ -21,6 +21,8 @@ export class WorkflowsController {
     name: string;
     order: number;
     assignedRole?: any;
+    assignedUserId?: string;
+    aiInstructions?: string;
     slaHours?: number;
     color?: string;
   }) {

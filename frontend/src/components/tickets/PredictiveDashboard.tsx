@@ -7,13 +7,7 @@ import {
 } from 'recharts';
 import { ShieldCheck, AlertTriangle, TrendingDown, Zap } from 'lucide-react';
 
-const data = [
-  { name: 'Cimentación', score: 98 },
-  { name: 'Eléctrico', score: 75 },
-  { name: 'Hidráulico', score: 62 },
-  { name: 'Cubierta', score: 88 },
-  { name: 'Fachada', score: 92 },
-];
+const data: any[] = [];
 
 const COLORS = ['#00ffff', '#0070f3', '#ff0055', '#facc15', '#a855f7'];
 
@@ -28,7 +22,7 @@ export default function PredictiveDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={[{ value: 78 }, { value: 22 }]}
+                  data={[{ value: 0 }, { value: 100 }]}
                   innerRadius={50}
                   outerRadius={70}
                   startAngle={90}
@@ -41,7 +35,7 @@ export default function PredictiveDashboard() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold text-white">78/100</span>
+              <span className="text-3xl font-bold text-white">0/100</span>
               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Health Score</span>
             </div>
           </div>
@@ -50,7 +44,7 @@ export default function PredictiveDashboard() {
               <span>Atención Requerida</span>
           </div>
           <p className="text-[10px] text-gray-500 leading-relaxed px-4">
-              Hidráulico: fatiga detectada en 2 puntos.
+              Ninguna anomalía detectada.
           </p>
         </div>
 
@@ -59,7 +53,7 @@ export default function PredictiveDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={[{ value: 95 }, { value: 5 }]}
+                  data={[{ value: 0 }, { value: 100 }]}
                   innerRadius={50}
                   outerRadius={70}
                   startAngle={90}
@@ -72,7 +66,7 @@ export default function PredictiveDashboard() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold text-white">95%</span>
+              <span className="text-3xl font-bold text-white">0%</span>
               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Brand Clone</span>
             </div>
           </div>
@@ -81,7 +75,7 @@ export default function PredictiveDashboard() {
               <span>Tono Corporativo OK</span>
           </div>
           <p className="text-[10px] text-gray-500 leading-relaxed px-4">
-              95% de coincidencia con manuales cargados.
+              Esperando manuales corporativos.
           </p>
         </div>
       </div>
@@ -132,18 +126,14 @@ export default function PredictiveDashboard() {
             Recomendaciones Proactivas de Don Atento
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-                { label: "Plomería", action: "Revisar válvula 402B", impact: "Evita filtración", score: "89%" },
-                { label: "Mampostería", action: "Resane en muro sala", impact: "Estética / Humedad", score: "94%" },
-                { label: "Eléctrico", action: "Cambio de breaker #3", impact: "Prevención incendio", score: "100%" },
-            ].map((rec, i) => (
+            {[].map((rec, i) => (
                 <div key={i} className="p-4 rounded-2xl bg-black/40 border border-white/5 hover:border-[var(--color-neon-cyan)]/30 transition-all cursor-pointer group">
                     <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-mono text-gray-500">{rec.label}</span>
-                        <span className="text-[10px] font-bold text-[var(--color-neon-cyan)]">{rec.score} Conf.</span>
+                        <span className="text-[10px] font-mono text-gray-500">{(rec as any).label}</span>
+                        <span className="text-[10px] font-bold text-[var(--color-neon-cyan)]">{(rec as any).score} Conf.</span>
                     </div>
-                    <p className="text-sm text-white font-medium mb-1">{rec.action}</p>
-                    <p className="text-[10px] text-gray-500 italic">{rec.impact}</p>
+                    <p className="text-sm text-white font-medium mb-1">{(rec as any).action}</p>
+                    <p className="text-[10px] text-gray-500 italic">{(rec as any).impact}</p>
                 </div>
             ))}
         </div>

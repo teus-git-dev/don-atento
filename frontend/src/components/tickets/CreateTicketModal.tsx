@@ -32,6 +32,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const [aiDictamen, setAiDictamen] = useState<{verdict: string, confidence: number} | null>(null);
   const [isValidatingAI, setIsValidatingAI] = useState(false);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
 
   const fetchData = async () => {
     setLoading(true);
+    setBackendError(null);
     try {
       const [propsRes, wfRes, techRes] = await Promise.all([
         fetch(`${API_URL}/properties?tenantId=${TENANT_ID}`),
@@ -50,35 +52,51 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
       ]);
 
       const [props, wfs, techs] = await Promise.all([
-        propsRes.json(),
-        wfRes.json(),
-        techRes.json()
+        propsRes.ok ? propsRes.json().catch(() => []) : [],
+        wfRes.ok ? wfRes.json().catch(() => []) : [],
+        techRes.ok ? techRes.json().catch(() => []) : []
       ]);
 
-      setProperties(props);
-      setWorkflows(wfs);
-      setTechnicians(techs);
+      if (!Array.isArray(props) || !Array.isArray(wfs) || !Array.isArray(techs)) {
+        const msg = (props as any)?.message || (wfs as any)?.message || 'Error del servidor';
+        setBackendError(`Backend no disponible: ${msg}`);
+        setProperties([]);
+        setWorkflows([]);
+        setTechnicians([]);
+      } else {
+        setProperties(props);
+        setWorkflows(wfs);
+        setTechnicians(techs);
+      }
 
       // Fetch admin user for reportedByUserId
       const adminRes = await fetch(`${API_URL}/users/admin?tenantId=${TENANT_ID}`);
       if (adminRes.ok) {
-        const adminData = await adminRes.json();
+        const text = await adminRes.text();
+        const adminData = text ? JSON.parse(text) : null;
         if (adminData?.id) setAdminUserId(adminData.id);
+        else setAdminUserId("admin-teus-id"); // Demo fallback
+      } else {
+        setAdminUserId("admin-teus-id"); // Demo fallback
       }
     } catch (err) {
       console.error("Error fetching modal data", err);
+      setBackendError('No se pudo conectar al backend. Verifica que el servidor esté corriendo.');
+      setProperties([]);
+      setWorkflows([]);
+      setTechnicians([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredProperties = properties.filter(p => 
+  const filteredProperties = Array.isArray(properties) ? properties.filter(p => 
     p.isActive !== false && (
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.address?.toLowerCase().includes(searchQuery.toLowerCase())
     )
-  );
+  ) : [];
 
   const handleSave = async () => {
     setLoading(true);
@@ -98,13 +116,16 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
         })
       });
 
-      if (!response.ok) throw new Error("Failed to create ticket");
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to create ticket");
+      }
       
       onSuccess();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving ticket:", err);
-      alert("Error al guardar el ticket");
+      alert(`Error al guardar el ticket: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -172,6 +193,17 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
             <X size={20} />
           </button>
         </div>
+
+        {/* Backend error banner */}
+        {backendError && (
+          <div className="mx-6 mt-4 flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+            <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-red-400">Error de conexión</p>
+              <p className="text-[11px] text-red-300/80 mt-0.5">{backendError}</p>
+            </div>
+          </div>
+        )}
 
         <div className="flex h-full flex-col md:flex-row overflow-hidden">
             {/* Left Column: Form Steps */}
@@ -380,6 +412,24 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">5. Asignar Especialista</label>
                                 <div className="space-y-2">
+                                    <button
+                                        onClick={() => setSelectedTechnician(null)}
+                                        className={`w-full p-3 rounded-xl border transition-all text-left flex items-center gap-3 ${
+                                            selectedTechnician === null 
+                                            ? 'bg-amber-500/10 border-amber-500/40' 
+                                            : 'bg-white/5 border-white/5 hover:border-white/10'
+                                        }`}
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-[10px] font-bold text-amber-500">
+                                            <User size={14} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-[11px]">Sin asignar (Pendiente)</p>
+                                            <p className="text-[9px] text-gray-500 font-mono">Asignar después</p>
+                                        </div>
+                                        {selectedTechnician === null && <Check size={14} className="text-amber-500" />}
+                                    </button>
+
                                     {technicians.map(t => (
                                         <button
                                             key={t.id}
@@ -437,7 +487,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
                         <SummaryItem label="Inmueble" value={selectedProperty?.title || "---"} />
                         <SummaryItem label="Ticket" value={formData.title || "---"} />
                         <SummaryItem label="Archivos" value={selectedFiles.length > 0 ? `${selectedFiles.length} adjunto(s)` : "Ninguno"} />
-                        <SummaryItem label="Especialista" value={selectedTechnician ? `${selectedTechnician.firstName} ${selectedTechnician.lastName}` : "---"} />
+                        <SummaryItem label="Especialista" value={selectedTechnician ? `${selectedTechnician.firstName} ${selectedTechnician.lastName}` : "Sin asignar (Pendiente)"} />
                         <SummaryItem label="Flujo BPM" value={selectedWorkflow?.name || "---"} />
                     </div>
                 </div>
@@ -458,7 +508,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
             disabled={
                 loading || 
                 (step === 1 && !selectedProperty) || 
-                (step === 3 && (!formData.title || !selectedWorkflow || !selectedTechnician))
+                (step === 3 && (!formData.title || !selectedWorkflow || !adminUserId))
             }
             className="bg-[var(--color-neon-blue)] text-white px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(0,112,243,0.3)] disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
           >
@@ -467,7 +517,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
                     <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                     Sincronizando...
                 </>
-            ) : step === 3 ? 'Finalizar y Crear' : 'Siguiente Paso'}
+            ) : step === 3 ? (adminUserId ? 'Finalizar y Crear' : 'Admin no cargado...') : 'Siguiente Paso'}
           </button>
         </div>
       </div>

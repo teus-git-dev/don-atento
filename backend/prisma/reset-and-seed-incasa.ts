@@ -16,7 +16,9 @@ async function resetDatabase() {
   await prisma.prospectInteraction.deleteMany({});
   await prisma.prospect.deleteMany({});
   await prisma.ticketInteraction.deleteMany({});
+  await prisma.ticketStateLog.deleteMany({});
   await prisma.ticket.deleteMany({});
+  await prisma.provider.deleteMany({});
   await prisma.inventoryEvidence.deleteMany({});
   await prisma.inventoryItem.deleteMany({});
   await prisma.inventoryTemplateItem.deleteMany({});
@@ -49,10 +51,10 @@ async function seedGeneric() {
     },
   });
 
-  // 2. Tenant 1: Incasa NC Group
+  // 2. Tenant 1: Incasa NC Group (Aligned with Frontend)
   const tenantIncasa = await prisma.tenant.create({
     data: {
-      id: 'incasa-tenant-id',
+      id: 'teus-tenant-id',
       name: 'Incasa NC Group',
       nit: '900.987.654-3',
       status: 'ACTIVE',
@@ -119,6 +121,61 @@ async function seedGeneric() {
       isTaxDeclarant: false,
     },
   });
+  
+  // 5.1 Technicians (Incasa)
+  const tech1 = await prisma.user.create({
+    data: {
+      id: 'b1700499-cb05-4407-b4b2-6f44150f47f1', // Fixed for TechnicianView.tsx
+      tenantId: tenantIncasa.id,
+      email: 'jose.tecnico@incasa.com',
+      passwordHash: 'secure_hash',
+      firstName: 'José',
+      lastName: 'Mantenimiento',
+      role: 'TECHNICIAN',
+      phone: '+573112223344',
+      governmentId: '10000002',
+    },
+  });
+
+  const tech2 = await prisma.user.create({
+    data: {
+      id: 'c1700499-cb05-4407-b4b2-6f44150f47f2',
+      tenantId: tenantIncasa.id,
+      email: 'carlos.obras@incasa.com',
+      passwordHash: 'secure_hash',
+      firstName: 'Carlos',
+      lastName: 'Especialista',
+      role: 'TECHNICIAN',
+      phone: '+573223334455',
+      governmentId: '10000003',
+    },
+  });
+
+  // 5.2 Provider (Incasa)
+  const provider = await prisma.provider.create({
+    data: {
+      tenantId: tenantIncasa.id,
+      name: 'Servicios Técnicos Integrales',
+      nit: '900.111.222-3',
+      email: 'contacto@servitecnicos.com',
+      phone: '+573005556677',
+      address: 'Carrera 7 # 100-50, Bogotá',
+      specialty: 'GENERAL',
+      status: 'ACTIVE',
+      rating: 4.8,
+    },
+  });
+
+  // Update technicians to belong to provider
+  await prisma.user.update({
+    where: { id: tech1.id },
+    data: { providerId: provider.id },
+  });
+
+  await prisma.user.update({
+    where: { id: tech2.id },
+    data: { providerId: provider.id },
+  });
 
   // 6. Inventory Template
   const template = await prisma.inventoryTemplate.create({
@@ -130,14 +187,52 @@ async function seedGeneric() {
         create: [
           { name: 'Puerta Principal', category: 'LIVING_ROOM', material: 'Madera Maciza', description: 'Cerradura de seguridad' },
           { name: 'Ventanal Sala', category: 'LIVING_ROOM', material: 'Aluminio/Vidrio', description: 'Corredizo' },
+          { name: 'Grifería Cocina', category: 'KITCHEN', material: 'Acero Inox', description: 'Monomando' },
         ],
       },
     },
   });
 
+  // 6.1 Operational Workflows
+  const wfElectric = await prisma.workflow.create({
+    data: {
+      tenantId: tenantIncasa.id,
+      name: "Reparaciones Eléctricas",
+      description: "Flujo para fallos en redes eléctricas y equipos.",
+      states: {
+        create: [
+          { name: "Reportado", order: 0, slaHours: 2 },
+          { name: "Asignado", order: 1, slaHours: 4 },
+          { name: "En Camino", order: 2, slaHours: 2 },
+          { name: "En Reparación", order: 3, slaHours: 8 },
+          { name: "Resuelto", order: 4, slaHours: 0, color: "#22c55e" },
+        ]
+      }
+    },
+    include: { states: true }
+  });
+
+  const wfPlumbing = await (prisma.workflow.create({
+    data: {
+      tenantId: tenantIncasa.id,
+      name: "Plomería y Aguas",
+      description: "Flujo para fugas, grifería y tuberías.",
+      states: {
+        create: [
+          { name: "Reportado", order: 0, slaHours: 2 },
+          { name: "Diagnóstico", order: 1, slaHours: 4 },
+          { name: "En Reparación", order: 2, slaHours: 12 },
+          { name: "Resuelto", order: 3, slaHours: 0, color: "#22c55e" },
+        ]
+      }
+    },
+    include: { states: true }
+  }) as any);
+
   // 7. Property with New Fields
   const property = await prisma.property.create({
     data: {
+      id: 'h-401-id',
       tenantId: tenantIncasa.id,
       propertyType: 'APARTMENT',
       title: 'Apto 401 - Edificio Horizonte',
@@ -158,7 +253,7 @@ async function seedGeneric() {
       managementNit: '860.001.002-3',
       insuranceCompany: 'Sura',
       splatUrl: 'https://donatento.ai/splats/h-401.splat',
-      inventoryTemplateId: template.id,
+
     },
   });
 
@@ -174,6 +269,30 @@ async function seedGeneric() {
       contractType: 'RESIDENTIAL',
       insuranceCompany: 'El Libertador',
     },
+  });
+
+  // 8.1 Create a Ticket and assign a technician
+  const ticket = await prisma.ticket.create({
+    data: {
+      tenantId: tenantIncasa.id,
+      propertyId: property.id,
+      workflowId: wfPlumbing.id,
+      title: 'Prueba de mantenimiento',
+      description: 'Filtración detectada en techo de habitación principal',
+      priority: 'URGENT',
+      assignedTechnicianId: tech1.id,
+      currentStateId: wfPlumbing.states[0].id,
+      reportedByUserId: ownerJuridico.id,
+    },
+  });
+
+  // 8.2 Initialize State Log for the test ticket
+  await prisma.ticketStateLog.create({
+    data: {
+        ticketId: ticket.id,
+        stateId: wfPlumbing.states[0].id,
+        startedAt: new Date(),
+    }
   });
 
   // Adding Owner Relation

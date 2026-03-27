@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Settings2, ShieldCheck, BrainCircuit, Database, Webhook, Zap, UserPlus, Fingerprint, Waypoints, Clock, CheckCircle2, ChevronRight, Plus, Trash2, Layers } from "lucide-react";
 import { TENANT_ID, API_URL } from "@/lib/config";
+import RolesManager from "@/components/configuracion/RolesManager";
 
 export default function ConfiguracionPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("general");
   const [templates, setTemplates] = useState<any[]>([]);
   const [workflows, setWorkflows] = useState<any[]>([]);
@@ -15,8 +18,11 @@ export default function ConfiguracionPage() {
   
   const [newFlow, setNewFlow] = useState({ name: "", description: "" });
   const [flowStates, setFlowStates] = useState([
-    { name: "Abierto / Triaje", assignedRole: "AGENT", slaHours: 4, color: "cyan" }
+    { name: "Abierto / Triaje", assignedRole: "AGENT", assignedUserId: "", aiInstructions: "Analizar el caso y asignar prioridad.", slaHours: 4, color: "cyan" }
   ]);
+  const [isSavingFlow, setIsSavingFlow] = useState(false);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
     if (activeTab === "inventarios") {
@@ -24,6 +30,7 @@ export default function ConfiguracionPage() {
     }
     if (activeTab === "workflows") {
         fetchWorkflows();
+        fetchUsers();
     }
   }, [activeTab]);
 
@@ -39,7 +46,26 @@ export default function ConfiguracionPage() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_URL}/users?tenantId=${TENANT_ID}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (e) {
+      console.error("Fetch users error", e);
+    }
+  };
+
   const handleCreateWorkflow = async () => {
+    if (!newFlow.name) {
+      setFlowError("El nombre del flujo es obligatorio.");
+      return;
+    }
+
+    setIsSavingFlow(true);
+    setFlowError(null);
     try {
       // 1. Create Workflow
       const flowRes = await fetch(`${API_URL}/workflows`, {
@@ -66,6 +92,8 @@ export default function ConfiguracionPage() {
               name: s.name,
               order: i + 1,
               assignedRole: s.assignedRole,
+              assignedUserId: s.assignedUserId || null,
+              aiInstructions: s.aiInstructions || "",
               slaHours: s.slaHours,
               color: s.color
             })
@@ -75,10 +103,15 @@ export default function ConfiguracionPage() {
         fetchWorkflows();
         setShowWorkflowModal(false);
         setNewFlow({ name: "", description: "" });
-        setFlowStates([{ name: "Abierto / Triaje", assignedRole: "AGENT", slaHours: 4, color: "cyan" }]);
+        setFlowStates([{ name: "Abierto / Triaje", assignedRole: "AGENT", assignedUserId: "", aiInstructions: "", slaHours: 4, color: "cyan" }]);
+      } else {
+        setFlowError("Error al crear el flujo. Verifica que el tenant sea válido.");
       }
     } catch (e) {
       console.error("Workflow creation error", e);
+      setFlowError("Error de conexión con el servidor.");
+    } finally {
+      setIsSavingFlow(false);
     }
   };
 
@@ -209,7 +242,7 @@ export default function ConfiguracionPage() {
                   <h3 className="text-sm font-medium text-white">Identidad Gráfica</h3>
                   <div className="space-y-3">
                     <label className="text-sm text-gray-400 block">Nombre de la Organización</label>
-                    <input type="text" defaultValue="Incasa NC Group - Don Atento" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-[var(--color-neon-blue)] focus:outline-none text-white" />
+                    <input type="text" placeholder="Mi Organización" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm focus:border-[var(--color-neon-blue)] focus:outline-none text-white" />
                   </div>
                   <div className="flex gap-4">
                     <div className="w-16 h-16 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 border-dashed">
@@ -296,35 +329,7 @@ export default function ConfiguracionPage() {
 
           {/* Roles Settings */}
           {activeTab === "roles" && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-               <div className="border-b border-warning/10 pb-4 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-medium text-white mb-1 flex items-center gap-2">
-                      <ShieldCheck className="text-[var(--color-neon-cyan)]" size={24} />
-                      Control de Accesos (RBAC)
-                    </h2>
-                    <p className="text-sm text-gray-400">Jerarquía corporativa y permisos modulares.</p>
-                  </div>
-                  <button className="bg-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/20 transition-colors flex items-center gap-2">
-                    <UserPlus size={16} /> Agregar Rol
-                  </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <RoleCard title="Superadmin" desc="Acceso total al ecosistema, modelos IA y facturación." users={2} active={true} />
-                <RoleCard title="Agente Operativo" desc="Gestión de tickets e inmuebles, lectura de IA." users={15} active={true} highlight />
-                <RoleCard title="Propietario / Cliente" desc="Dashboard unificado de ROI y contratos." users={420} active={true} />
-              </div>
-
-              <div className="pt-4 border-t border-white/5">
-                 <h3 className="text-sm font-medium text-gray-300 mb-4">Matriz de Permisos: Agente Operativo</h3>
-                 <div className="space-y-2">
-                    <PermissionRow label="Crear Inmuebles" active={true} />
-                    <PermissionRow label="Sobrescribir decisiones de la IA" active={false} />
-                    <PermissionRow label="Ver Analítica Financiera de Portafolio" active={false} />
-                 </div>
-              </div>
-            </div>
+            <RolesManager />
           )}
 
           {/* Placeholder for others */}
@@ -347,23 +352,11 @@ export default function ConfiguracionPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {[
-                      { event: "Negociación Exitosa (WhatsApp)", entity: "Ticket #842", confidence: "94%", date: "2024-03-12 10:45", status: "success" },
-                      { event: "Cierre Automático de Inspección", entity: "Inmueble 102", confidence: "88%", date: "2024-03-12 09:30", status: "info" },
-                      { event: "Alerta de Fraude Documental", entity: "Contrato C-99", confidence: "97%", date: "2024-03-11 16:15", status: "warning" },
-                      { event: "Calculo ROI Actualizado", entity: "Tenant #001", confidence: "100%", date: "2024-03-11 14:00", status: "info" },
-                    ].map((log, i) => (
-                      <tr key={i} className="hover:bg-white/[0.02] group transition-colors">
-                        <td className="py-4 pl-2 font-medium text-gray-200">{log.event}</td>
-                        <td className="py-4 text-gray-400">{log.entity}</td>
-                        <td className="py-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] ${log.status === 'warning' ? 'bg-red-500/10 text-red-400' : 'bg-[var(--color-neon-blue)]/10 text-[var(--color-neon-blue)]'}`}>
-                            {log.confidence}
-                          </span>
-                        </td>
-                        <td className="py-4 text-gray-500 font-mono text-xs">{log.date}</td>
-                      </tr>
-                    ))}
+                    <tr>
+                      <td colSpan={4} className="py-20 text-center text-gray-500 font-mono text-xs uppercase tracking-widest opacity-50">
+                        No hay eventos de auditoría registrados
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -379,31 +372,16 @@ export default function ConfiguracionPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <IntegrationCard 
-                  name="SAP Business One" 
-                  desc="Sincronización de facturas y costos de mantenimiento." 
-                  status="connected" 
-                  icon={<Database className="text-blue-400" size={20} />}
-                />
-                <IntegrationCard 
-                  name="WhatsApp Business API" 
-                  desc="Canal oficial para orquestación de reparaciones." 
-                  status="connected" 
-                  icon={<Webhook className="text-green-500" size={20} />}
-                />
-                <IntegrationCard 
-                  name="Salesforce CRM" 
-                  desc="Gestión de leads y contratos de arrendamiento." 
-                  status="disconnected" 
-                  icon={<Zap className="text-orange-400" size={20} />}
-                />
+                <div className="col-span-full py-10 text-center text-gray-500 font-mono text-xs uppercase tracking-widest opacity-50">
+                  No hay integraciones activas configuradas
+                </div>
               </div>
 
               <div className="glass p-6 rounded-2xl border border-white/5 bg-black/40">
                 <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-widest">API Keys de Organización</h3>
                 <div className="flex items-center gap-4">
                   <div className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 font-mono text-xs text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                    sk_live_51Mv4Atento_INCASA_777_Cognitiva_2024
+                    sk_live_....
                   </div>
                   <button className="text-[var(--color-neon-cyan)] text-xs font-bold uppercase hover:underline">Revelar Key</button>
                 </div>
@@ -444,6 +422,8 @@ export default function ConfiguracionPage() {
                             order={idx + 1}
                             name={state.name}
                             role={state.assignedRole}
+                            responsible={state.responsible}
+                            aiInstructions={state.aiInstructions}
                             sla={`${state.slaHours} Horas`}
                             color={state.color || "blue"}
                             isFirst={idx === 0}
@@ -499,7 +479,7 @@ export default function ConfiguracionPage() {
                         <div className="flex items-center justify-between">
                           <h3 className="text-sm font-bold uppercase tracking-widest text-gray-300">Etapas del Proceso</h3>
                           <button 
-                            onClick={() => setFlowStates([...flowStates, { name: "", assignedRole: "TECHNICIAN", slaHours: 24, color: "blue" }])}
+                            onClick={() => setFlowStates([...flowStates, { name: "", assignedRole: "TECHNICIAN", assignedUserId: "", aiInstructions: "", slaHours: 24, color: "blue" }])}
                             className="text-[var(--color-neon-blue)] text-[10px] font-bold uppercase flex items-center gap-1 hover:underline"
                           >
                             <Plus size={12} /> Agregar Estado
@@ -508,78 +488,128 @@ export default function ConfiguracionPage() {
 
                         <div className="space-y-3">
                           {flowStates.map((state, idx) => (
-                            <div key={idx} className="flex gap-3 items-end bg-white/5 p-3 rounded-xl border border-white/5">
-                              <div className="w-8 h-8 rounded-full bg-black border border-white/10 flex items-center justify-center text-[10px] font-mono shrink-0">
-                                0{idx+1}
+                            <div key={idx} className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
+                              <div className="flex gap-3 items-end">
+                                <div className="w-8 h-8 rounded-full bg-black border border-white/10 flex items-center justify-center text-[10px] font-mono shrink-0">
+                                  0{idx+1}
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                  <label className="text-[9px] text-gray-500 uppercase font-bold">Estado</label>
+                                  <input 
+                                    type="text" 
+                                    placeholder="Nombre del estado" 
+                                    value={state.name}
+                                    onChange={(e) => {
+                                      const updated = [...flowStates];
+                                      updated[idx].name = e.target.value;
+                                      setFlowStates(updated);
+                                    }}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white" 
+                                  />
+                                </div>
+                                <div className="w-32 space-y-1">
+                                  <label className="text-[9px] text-gray-500 uppercase font-bold">Responsable</label>
+                                  <select 
+                                    value={state.assignedUserId || state.assignedRole}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const updated = [...flowStates];
+                                      const selectedUser = users.find(u => u.id === val);
+                                      if (selectedUser) {
+                                        updated[idx].assignedUserId = selectedUser.id;
+                                        updated[idx].assignedRole = selectedUser.role;
+                                      } else {
+                                        updated[idx].assignedUserId = "";
+                                        updated[idx].assignedRole = val;
+                                      }
+                                      setFlowStates(updated);
+                                    }}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white"
+                                  >
+                                    <optgroup label="Roles Generales">
+                                      <option value="AGENT">Agente</option>
+                                      <option value="TECHNICIAN">Técnico</option>
+                                      <option value="ADMIN_TENANT">Administrador</option>
+                                      <option value="OWNER">Propietario</option>
+                                    </optgroup>
+                                    {users.length > 0 && (
+                                      <optgroup label="Usuarios del Sistema">
+                                        {users.map((u: any) => (
+                                          <option key={u.id} value={u.id}>
+                                            {u.firstName} {u.lastName} ({u.role})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                  </select>
+                                </div>
+                                <div className="w-20 space-y-1">
+                                  <label className="text-[9px] text-gray-500 uppercase font-bold">SLA (Hrs)</label>
+                                  <input 
+                                    type="number" 
+                                    value={state.slaHours}
+                                    onChange={(e) => {
+                                      const updated = [...flowStates];
+                                      updated[idx].slaHours = parseInt(e.target.value);
+                                      setFlowStates(updated);
+                                    }}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white" 
+                                  />
+                                </div>
+                                <button 
+                                  onClick={() => setFlowStates(flowStates.filter((_, i) => i !== idx))}
+                                  className="p-2 mb-0.5 hover:bg-red-500/10 rounded-lg text-gray-500 hover:text-red-400"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
-                              <div className="flex-1 space-y-1">
-                                <label className="text-[9px] text-gray-500 uppercase font-bold">Estado</label>
+                              <div className="flex gap-3 items-center pl-11">
+                                <BrainCircuit size={14} className="text-[var(--color-neon-purple)] shrink-0" />
                                 <input 
                                   type="text" 
-                                  placeholder="Nombre del estado" 
-                                  value={state.name}
+                                  placeholder="¿Qué debe hacer la IA en este estado? (ej: Notificar técnico, validar fotos...)" 
+                                  value={state.aiInstructions}
                                   onChange={(e) => {
                                     const updated = [...flowStates];
-                                    updated[idx].name = e.target.value;
+                                    updated[idx].aiInstructions = e.target.value;
                                     setFlowStates(updated);
                                   }}
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white" 
+                                  className="flex-1 bg-black/20 border border-white/5 rounded-lg px-3 py-1.5 text-[10px] text-gray-400 focus:text-white outline-none italic"
                                 />
                               </div>
-                              <div className="w-32 space-y-1">
-                                <label className="text-[9px] text-gray-500 uppercase font-bold">Responsable</label>
-                                <select 
-                                  value={state.assignedRole}
-                                  onChange={(e) => {
-                                    const updated = [...flowStates];
-                                    updated[idx].assignedRole = e.target.value;
-                                    setFlowStates(updated);
-                                  }}
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white"
-                                >
-                                  <option value="AGENT">Agente</option>
-                                  <option value="TECHNICIAN">Técnico</option>
-                                  <option value="ADMIN_TENANT">Administrador</option>
-                                  <option value="OWNER">Propietario</option>
-                                </select>
-                              </div>
-                              <div className="w-20 space-y-1">
-                                <label className="text-[9px] text-gray-500 uppercase font-bold">SLA (Hrs)</label>
-                                <input 
-                                  type="number" 
-                                  value={state.slaHours}
-                                  onChange={(e) => {
-                                    const updated = [...flowStates];
-                                    updated[idx].slaHours = parseInt(e.target.value);
-                                    setFlowStates(updated);
-                                  }}
-                                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white" 
-                                />
-                              </div>
-                              <button 
-                                onClick={() => setFlowStates(flowStates.filter((_, i) => i !== idx))}
-                                className="p-2 mb-0.5 hover:bg-red-500/10 rounded-lg text-gray-500 hover:text-red-400"
-                              >
-                                <Trash2 size={16} />
-                              </button>
                             </div>
                           ))}
                         </div>
                       </div>
                     </div>
 
+                    {flowError && (
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                        <Plus size={14} className="rotate-45" /> {flowError}
+                      </div>
+                    )}
+
                     <div className="flex gap-4 pt-4">
                       <button 
+                        disabled={isSavingFlow}
                         onClick={() => setShowWorkflowModal(false)}
-                        className="flex-1 px-6 py-3 rounded-2xl border border-white/10 text-sm font-medium text-gray-400 hover:bg-white/5 transition-colors"
+                        className="flex-1 px-6 py-3 rounded-2xl border border-white/10 text-sm font-medium text-gray-400 hover:bg-white/5 transition-colors disabled:opacity-50"
                       >
                         Cancelar
                       </button>
                       <button 
+                        disabled={isSavingFlow}
                         onClick={handleCreateWorkflow}
-                        className="flex-1 px-6 py-3 rounded-2xl bg-[var(--color-neon-blue)] text-white text-sm font-medium hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(0,112,243,0.4)]"
+                        className="flex-1 px-6 py-3 rounded-2xl bg-[var(--color-neon-blue)] text-white text-sm font-medium hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(0,112,243,0.4)] flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        Crear Flujo Completo
+                        {isSavingFlow ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                            Guardando...
+                          </>
+                        ) : (
+                          "Crear Flujo Completo"
+                        )}
                       </button>
                     </div>
                   </div>
@@ -597,7 +627,7 @@ export default function ConfiguracionPage() {
                     <p className="text-sm text-gray-400">Define la estructura base para la Ficha Técnica de tus inmuebles.</p>
                 </div>
                 <button 
-                    onClick={() => setShowCreateModal(true)}
+                    onClick={() => router.push("/inventory-master?mode=template")}
                     className="bg-[var(--color-neon-blue)] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-blue-600 transition-all shadow-[0_0_15px_rgba(0,112,243,0.3)]"
                 >
                     <Plus size={16} /> CREAR PLANTILLA
@@ -611,28 +641,19 @@ export default function ConfiguracionPage() {
                       key={t.id}
                       name={t.name}
                       desc={t.description || "Sin descripción proporcionada."}
-                      items={t.items?.length || 0}
+                      items={t.zones?.reduce((acc: number, z: any) => acc + (z.templateItems?.length || 0), 0) || t.items?.length || 0}
                       lastUsed="Reciente"
-                      color={t.items?.length > 8 ? "purple" : "blue"}
+                      color={(t.zones?.reduce((acc: number, z: any) => acc + (z.templateItems?.length || 0), 0) || t.items?.length || 0) > 8 ? "purple" : "blue"}
                       onDelete={() => handleDeleteTemplate(t.id)}
+                      onEdit={() => router.push(`/inventory-master?mode=template&id=${t.id}`)}
                     />
                   ))
                 ) : (
                   <>
-                    <InventoryTemplateCard 
-                      name="Apartamento Estándar (3H 2B)"
-                      desc="Ideal para apartamentos residenciales. Incluye zonas de sala, cocina integral y habitaciones."
-                      items={7}
-                      lastUsed="Hace 2 horas"
-                      color="blue"
-                    />
-                    <InventoryTemplateCard 
-                      name="Bodega Industrial"
-                      desc="Enfocado en áreas abiertas, sistemas eléctricos de alta potencia y muelles de carga."
-                      items={5}
-                      lastUsed="Ayer"
-                      color="purple"
-                    />
+                  <div className="col-span-full py-20 bg-[#0a0a0a] rounded-3xl border border-dashed border-white/10 flex flex-col items-center gap-4 text-gray-500">
+                    <Layers className="w-12 h-12 opacity-20" />
+                    <p className="text-sm uppercase tracking-widest font-mono">No hay plantillas base creadas</p>
+                  </div>
                   </>
                 )}
               </div>
@@ -641,118 +662,12 @@ export default function ConfiguracionPage() {
                  {/* ... existing integrity panel ... */}
               </div>
 
-              {/* Create Template Modal */}
-              {showCreateModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
-                    <div className="relative glass w-full max-w-2xl rounded-3xl border border-white/10 p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-                        <div>
-                            <h2 className="text-2xl font-bold">Nueva Plantilla Maestra</h2>
-                            <p className="text-gray-400 text-sm">Define la estructura base para los inventarios de tus inmuebles.</p>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-400">Nombre de la Plantilla</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Ej: Apartamento Luxury 3H" 
-                                    value={newTemplate.name}
-                                    onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-[var(--color-neon-blue)] outline-none text-white" 
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-400">Descripción</label>
-                                <textarea 
-                                    placeholder="Describe para qué tipo de inmuebles es esta plantilla..." 
-                                    value={newTemplate.description}
-                                    onChange={(e) => setNewTemplate({...newTemplate, description: e.target.value})}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:border-[var(--color-neon-blue)] outline-none text-white h-20"
-                                />
-                            </div>
-
-                            <div className="space-y-4 border-t border-white/5 pt-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-300">Ítems del Inventario</h3>
-                                    <button 
-                                        onClick={() => setNewItems([...newItems, { name: "", category: "LIVING_ROOM", material: "" }])}
-                                        className="text-[var(--color-neon-blue)] text-[10px] font-bold uppercase flex items-center gap-1 hover:underline"
-                                    >
-                                        <Plus size={12} /> Agregar Ítem
-                                    </button>
-                                </div>
-
-                                <div className="space-y-3">
-                                    {newItems.map((item, idx) => (
-                                        <div key={idx} className="flex gap-3 items-end">
-                                            <div className="flex-1 space-y-1">
-                                                {idx === 0 && <label className="text-[10px] text-gray-500 uppercase font-bold">Concepto</label>}
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="Ej: Puerta Principal" 
-                                                    value={item.name}
-                                                    onChange={(e) => {
-                                                        const updated = [...newItems];
-                                                        updated[idx].name = e.target.value;
-                                                        setNewItems(updated);
-                                                    }}
-                                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white" 
-                                                />
-                                            </div>
-                                            <div className="w-32 space-y-1">
-                                                {idx === 0 && <label className="text-[10px] text-gray-500 uppercase font-bold">Zona</label>}
-                                                <select 
-                                                    value={item.category}
-                                                    onChange={(e) => {
-                                                        const updated = [...newItems];
-                                                        updated[idx].category = e.target.value;
-                                                        setNewItems(updated);
-                                                    }}
-                                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"
-                                                >
-                                                    <option value="LIVING_ROOM">Sala</option>
-                                                    <option value="KITCHEN">Cocina</option>
-                                                    <option value="BATHROOM">Baño</option>
-                                                    <option value="BEDROOM">Habitación</option>
-                                                </select>
-                                            </div>
-                                            <button 
-                                                onClick={() => setNewItems(newItems.filter((_, i) => i !== idx))}
-                                                className="p-2 mb-0.5 hover:bg-red-500/10 rounded-lg text-gray-500 hover:text-red-400"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-4 pt-4">
-                            <button 
-                                onClick={() => setShowCreateModal(false)}
-                                className="flex-1 px-6 py-3 rounded-2xl border border-white/10 text-sm font-medium text-gray-400 hover:bg-white/5 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button 
-                                onClick={handleCreateTemplate}
-                                className="flex-1 px-6 py-3 rounded-2xl bg-[var(--color-neon-blue)] text-white text-sm font-medium hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(0,112,243,0.4)]"
-                            >
-                                Guardar Plantilla
-                            </button>
-                        </div>
-                    </div>
-                </div>
-              )}
-            </div>
-          )}
-
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
 }
 
 // Subcomponents
@@ -832,7 +747,7 @@ function IntegrationCard({ name, desc, status, icon }: any) {
   );
 }
 
-function WorkflowStep({ order, name, role, sla, color, isFirst, isLast }: any) {
+function WorkflowStep({ order, name, role, sla, color, isFirst, isLast, responsible, aiInstructions }: any) {
     const colorClasses: any = {
         cyan: 'border-[var(--color-neon-cyan)]/30 bg-[var(--color-neon-cyan)]/5',
         blue: 'border-[var(--color-neon-blue)]/30 bg-[var(--color-neon-blue)]/5',
@@ -866,12 +781,18 @@ function WorkflowStep({ order, name, role, sla, color, isFirst, isLast }: any) {
                         <h4 className="text-sm font-bold text-white">{name}</h4>
                         <div className="flex items-center gap-3 mt-1">
                             <span className="text-[10px] text-gray-500 flex items-center gap-1 uppercase tracking-tighter">
-                                <UserPlus size={10} /> {role}
+                                <UserPlus size={10} /> {responsible ? `${responsible.firstName} ${responsible.lastName}` : role}
                             </span>
                             <span className="text-[10px] text-[var(--color-neon-cyan)] flex items-center gap-1 font-mono">
                                 <Clock size={10} /> SLA: {sla}
                             </span>
                         </div>
+                        {aiInstructions && (
+                            <div className="mt-2 flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                                <BrainCircuit size={12} className="text-[var(--color-neon-purple)] mt-0.5" />
+                                <p className="text-[9px] text-gray-400 italic leading-tight">{aiInstructions}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -884,7 +805,7 @@ function WorkflowStep({ order, name, role, sla, color, isFirst, isLast }: any) {
     );
 }
 
-function InventoryTemplateCard({ name, desc, items, lastUsed, color, onDelete }: any) {
+function InventoryTemplateCard({ name, desc, items, lastUsed, color, onDelete, onEdit }: any) {
     const colorClasses: any = {
         blue: 'border-[var(--color-neon-blue)]/30 group-hover:border-[var(--color-neon-blue)]/60',
         purple: 'border-[var(--color-neon-purple)]/30 group-hover:border-[var(--color-neon-purple)]/60',
@@ -918,11 +839,14 @@ function InventoryTemplateCard({ name, desc, items, lastUsed, color, onDelete }:
                     USADO {lastUsed.toUpperCase()}
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="text-[10px] font-bold text-[var(--color-neon-blue)] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity hover:underline">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+                      className="text-[10px] font-bold text-[var(--color-neon-blue)] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity hover:underline"
+                    >
                         Editar
                     </button>
                     <button 
-                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
                         className="p-1.5 hover:bg-red-500/10 rounded-lg text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                         <Trash2 size={14} />

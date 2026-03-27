@@ -6,13 +6,13 @@ import {
 } from 'recharts';
 
 const data = [
-  { name: 'Lun', tickets: 12, resueltos: 10, whatsapp: 8, email: 2, responseTime: 45 },
-  { name: 'Mar', tickets: 18, resueltos: 15, whatsapp: 12, email: 3, responseTime: 38 },
-  { name: 'Mie', tickets: 15, resueltos: 14, whatsapp: 10, email: 4, responseTime: 42 },
-  { name: 'Jue', tickets: 25, resueltos: 22, whatsapp: 18, email: 4, responseTime: 30 },
-  { name: 'Vie', tickets: 20, resueltos: 19, whatsapp: 15, email: 4, responseTime: 35 },
-  { name: 'Sab', tickets: 8, resueltos: 7, whatsapp: 6, email: 1, responseTime: 50 },
-  { name: 'Dom', tickets: 5, resueltos: 5, whatsapp: 4, email: 1, responseTime: 48 },
+  { name: 'Lun', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
+  { name: 'Mar', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
+  { name: 'Mie', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
+  { name: 'Jue', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
+  { name: 'Vie', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
+  { name: 'Sab', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
+  { name: 'Dom', tickets: 0, resueltos: 0, whatsapp: 0, email: 0, responseTime: 0 },
 ];
 
 export default function OperationalChart() {

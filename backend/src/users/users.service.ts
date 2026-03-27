@@ -22,8 +22,11 @@ export class UsersService {
   }
 
   async findAdmin(tenantId: string) {
-    return this.prisma.user.findFirst({
+    console.log(`[UsersService] Finding admin for tenant: ${tenantId}`);
+    const admin = await this.prisma.user.findFirst({
       where: { tenantId, role: UserRole.ADMIN_TENANT }
     });
+    if (!admin) console.warn(`[UsersService] NO ADMIN FOUND for tenant: ${tenantId}`);
+    return admin;
   }
 }

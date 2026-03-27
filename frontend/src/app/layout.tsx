@@ -14,7 +14,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Don Atento | Arquitectura Cognitiva Inmobiliaria",
+  title: "Don IQ | Arquitectura Cognitiva Inmobiliaria",
   description: "Plataforma SaaS Inmobiliaria potenciada con IA",
 };
 

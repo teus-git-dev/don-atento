@@ -84,8 +84,10 @@ export async function processMessage(input: string, history: ChatMessage[]): Pro
   let brain = { tone: 'DEFAULT', policies: '', responseRules: '' };
   
   try {
-    const data = await brainService.getBrain(currentTenant.id);
-    if (data) brain = data as any;
+    if (currentTenant) {
+      const data = await brainService.getBrain(currentTenant.id);
+      if (data) brain = data as any;
+    }
   } catch (e) {
     console.warn("Using default brain for simulation");
   }
@@ -98,7 +100,8 @@ export async function processMessage(input: string, history: ChatMessage[]): Pro
   if (brain.tone === 'FRIENDLY') responsePrefix = "¡Hola! ";
   if (brain.tone === 'SALES') responsePrefix = "¡Excelente oportunidad! ";
 
-  let responseText = `${responsePrefix}Soy Don Atento, el cerebro digital de ${currentTenant.name}. Estoy analizando su solicitud con prioridad bajo nuestras políticas vigentes.`;
+  const tenantName = currentTenant?.name || "Don IQ";
+  let responseText = `${responsePrefix}Soy Don Atento, el cerebro digital de ${tenantName}. Estoy analizando su solicitud con prioridad bajo nuestras políticas vigentes.`;
   
   const statusAssurance = brain.tone === 'PROFESSIONAL' 
     ? " Permítanos asegurarle que estamos monitoreando los tiempos de respuesta para cumplir con nuestros estándares de excelencia."
@@ -110,7 +113,7 @@ export async function processMessage(input: string, history: ChatMessage[]): Pro
           responseText = "¡Qué gusto saludarte! En Inmobiliaria Horizonte estamos listos para ayudarte a encontrar el hogar de tus sueños o resolver cualquier duda técnica con la mejor actitud. ¿Cómo podemos brillar hoy?";
       } else {
           responseText = sentiment === Sentiment.ANGRY 
-            ? `${responsePrefix}Lamento profundamente que estés pasando por este inconveniente. Como asistente de ${currentTenant.name}, mi prioridad es darle una solución inmediata.` 
+            ? `${responsePrefix}Lamento profundamente que estés pasando por este inconveniente. Como asistente de ${tenantName}, mi prioridad es darle una solución inmediata.` 
             : `${responsePrefix}Soy Don Atento, tu asistente inteligente. Es un gusto saludarte. ¿En qué puedo colaborar con tu inmueble hoy?`;
       }
       break;
@@ -134,7 +137,7 @@ export async function processMessage(input: string, history: ChatMessage[]): Pro
     case Intent.PHOTO_SUBMISSION:
       simulatedTicketId = `TK-${Math.floor(Math.random() * 9000) + 1000}`;
       currentBpmState = "ASSIGNMENT";
-      responseText = `¡Evidencia recibida! He generado el Ticket #${simulatedTicketId}. Basado en mi análisis Atento-Vision, ya tenemos un diagnóstico preliminar. El cerebro de ${currentTenant.name} ya está orquestando la solución.`;
+      responseText = `¡Evidencia recibida! He generado el Ticket #${simulatedTicketId}. Basado en mi análisis Atento-Vision, ya tenemos un diagnóstico preliminar. El cerebro de ${tenantName} ya está orquestando la solución.`;
       break;
 
     case Intent.STATUS_QUERY:

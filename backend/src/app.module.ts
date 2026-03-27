@@ -11,6 +11,8 @@ import { InventoryTemplatesModule } from './inventory-templates/inventory-templa
 import { CognitiveModule } from './cognitive/cognitive.module';
 import { CrmModule } from './crm/crm.module';
 import { ProvidersModule } from './providers/providers.module';
+import { InventoryMasterModule } from './inventory-master/inventory-master.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
   imports: [
@@ -23,7 +25,9 @@ import { ProvidersModule } from './providers/providers.module';
     InventoryTemplatesModule,
     CognitiveModule,
     CrmModule,
-    ProvidersModule
+    ProvidersModule,
+    InventoryMasterModule,
+    IntegrationsModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { tenantService } from './tenantService';
+import { API_URL, TENANT_ID } from '@/lib/config';
 
-const API_URL = 'http://localhost:3051/providers';
+const BASE_URL = `${API_URL}/providers`;
 
 export enum ProviderSpecialty {
   PLUMBING = 'PLUMBING',
@@ -11,6 +11,25 @@ export enum ProviderSpecialty {
   PAINTING = 'PAINTING',
   AC_HEATING = 'AC_HEATING',
   GENERAL = 'GENERAL'
+}
+
+export const SpecialtyLabels: Record<ProviderSpecialty, string> = {
+  [ProviderSpecialty.PLUMBING]: 'Plomería',
+  [ProviderSpecialty.ELECTRICAL]: 'Electricidad',
+  [ProviderSpecialty.MASONRY]: 'Albañilería',
+  [ProviderSpecialty.CARPENTRY]: 'Carpintería',
+  [ProviderSpecialty.PAINTING]: 'Pintura',
+  [ProviderSpecialty.AC_HEATING]: 'Aire Acondicionado',
+  [ProviderSpecialty.GENERAL]: 'General'
+};
+
+export interface ProviderAdditionalContact {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  governmentId?: string;
+  phone?: string;
+  photoUrl?: string;
 }
 
 export interface Provider {
@@ -23,39 +42,51 @@ export interface Provider {
   specialty: ProviderSpecialty;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   rating?: number;
+  
+  // New Contact Fields
+  contactName?: string;
+  contactLastName?: string;
+  contactId?: string;
+  contactPhone?: string;
+  photoUrl?: string;
+  
+  // Legal Compliance
+  legalArl?: string;
+  legalSst?: boolean;
+  legalPolicyNumber?: string;
+  
   technicians?: any[];
+  additionalContacts?: ProviderAdditionalContact[];
 }
 
 export const providersService = {
   async getProviders() {
-    const tenantId = tenantService.getCurrentTenant().id;
-    const response = await axios.get(`${API_URL}?tenantId=${tenantId}`);
+    const response = await axios.get(`${BASE_URL}?tenantId=${TENANT_ID}`);
     return response.data;
   },
 
   async getProvider(id: string) {
-    const response = await axios.get(`${API_URL}/${id}`);
+    const response = await axios.get(`${BASE_URL}/${id}`);
     return response.data;
   },
 
   async createProvider(data: Omit<Provider, 'id' | 'status'>) {
-    const tenantId = tenantService.getCurrentTenant().id;
-    const response = await axios.post(`${API_URL}?tenantId=${tenantId}`, data);
+    const response = await axios.post(`${BASE_URL}?tenantId=${TENANT_ID}`, data);
     return response.data;
   },
 
   async updateProvider(id: string, data: Partial<Provider>) {
-    const response = await axios.patch(`${API_URL}/${id}`, data);
+    const response = await axios.patch(`${BASE_URL}/${id}`, data);
     return response.data;
   },
 
   async deleteProvider(id: string) {
-    const response = await axios.delete(`${API_URL}/${id}`);
+    const response = await axios.delete(`${BASE_URL}/${id}`);
     return response.data;
   },
 
   async assignTechnician(providerId: string, userId: string) {
-    const response = await axios.post(`${API_URL}/${providerId}/assign-technician/${userId}`);
+    const response = await axios.post(`${BASE_URL}/${providerId}/assign-technician/${userId}`);
     return response.data;
   }
 };

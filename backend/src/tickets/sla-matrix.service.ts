@@ -12,6 +12,11 @@ export class SlaMatrixService {
       include: {
         property: true,
         currentState: true,
+        stateLogs: {
+            where: { completedAt: null },
+            orderBy: { startedAt: 'desc' },
+            take: 1
+        }
       },
     });
 
@@ -32,7 +37,8 @@ export class SlaMatrixService {
       slaHours = Math.ceil(slaHours * 0.75); // Reduce by 25%
     }
 
-    const dueDate = new Date(ticket.createdAt);
+    const baseDate = ticket.stateLogs?.find((l: any) => l.stateId === ticket.currentStateId && !l.completedAt)?.startedAt || ticket.createdAt;
+    const dueDate = new Date(baseDate);
     dueDate.setHours(dueDate.getHours() + slaHours);
 
     return dueDate;

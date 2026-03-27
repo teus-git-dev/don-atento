@@ -8,7 +8,12 @@ export class WorkflowsService {
   async findAllByTenant(tenantId: string) {
     return this.prisma.workflow.findMany({
       where: { tenantId },
-      include: { states: { orderBy: { order: 'asc' } } },
+      include: { 
+        states: { 
+          orderBy: { order: 'asc' },
+          include: { responsible: true }
+        } 
+      },
     });
   }
 
@@ -23,6 +28,8 @@ export class WorkflowsService {
     name: string;
     order: number;
     assignedRole?: any;
+    assignedUserId?: string;
+    aiInstructions?: string;
     slaHours?: number;
     color?: string;
   }) {

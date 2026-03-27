@@ -103,7 +103,7 @@ function AnnotationMarker({ annotation, onClick }: { annotation: Annotation, onC
     );
 }
 
-export default function SplatViewer() {
+export default function SplatViewer({ splatUrl }: { splatUrl?: string }) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

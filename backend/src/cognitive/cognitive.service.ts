@@ -3,13 +3,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SentimentAnalysis, InteractionChannel } from '@prisma/client';
 
 import { BrandBrainService } from './brand-brain.service';
+import { AiChatService } from './ai-chat.service';
 
 @Injectable()
 export class CognitiveService {
   constructor(
     private prisma: PrismaService,
-    private brandBrain: BrandBrainService
+    private brandBrain: BrandBrainService,
+    private aiChatService: AiChatService,
   ) {}
+
+  async generateAiChatResponse(tenantId: string, userId: string, message: string) {
+    return this.aiChatService.processChat(tenantId, userId, message);
+  }
 
   async generateResponse(
     ticketId: string,
@@ -141,12 +147,79 @@ export class CognitiveService {
     };
   }
 
-  async getBrandAlignmentScore(tenantId: string) {
-    const profile = await this.brandBrain.getBrandTone(tenantId);
+
+
+  async extractContractData(fileName: string, fileType: string, tenantId: string) {
+    // In a real scenario, this would call an LLM (OpenAI/Claude) or OCR service
+    // We simulate the extraction based on the file and tenantId
+    const isMock = true; // Permissive for demo
+    
+    if (!isMock) {
+        return {
+            success: false,
+            error: "Documento no reconocido como contrato válido."
+        };
+    }
+
+    // Extraction simulation
+    const extractionData = {
+        tenantName: "Juan David",
+        tenantLastName: "Pérez García",
+        tenantId: "1.020.334.556",
+        tenantPhone: "3104567890",
+        tenantEmail: "juan.perez@email.com",
+        rentAmount: 1850000,
+        adminAmount: 250000,
+        startDate: "2024-04-01",
+        endDate: "2025-03-31",
+        propertyAddress: "Calle 100 #15-30, Edificio Oasis, Apto 502",
+        agencyName: "Incasa NC Group",
+        agencyNit: "900.223.445-1"
+    };
+
+    // 2. LEARNING: Save to Brand Brain
+    const summary = `Contrato de arrendamiento residencial para ${extractionData.tenantName} ${extractionData.tenantLastName}. Canon: ${extractionData.rentAmount}. Inmueble en ${extractionData.propertyAddress}.`;
+    await this.brandBrain.recordContractKnowledge(tenantId, summary);
+
     return {
-      score: profile.alignmentScore,
-      status: profile.tone === 'CUSTOM' ? 'Cloned Brand Voice' : 'Standard Tone',
-      details: profile.description
+        success: true,
+        expertIdentity: "Abogado Experto en Legislación Inmobiliaria Colombiana (Ley 820)",
+        data: extractionData,
+        validation: await this.validateLegalCompliance(fileName)
+    };
+  }
+  async validateLegalCompliance(fileName: string) {
+    return {
+        legalPersona: "Don Atento Legal-Brain v2.0",
+        findings: [
+            "Cumple con Ley 820 de 2003 (Arrendamiento de Vivienda).",
+            "Cláusula de incremento anual (IPC) verificada.",
+            "Garantías y codeudores identificados correctamente."
+        ],
+        warnings: [
+            "Se recomienda verificar físicamente la cédula del arrendatario para mayor seguridad."
+        ]
+    };
+  }
+
+  async analyzePropertyVision(fileName: string, fileType: string) {
+    // Simulated Vision AI analysis for onboarding (Gaussian Splat + Repairs)
+    // Artificial delay to show AI processing in UI
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    return {
+        success: true,
+        splatUrl: `https://poly.cam/capture/${Math.random().toString(36).substring(7)}`,
+        analysis: {
+            repairs: [
+                { id: 1, area: "Sala", issue: "Fisura leve en techo (requiere resane)", severity: "LOW" },
+                { id: 2, area: "Baño Principal", issue: "Filtración en grifería de ducha", severity: "MEDIUM" },
+                { id: 3, area: "Balcón", issue: "Oxidación en barandal metálico", severity: "LOW" }
+            ],
+            overallHealth: 88,
+            expertIdentity: "Don Atento Vision-Engine v2.1",
+            recommendation: "Se recomienda corregir la filtración en el baño antes de la entrega para evitar daños mayores en el cielo raso del piso inferior."
+        }
     };
   }
 }

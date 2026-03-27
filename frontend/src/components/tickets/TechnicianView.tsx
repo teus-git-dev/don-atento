@@ -131,7 +131,7 @@ export default function TechnicianView() {
       <div className="mt-4 glass p-4 rounded-2xl border border-white/5 bg-black/40">
         <div className="flex gap-4">
             <div className="flex-1 text-center">
-                <div className="text-xl font-bold text-white">4</div>
+                <div className="text-xl font-bold text-white">0</div>
                 <div className="text-[8px] uppercase text-gray-500 font-bold">Resueltos</div>
             </div>
             <div className="w-px bg-white/5"></div>
@@ -141,7 +141,7 @@ export default function TechnicianView() {
             </div>
             <div className="w-px bg-white/5"></div>
             <div className="flex-1 text-center">
-                <div className="text-xl font-bold text-green-500">100%</div>
+                <div className="text-xl font-bold text-green-500">0%</div>
                 <div className="text-[8px] uppercase text-gray-500 font-bold">Efectividad</div>
             </div>
         </div>

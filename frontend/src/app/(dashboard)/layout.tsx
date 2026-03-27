@@ -4,6 +4,7 @@ import { useState } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import CreateTicketModal from "@/components/tickets/CreateTicketModal";
+import AiChatWidget from "@/components/chat/AiChatWidget";
 
 export default function DashboardLayout({
   children,
@@ -36,6 +37,7 @@ export default function DashboardLayout({
           // Optional: trigger a global refresh or toast
         }}
       />
+      <AiChatWidget />
     </div>
   );
 }

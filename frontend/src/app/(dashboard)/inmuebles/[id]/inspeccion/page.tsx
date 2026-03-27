@@ -10,23 +10,31 @@ import { API_URL } from "@/lib/config";
 
 export default function InspeccionDetallePage() {
   const { id } = useParams();
+  const [property, setProperty] = useState<any>(null);
   const [cognitiveData, setCognitiveData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchCognitiveData = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`${API_URL}/cognitive/property/${id}/summary`);
-        const data = await res.json();
-        setCognitiveData(data);
+        setLoading(true);
+        // 1. Fetch cognitive summary (interactions)
+        const summaryRes = await fetch(`${API_URL}/cognitive/property/${id}/summary`);
+        const summary = await summaryRes.json();
+        setCognitiveData(summary);
+
+        // 2. Fetch real property details (visionAnalysis, splatUrl, etc)
+        const propRes = await fetch(`${API_URL}/properties/${id}`);
+        const prop = await propRes.json();
+        setProperty(prop);
       } catch (error) {
-        console.error("Error fetching cognitive data:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    if (id) fetchCognitiveData();
+    if (id) fetchData();
   }, [id]);
 
   const getHealthColor = (health: string) => {
@@ -47,7 +55,9 @@ export default function InspeccionDetallePage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Expediente de Inspección Cognitiva</h1>
-            <p className="text-gray-400 text-sm">Inmueble: Edificio Horizonte - Apto 402 • ID: INSP-2024-081</p>
+            <p className="text-gray-400 text-sm">
+              Inmueble: {property?.title || "Cargando..."} • {property?.address} • ID: {property?.propertyCode || "..."}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -72,7 +82,7 @@ export default function InspeccionDetallePage() {
                 <div className="text-[10px] text-gray-500">Nube de puntos: 1.2M Gaussians</div>
             </div>
             <div className="flex-1 min-h-0">
-                <SplatViewer />
+                <SplatViewer splatUrl={property?.splatUrl} />
             </div>
         </div>
 
@@ -83,7 +93,10 @@ export default function InspeccionDetallePage() {
                     <Map size={14} /> Análisis de Evidencia de Campo
                 </div>
                 <div className="h-48">
-                    <VideoInspection />
+                    <VideoInspection 
+                        videoUrl={property?.visionVideoUrl} 
+                        visionAnalysis={property?.visionAnalysis}
+                    />
                 </div>
             </div>
 

@@ -31,4 +31,7 @@ export class CreateTicketDto {
 
   @ApiPropertyOptional({ example: 'uuid-tech-321' })
   assignedTechnicianId?: string;
+
+  @ApiPropertyOptional({ example: ['https://example.com/photo.jpg'] })
+  attachments?: any;
 }

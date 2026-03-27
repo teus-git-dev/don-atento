@@ -70,4 +70,10 @@ export class PropertiesController {
   async update(@Param('id') id: string, @Body() data: UpdatePropertyDto) {
     return this.propertiesService.update(id, data);
   }
+
+  @Post(':id/transfer')
+  @ApiOperation({ summary: 'Realizar cesión (transferencia) de titularidad o arrendatario' })
+  async transfer(@Param('id') id: string, @Body() data: { newOwnerId: string, newTenantId?: string, startDate: string }) {
+    return this.propertiesService.transferProperty(id, data);
+  }
 }

@@ -1,10 +1,25 @@
 "use client";
 
-import React from 'react';
 import TenantManager from '@/components/admin/TenantManager';
 import { ShieldCheck, Users, Zap, DollarSign, TrendingUp, BarChart3 } from 'lucide-react';
+import { tenantService, PLAN_PRICES } from '@/services/tenantService';
+import { useState, useEffect } from "react";
 
 export default function SuperAdminPage() {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const tenants = mounted ? tenantService.getTenants() : [];
+  const tenantCount = tenants.length;
+  
+  const mrr = tenants.reduce((acc, t) => {
+    const price = t.plan === 'pro' ? PLAN_PRICES.pro : (t.plan === 'basic' ? PLAN_PRICES.basic : PLAN_PRICES.enterprise);
+    return acc + (t.status === 'active' ? price : 0);
+  }, 0);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-1000">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -19,30 +34,18 @@ export default function SuperAdminPage() {
       </div>
 
       {/* Global Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <GlobalKpiCard 
           title="Inmobiliarias"
-          value="42"
-          subValue="+3 este mes"
+          value={tenantCount.toString()}
+          subValue={`${tenants.filter(t => t.status === 'active').length} Activas`}
           icon={<Users size={24} className="text-[var(--color-neon-cyan)]" />}
         />
         <GlobalKpiCard 
-          title="Tickets Resueltos IA"
-          value="18.4k"
-          subValue="Ahorro: $420k"
-          icon={<Zap size={24} className="text-yellow-400" />}
-        />
-        <GlobalKpiCard 
           title="MRR Teus"
-          value="$125,400"
+          value={`$${mrr.toLocaleString()}`}
           subValue="Facturación Proyectada"
           icon={<DollarSign size={24} className="text-green-400" />}
-        />
-        <GlobalKpiCard 
-          title="Salud Global"
-          value="98.2%"
-          subValue="SLA Infraestructura"
-          icon={<TrendingUp size={24} className="text-[var(--color-neon-blue)]" />}
         />
       </div>
 
@@ -60,7 +63,7 @@ export default function SuperAdminPage() {
           <div className="lg:col-span-2 glass p-6 rounded-3xl border border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent">
             <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Carga de Infraestructura IA</h4>
             <div className="h-48 flex items-end gap-2 px-2">
-                {[45, 60, 40, 80, 55, 90, 70, 45, 30, 85, 95, 60].map((h, i) => (
+                {[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5].map((h, i) => (
                     <div key={i} className="flex-1 bg-white/5 rounded-t-lg relative group transition-all hover:bg-[var(--color-neon-blue)]/40" style={{ height: `${h}%` }}>
                         <div className="absolute inset-0 bg-[var(--color-neon-blue)] opacity-0 group-hover:opacity-20 transition-opacity"></div>
                     </div>

@@ -48,8 +48,38 @@ export class CrmService {
   async findAll(tenantId: string) {
     return this.prisma.prospect.findMany({
       where: { tenantId },
-      include: { interactions: true },
+      include: { 
+        interactions: { orderBy: { createdAt: 'desc' }, take: 5 },
+        tasks: { orderBy: { createdAt: 'desc' } },
+        assignedAgent: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      },
       orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async createTask(prospectId: string, data: { title: string; description?: string; dueDate?: Date }) {
+    return this.prisma.prospectTask.create({
+      data: {
+        prospectId,
+        title: data.title,
+        description: data.description,
+        dueDate: data.dueDate,
+      },
+    });
+  }
+
+  async updateTask(taskId: string, data: { title?: string; description?: string; dueDate?: Date; isCompleted?: boolean }) {
+    return this.prisma.prospectTask.update({
+      where: { id: taskId },
+      data,
+    });
+  }
+
+  async deleteTask(taskId: string) {
+    return this.prisma.prospectTask.delete({
+      where: { id: taskId },
     });
   }
 

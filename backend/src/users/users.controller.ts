@@ -11,6 +11,11 @@ export class UsersController {
     return this.usersService.findByRole(UserRole.TECHNICIAN, tenantId);
   }
 
+  @Get('owners')
+  async findOwners(@Query('tenantId') tenantId?: string) {
+    return this.usersService.findByRole(UserRole.OWNER, tenantId);
+  }
+
   @Get('admin')
   async findAdmin(@Query('tenantId') tenantId: string) {
     return this.usersService.findAdmin(tenantId);

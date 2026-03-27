@@ -3,10 +3,16 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
 
+import { join } from 'path';
+import * as express from 'express';
+
 async function bootstrap() {
   dotenv.config();
   const app = await NestFactory.create(AppModule);
   app.enableCors();
+  
+  // Serve static files from public/uploads
+  app.use('/uploads', express.static(join(process.cwd(), 'public/uploads')));
 
   const config = new DocumentBuilder()
     .setTitle('Don Atento Connect API')

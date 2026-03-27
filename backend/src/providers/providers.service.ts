@@ -17,8 +17,10 @@ export class ProvidersService {
             lastName: true,
             email: true,
             phone: true,
+            photoUrl: true,
           },
         },
+        additionalContacts: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -29,6 +31,7 @@ export class ProvidersService {
       where: { id },
       include: {
         technicians: true,
+        additionalContacts: true,
       },
     });
   }
@@ -40,12 +43,26 @@ export class ProvidersService {
     phone?: string;
     address?: string;
     specialty: ProviderSpecialty;
+    contactName?: string;
+    contactLastName?: string;
+    contactId?: string;
+    contactPhone?: string;
+    photoUrl?: string;
+    legalArl?: string;
+    legalSst?: boolean;
+    legalPolicyNumber?: string;
+    additionalContacts?: any[];
   }) {
+    const { additionalContacts, ...providerData } = data;
     return this.prisma.provider.create({
       data: {
-        ...data,
+        ...providerData,
         tenantId,
+        additionalContacts: additionalContacts ? {
+          create: additionalContacts
+        } : undefined
       },
+      include: { additionalContacts: true }
     });
   }
 

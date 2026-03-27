@@ -26,7 +26,7 @@ export class AssetRecognitionService {
       {
         name: 'Estufa de Inducción',
         category: InventoryCategory.KITCHEN,
-        condition: InventoryCondition.NEW,
+        condition: InventoryCondition.EXCELLENT,
         description: 'Cubierta vitrocerámica de 4 puestos.',
         expectedLifespanMonths: 180
       }

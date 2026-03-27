@@ -22,26 +22,26 @@ export default function CentroMando() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           label="Prospectos Activos" 
-          value="156" 
-          trend="+12%" 
+          value="0" 
+          trend="Sin datos" 
           icon={<Users className="text-[var(--color-neon-blue)]" />}
         />
         <StatCard 
           label="Salud del Inventario" 
-          value="94.2%" 
-          trend="Estable" 
+          value="0%" 
+          trend="N/A" 
           icon={<Home className="text-[var(--color-neon-cyan)]" />}
         />
         <StatCard 
           label="Tickets Resueltos Hoy" 
-          value="24" 
-          trend="+5" 
+          value="0" 
+          trend="0" 
           icon={<TicketCheck className="text-[var(--color-neon-purple)]" />}
         />
         <StatCard 
           label="Sentiment Score" 
-          value="8.8" 
-          trend="Excelente" 
+          value="0.0" 
+          trend="Sin feedback" 
           icon={<HeartPulse className="text-green-400" />}
         />
       </div>
@@ -89,21 +89,9 @@ export default function CentroMando() {
             </h3>
           </div>
           <div className="space-y-4">
-            <InventoryAlert 
-              property="Apt 402 - Edificio Sky" 
-              issue="Humedad detectada por IA en fotos" 
-              severity="medium"
-            />
-            <InventoryAlert 
-              property="Local 12 - Mall Sur" 
-              issue="Reemplazo de luminarias programado" 
-              severity="low"
-            />
-            <InventoryAlert 
-              property="Casa Campestre 09" 
-              issue="Fallo estructural critico reportado" 
-              severity="high"
-            />
+            <p className="text-gray-500 text-xs text-center py-10 font-mono uppercase tracking-widest opacity-50">
+              No hay alertas de integridad activas
+            </p>
           </div>
         </section>
 
@@ -114,8 +102,8 @@ export default function CentroMando() {
               <HeartPulse size={16} className="text-green-400" />
               Pulso del Cliente (Feedback)
             </h3>
-            <div className="flex items-center gap-1 text-[10px] text-green-400 font-mono">
-              <Star size={10} fill="currentColor" /> 4.8 AVG
+            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
+              <Star size={10} fill="currentColor" /> 0.0 AVG
             </div>
           </div>
           
@@ -123,7 +111,7 @@ export default function CentroMando() {
             {/* Satisfaction Gauge-like display */}
             <div className="flex flex-col items-center justify-center p-4 relative h-[180px]">
               <div className="text-center relative z-10">
-                <div className="text-4xl font-bold text-white mb-1">94%</div>
+                <div className="text-4xl font-bold text-white mb-1">0%</div>
                 <div className="text-[10px] text-gray-500 font-mono">SATISFACCIÓN</div>
               </div>
               {/* Dynamic Pulse based on score */}
@@ -134,22 +122,8 @@ export default function CentroMando() {
             </div>
 
             {/* Recent Comments */}
-            <div className="space-y-3 max-h-[180px] overflow-y-auto pr-2 scrollbar-hide">
-              <CommentItem 
-                user="A. Restrepo" 
-                comment="El técnico fue muy puntual y resolvió la fuga rápido. ¡Excelente seguimiento!" 
-                stars={5}
-              />
-              <CommentItem 
-                user="M. Giraldo" 
-                comment="Buen servicio, aunque tardaron un poco en confirmar la cita." 
-                stars={4}
-              />
-              <CommentItem 
-                user="P. Velez" 
-                comment="Me encanta que me avisen por WhatsApp de cada paso." 
-                stars={5}
-              />
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 font-mono text-[10px] uppercase tracking-widest opacity-50">
+              Sin comentarios recientes
             </div>
           </div>
         </section>
