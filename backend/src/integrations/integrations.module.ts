@@ -7,6 +7,6 @@ import { PropertiesModule } from '../properties/properties.module';
   imports: [PropertiesModule],
   controllers: [IntegrationsController],
   providers: [IntegrationsService],
-  exports: [IntegrationsService]
+  exports: [IntegrationsService],
 })
 export class IntegrationsModule {}

@@ -1,23 +1,40 @@
-import { useState, useEffect } from "react";
-import { Search, Filter, AlertCircle, Clock, CheckCircle2, MoreVertical, Paperclip, Loader2, MapPin, Zap, Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, Filter, AlertCircle, Clock, MoreVertical, Loader2, MapPin, Zap, Users } from "lucide-react";
 import { TENANT_ID, API_URL } from "@/lib/config";
 import TicketDetailModal from "./TicketDetailModal";
 
-export default function TicketBoard() {
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [owners, setOwners] = useState<any[]>([]);
+interface ITicket {
+  id: string;
+  title: string;
+  priority: string;
+  severity: string;
+  createdAt: string;
+  dueDate?: string;
+  property?: { title: string };
+  currentState?: { name: string; slaHours?: number };
+  currentStateId?: string;
+  interactions: { sentimentAnalysis?: string }[];
+  assignedTechnician?: { firstName: string; lastName: string };
+  aiDiagnosisSummary?: string;
+}
+
+interface IOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export default function TicketBoard({ refreshTrigger: externalRefresh = 0 }: { refreshTrigger?: number }) {
+  const [internalRefreshTrigger, setInternalRefreshTrigger] = useState(0);
+  const [tickets, setTickets] = useState<ITicket[]>([]);
+  const [owners, setOwners] = useState<IOwner[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [selectedTicket, setSelectedTicket] = useState<ITicket | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  useEffect(() => {
-    fetchInitialData();
-  }, [refreshTrigger, selectedOwnerId]);
-
-  const fetchInitialData = async () => {
+  const fetchInitialData = useCallback(async () => {
     setLoading(true);
     setIsOffline(false);
     try {
@@ -41,7 +58,11 @@ export default function TicketBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedOwnerId]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [internalRefreshTrigger, externalRefresh, fetchInitialData]);
 
   if (loading) {
     return (
@@ -114,7 +135,7 @@ export default function TicketBoard() {
         isOpen={isDetailOpen} 
         onClose={() => setIsDetailOpen(false)} 
         ticket={selectedTicket} 
-        onRefresh={fetchInitialData}
+        onRefresh={() => setInternalRefreshTrigger(prev => prev + 1)}
       />
     </div>
   );
@@ -148,7 +169,7 @@ function FilterBadge({ label, count, active, color }: { label: string, count: st
   );
 }
 
-function SentimentBadge({ interactions }: { interactions: any[] }) {
+function SentimentBadge({ interactions }: { interactions: ITicket['interactions'] }) {
   if (!interactions?.length) return null;
   
   const latest = interactions[0].sentimentAnalysis;
@@ -193,7 +214,7 @@ function SLABadge({ createdAt, slaHours }: { createdAt: string, slaHours?: numbe
   );
 }
 
-function TicketCard({ ticket }: { ticket: any }) {
+function TicketCard({ ticket }: { ticket: ITicket }) {
   const isUrgent = ticket.priority === 'URGENT';
   const isInProgress = ticket.currentState?.name?.toLowerCase().includes('reparación') || ticket.currentStateId !== null;
   const statusName = ticket.currentState?.name || "Pendiente";

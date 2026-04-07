@@ -12,8 +12,8 @@ import {
   ShieldCheck,
   Users,
   Key,
-  Gavel,
-  Scan
+  BookOpen,
+  FileText
 } from "lucide-react";
 
 import { authService } from "@/services/authService";
@@ -67,7 +67,6 @@ export default function Sidebar() {
         {canSeeInmuebles && (
           <>
             <SidebarLink href="/inmuebles" icon={<Building2 size={20} />} label="Maestro Inmuebles" active={pathname === '/inmuebles'} />
-            <SidebarLink href="/legal" icon={<Gavel size={20} />} label="Centro de Cierres" active={pathname === '/legal'} />
           </>
         )}
 
@@ -75,7 +74,6 @@ export default function Sidebar() {
           <>
             <SidebarLink href="/tickets" icon={<Ticket size={20} />} label="Gestión Tickets" active={pathname === '/tickets'} />
             <SidebarLink href="/providers" icon={<Users size={20} />} label="Proveedores" active={pathname === '/providers'} />
-            <SidebarLink href="/inspeccion-ia" icon={<Scan size={20} />} label="Visión IA (AR)" active={pathname === '/inspeccion-ia'} />
           </>
         )}
 
@@ -105,6 +103,18 @@ export default function Sidebar() {
               label="Cerebro de Marca" 
               active={pathname === '/ia-config'}
               special
+            />
+            <SidebarLink 
+              href="/contabilidad" 
+              icon={<BookOpen size={20} />} 
+              label="Contabilidad" 
+              active={pathname === '/contabilidad'}
+            />
+            <SidebarLink 
+              href="/facturacion" 
+              icon={<FileText size={20} className="text-[var(--color-neon-cyan)]" />} 
+              label="Facturación Electrónica" 
+              active={pathname === '/facturacion'}
             />
             <SidebarLink 
               href="/configuracion" 

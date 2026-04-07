@@ -50,7 +50,9 @@ export class BulkImportService {
           });
           if (existing) {
             results.skipped++;
-            results.errors.push(`Property with code ${mappedProperty.propertyCode} already exists.`);
+            results.errors.push(
+              `Property with code ${mappedProperty.propertyCode} already exists.`,
+            );
             continue;
           }
         }
@@ -69,13 +71,25 @@ export class BulkImportService {
   private smartMap(externalItem: any): MappedProperty {
     // Basic heuristics for mapping (Plug & Play vision)
     return {
-      propertyCode: externalItem.ID || externalItem.codigo || externalItem['Cod_Propiedad'] || externalItem.propertyCode,
-      title: externalItem.Nombre || externalItem.Titulo || externalItem.title || 'Inmueble Importado',
-      address: externalItem.Direccion || externalItem.address || 'Calle Falsa 123',
+      propertyCode:
+        externalItem.ID ||
+        externalItem.codigo ||
+        externalItem['Cod_Propiedad'] ||
+        externalItem.propertyCode,
+      title:
+        externalItem.Nombre ||
+        externalItem.Titulo ||
+        externalItem.title ||
+        'Inmueble Importado',
+      address:
+        externalItem.Direccion || externalItem.address || 'Calle Falsa 123',
       city: externalItem.Ciudad || externalItem.city || 'Bogotá',
-      department: externalItem.Departamento || externalItem.department || 'Cundinamarca',
+      department:
+        externalItem.Departamento || externalItem.department || 'Cundinamarca',
       country: externalItem.Pais || externalItem.country || 'Colombia',
-      propertyType: this.mapType(externalItem.Tipo || externalItem.propertyType),
+      propertyType: this.mapType(
+        externalItem.Tipo || externalItem.propertyType,
+      ),
       areaM2: parseFloat(externalItem.Area || externalItem.areaM2) || 0,
       rooms: parseInt(externalItem.Habitaciones || externalItem.rooms) || 0,
       bathrooms: parseInt(externalItem.Baños || externalItem.bathrooms) || 0,

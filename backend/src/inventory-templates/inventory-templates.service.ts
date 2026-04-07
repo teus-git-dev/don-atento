@@ -74,9 +74,11 @@ export class InventoryTemplatesService {
   }
 
   async toggleStatus(id: string) {
-    const template = await this.prisma.inventoryTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.inventoryTemplate.findUnique({
+      where: { id },
+    });
     if (!template) throw new Error('Template not found');
-    
+
     return this.prisma.inventoryTemplate.update({
       where: { id },
       data: {
@@ -87,13 +89,15 @@ export class InventoryTemplatesService {
 
   async remove(id: string) {
     // Delete hierarchical data
-    const zones = await this.prisma.zone.findMany({ where: { templateId: id } });
-    const zoneIds = zones.map(z => z.id);
+    const zones = await this.prisma.zone.findMany({
+      where: { templateId: id },
+    });
+    const zoneIds = zones.map((z) => z.id);
 
     await this.prisma.inventoryTemplateItem.deleteMany({
       where: { OR: [{ templateId: id }, { zoneId: { in: zoneIds } }] },
     });
-    
+
     await this.prisma.zone.deleteMany({
       where: { templateId: id },
     });

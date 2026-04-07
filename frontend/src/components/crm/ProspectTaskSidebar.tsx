@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, CheckCircle2, Circle, Calendar, Plus, Trash2, Loader2, MessageSquare } from "lucide-react";
+import { X, CheckCircle2, Circle, Calendar, Plus, Trash2, Loader2, MessageSquare, Building2, FileText, ArrowRight } from "lucide-react";
 import { API_URL } from "@/lib/config";
+import ContractFormModal from "./ContractFormModal";
 
 interface Task {
   id: string;
@@ -22,6 +23,7 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
   const [loading, setLoading] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
+  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +97,35 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
           </div>
         </div>
 
+        {/* Interested Properties Section */}
+        {prospect.interestedProperties && prospect.interestedProperties.length > 0 && (
+          <div className="space-y-4 animate-in fade-in duration-500 delay-200">
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-[#00f2ff]">Inmuebles de Interés</h4>
+            <div className="grid gap-3">
+              {prospect.interestedProperties.map((prop: any) => (
+                <div key={prop.id} className="group p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 hover:border-cyan-500/30 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-400">
+                      <Building2 size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate">{prop.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-1.5 py-0.5 bg-black/40 rounded text-[8px] font-mono font-bold text-gray-500 border border-white/5">
+                          {prop.propertyCode || "S/N"}
+                        </span>
+                        <span className="text-[9px] text-gray-600 uppercase font-black tracking-widest text-[8px]">
+                          {prop.propertyType}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Task List */}
         <div className="space-y-4">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Próximas Acciones</h4>
@@ -128,6 +159,24 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
           </div>
         </div>
       </div>
+
+      {/* Contract Action Button */}
+      {prospect.status !== 'CLOSED_WON' && (
+        <div className="p-6 border-t border-white/10 bg-cyan-500/5 group hover:bg-cyan-500/10 transition-all">
+          <button 
+            onClick={() => setIsContractModalOpen(true)}
+            className="w-full flex items-center justify-between gap-3 text-cyan-400 font-bold text-xs uppercase tracking-widest"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-cyan-500/10 rounded-lg">
+                <FileText size={18} />
+              </div>
+              <span>Iniciar Contrato V3</span>
+            </div>
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+      )}
 
       {/* New Task Form */}
       <div className="p-6 border-t border-white/10 bg-white/5">
@@ -163,6 +212,16 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
           </div>
         </form>
       </div>
+
+      <ContractFormModal 
+        isOpen={isContractModalOpen} 
+        onClose={() => setIsContractModalOpen(false)}
+        prospect={prospect}
+        onSuccess={() => {
+          setIsContractModalOpen(false);
+          onRefresh();
+        }}
+      />
     </div>
   );
 }

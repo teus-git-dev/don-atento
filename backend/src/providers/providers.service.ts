@@ -36,33 +36,38 @@ export class ProvidersService {
     });
   }
 
-  async create(tenantId: string, data: {
-    name: string;
-    nit?: string;
-    email?: string;
-    phone?: string;
-    address?: string;
-    specialty: ProviderSpecialty;
-    contactName?: string;
-    contactLastName?: string;
-    contactId?: string;
-    contactPhone?: string;
-    photoUrl?: string;
-    legalArl?: string;
-    legalSst?: boolean;
-    legalPolicyNumber?: string;
-    additionalContacts?: any[];
-  }) {
+  async create(
+    tenantId: string,
+    data: {
+      name: string;
+      nit?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      specialty: ProviderSpecialty;
+      contactName?: string;
+      contactLastName?: string;
+      contactId?: string;
+      contactPhone?: string;
+      photoUrl?: string;
+      legalArl?: string;
+      legalSst?: boolean;
+      legalPolicyNumber?: string;
+      additionalContacts?: any[];
+    },
+  ) {
     const { additionalContacts, ...providerData } = data;
     return this.prisma.provider.create({
       data: {
         ...providerData,
         tenantId,
-        additionalContacts: additionalContacts ? {
-          create: additionalContacts
-        } : undefined
+        additionalContacts: additionalContacts
+          ? {
+              create: additionalContacts,
+            }
+          : undefined,
       },
-      include: { additionalContacts: true }
+      include: { additionalContacts: true },
     });
   }
 

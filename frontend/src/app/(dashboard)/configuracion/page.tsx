@@ -23,6 +23,7 @@ export default function ConfiguracionPage() {
   const [isSavingFlow, setIsSavingFlow] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [editingFlowId, setEditingFlowId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === "inventarios") {
@@ -58,7 +59,7 @@ export default function ConfiguracionPage() {
     }
   };
 
-  const handleCreateWorkflow = async () => {
+  const handleSaveWorkflow = async () => {
     if (!newFlow.name) {
       setFlowError("El nombre del flujo es obligatorio.");
       return;
@@ -67,28 +68,60 @@ export default function ConfiguracionPage() {
     setIsSavingFlow(true);
     setFlowError(null);
     try {
-      // 1. Create Workflow
-      const flowRes = await fetch(`${API_URL}/workflows`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantId: TENANT_ID,
-          name: newFlow.name,
-          description: newFlow.description
-        })
-      });
+      let flowId = editingFlowId;
 
-      if (flowRes.ok) {
-        const flow = await flowRes.json();
-        
-        // 2. Create States
+      if (editingFlowId) {
+        // Update Workflow
+        const flowRes = await fetch(`${API_URL}/workflows/${editingFlowId}/update`, {
+          method: "POST", // Backend uses @Post for update currently
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newFlow.name,
+            description: newFlow.description
+          })
+        });
+
+        if (!flowRes.ok) {
+          setFlowError("Error al actualizar el flujo.");
+          setIsSavingFlow(false);
+          return;
+        }
+
+        // Delete old states to recreate them (simpler approach)
+        await fetch(`${API_URL}/workflows/${editingFlowId}/delete-states`, {
+          method: "POST"
+        });
+      } else {
+        // Create Workflow
+        const flowRes = await fetch(`${API_URL}/workflows`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId: TENANT_ID,
+            name: newFlow.name,
+            description: newFlow.description
+          })
+        });
+
+        if (flowRes.ok) {
+          const flow = await flowRes.json();
+          flowId = flow.id;
+        } else {
+          setFlowError("Error al crear el flujo. Verifica que el tenant sea válido.");
+          setIsSavingFlow(false);
+          return;
+        }
+      }
+
+      if (flowId) {
+        // Create States (same for both flows)
         for (let i = 0; i < flowStates.length; i++) {
           const s = flowStates[i];
           await fetch(`${API_URL}/workflows/states`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              workflowId: flow.id,
+              workflowId: flowId,
               name: s.name,
               order: i + 1,
               assignedRole: s.assignedRole,
@@ -102,17 +135,44 @@ export default function ConfiguracionPage() {
 
         fetchWorkflows();
         setShowWorkflowModal(false);
+        setEditingFlowId(null);
         setNewFlow({ name: "", description: "" });
         setFlowStates([{ name: "Abierto / Triaje", assignedRole: "AGENT", assignedUserId: "", aiInstructions: "", slaHours: 4, color: "cyan" }]);
-      } else {
-        setFlowError("Error al crear el flujo. Verifica que el tenant sea válido.");
       }
     } catch (e) {
-      console.error("Workflow creation error", e);
+      console.error("Workflow saving error", e);
       setFlowError("Error de conexión con el servidor.");
     } finally {
       setIsSavingFlow(false);
     }
+  };
+
+  const handleDeleteFlow = async (id: string) => {
+    if (!confirm("¿Está seguro de eliminar este flujo y todos sus estados?")) return;
+    try {
+      const response = await fetch(`${API_URL}/workflows/${id}/delete`, {
+        method: "POST"
+      });
+      if (response.ok) {
+        fetchWorkflows();
+      }
+    } catch (e) {
+      console.error("Delete flow error", e);
+    }
+  };
+
+  const handleEditFlow = (flow: any) => {
+    setEditingFlowId(flow.id);
+    setNewFlow({ name: flow.name, description: flow.description || "" });
+    setFlowStates(flow.states.map((s: any) => ({
+      name: s.name,
+      assignedRole: s.assignedRole || "AGENT",
+      assignedUserId: s.assignedUserId || "",
+      aiInstructions: s.aiInstructions || "",
+      slaHours: s.slaHours || 24,
+      color: s.color || "blue"
+    })));
+    setShowWorkflowModal(true);
   };
 
   const fetchTemplates = async () => {
@@ -397,7 +457,12 @@ export default function ConfiguracionPage() {
                     <p className="text-sm text-gray-400">Configura los estados, responsables y SLAs de tus procesos operativos.</p>
                 </div>
                 <button 
-                  onClick={() => setShowWorkflowModal(true)}
+                  onClick={() => {
+                    setEditingFlowId(null);
+                    setNewFlow({ name: "", description: "" });
+                    setFlowStates([{ name: "Abierto / Triaje", assignedRole: "AGENT", assignedUserId: "", aiInstructions: "", slaHours: 4, color: "cyan" }]);
+                    setShowWorkflowModal(true);
+                  }}
                   className="bg-[var(--color-neon-blue)] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-blue-600 transition-all shadow-[0_0_15px_rgba(0,112,243,0.3)]"
                 >
                     <Plus size={16} /> CREAR FLUJO
@@ -408,13 +473,27 @@ export default function ConfiguracionPage() {
                 {workflows.length > 0 ? (
                   workflows.map((flow: any) => (
                     <div key={flow.id} className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-bold text-white">{flow.name}</h3>
-                          <p className="text-xs text-gray-500">{flow.description || "Sin descripción."}</p>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-lg font-bold text-white">{flow.name}</h3>
+                            <p className="text-xs text-gray-500">{flow.description || "Sin descripción."}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <button 
+                              onClick={() => handleEditFlow(flow)}
+                              className="text-[10px] font-bold text-[var(--color-neon-blue)] uppercase tracking-widest hover:underline"
+                            >
+                              Editar Flujo
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteFlow(flow.id)}
+                              className="text-[10px] font-bold text-red-500 uppercase tracking-widest hover:underline"
+                            >
+                              Eliminar
+                            </button>
+                            <span className="text-[10px] font-mono text-gray-600 uppercase">ID: {flow.id.split('-')[0]}</span>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-mono text-gray-600 uppercase">ID: {flow.id.split('-')[0]}</span>
-                      </div>
                       <div className="space-y-3">
                         {flow.states.map((state: any, idx: number) => (
                           <WorkflowStep 
@@ -445,10 +524,10 @@ export default function ConfiguracionPage() {
               {showWorkflowModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                   <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowWorkflowModal(false)}></div>
-                  <div className="relative glass w-full max-w-2xl rounded-3xl border border-white/10 p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+                  <div className="relative glass-strong w-full max-w-2xl rounded-3xl border border-white/10 p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
                     <div>
-                      <h2 className="text-2xl font-bold">Nuevo Flujo Operativo</h2>
-                      <p className="text-gray-400 text-sm">Define la secuencia de estados y responsabilidades.</p>
+                      <h2 className="text-2xl font-bold">{editingFlowId ? "Editar Flujo Operativo" : "Nuevo Flujo Operativo"}</h2>
+                      <p className="text-gray-400 text-sm">{editingFlowId ? "Modifica los estados y responsabilidades del proceso." : "Define la secuencia de estados y responsabilidades."}</p>
                     </div>
 
                     <div className="space-y-4">
@@ -507,7 +586,7 @@ export default function ConfiguracionPage() {
                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white" 
                                   />
                                 </div>
-                                <div className="w-32 space-y-1">
+                                <div className="w-48 space-y-1">
                                   <label className="text-[9px] text-gray-500 uppercase font-bold">Responsable</label>
                                   <select 
                                     value={state.assignedUserId || state.assignedRole}
@@ -526,21 +605,12 @@ export default function ConfiguracionPage() {
                                     }}
                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white"
                                   >
-                                    <optgroup label="Roles Generales">
-                                      <option value="AGENT">Agente</option>
-                                      <option value="TECHNICIAN">Técnico</option>
-                                      <option value="ADMIN_TENANT">Administrador</option>
-                                      <option value="OWNER">Propietario</option>
-                                    </optgroup>
-                                    {users.length > 0 && (
-                                      <optgroup label="Usuarios del Sistema">
-                                        {users.map((u: any) => (
-                                          <option key={u.id} value={u.id}>
-                                            {u.firstName} {u.lastName} ({u.role})
-                                          </option>
-                                        ))}
-                                      </optgroup>
-                                    )}
+                                    <option value="">Seleccione Responsable...</option>
+                                    {users.length > 0 && users.map((u: any) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.firstName} {u.lastName} ({u.role})
+                                      </option>
+                                    ))}
                                   </select>
                                 </div>
                                 <div className="w-20 space-y-1">
@@ -599,7 +669,7 @@ export default function ConfiguracionPage() {
                       </button>
                       <button 
                         disabled={isSavingFlow}
-                        onClick={handleCreateWorkflow}
+                        onClick={handleSaveWorkflow}
                         className="flex-1 px-6 py-3 rounded-2xl bg-[var(--color-neon-blue)] text-white text-sm font-medium hover:bg-blue-600 transition-all shadow-[0_0_20px_rgba(0,112,243,0.4)] flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {isSavingFlow ? (
@@ -608,7 +678,7 @@ export default function ConfiguracionPage() {
                             Guardando...
                           </>
                         ) : (
-                          "Crear Flujo Completo"
+                          editingFlowId ? "Guardar Cambios" : "Crear Flujo Completo"
                         )}
                       </button>
                     </div>

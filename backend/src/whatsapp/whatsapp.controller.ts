@@ -1,7 +1,18 @@
-import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  Res,
+} from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
 import { Response } from 'express';
+import { Public } from '../auth/public.decorator';
 
+@Public() // WhatsApp webhook is called by Meta — no JWT available
 @Controller('whatsapp')
 export class WhatsappController {
   constructor(private readonly whatsappService: WhatsappService) {}
@@ -14,7 +25,7 @@ export class WhatsappController {
   ) {
     // Para simplificar, usamos un token fijo o guardado en .env
     const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
-    
+
     if (!verifyToken) {
       console.error('WHATSAPP_VERIFY_TOKEN not set in environment.');
       return 'Configuration Error';
@@ -54,7 +65,11 @@ export class WhatsappController {
         }
 
         if (text || mediaUrl) {
-          await this.whatsappService.processIncomingMessage(from, text || '', mediaUrl);
+          await this.whatsappService.processIncomingMessage(
+            from,
+            text || '',
+            mediaUrl,
+          );
         }
       }
       return 'EVENT_RECEIVED';

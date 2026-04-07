@@ -2,16 +2,26 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PropertyType } from '@prisma/client';
 
 export class CreatePropertyDto {
-  @ApiProperty({ description: 'Tenant ID common to the organization', example: 'uuid-tenant-123' })
+  @ApiProperty({
+    description: 'Tenant ID common to the organization',
+    example: 'uuid-tenant-123',
+  })
   tenantId: string;
 
-  @ApiProperty({ description: 'Internal or external property code (ID Inmueble)', example: 'INC-99', required: false })
+  @ApiProperty({
+    description: 'Internal or external property code (ID Inmueble)',
+    example: 'INC-99',
+    required: false,
+  })
   propertyCode?: string;
 
   @ApiProperty({ enum: PropertyType, example: 'APARTMENT' })
   propertyType: PropertyType;
 
-  @ApiProperty({ description: 'Property title or name', example: 'Apto 402 Torre B' })
+  @ApiProperty({
+    description: 'Property title or name',
+    example: 'Apto 402 Torre B',
+  })
   title: string;
 
   @ApiPropertyOptional({ description: 'Detailed description' })

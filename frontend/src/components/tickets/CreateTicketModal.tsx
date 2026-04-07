@@ -26,13 +26,16 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    priority: "MEDIUM" as const,
+    priority: "MEDIUM" as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [aiDictamen, setAiDictamen] = useState<{verdict: string, confidence: number} | null>(null);
   const [isValidatingAI, setIsValidatingAI] = useState(false);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [aiPriority, setAiPriority] = useState<{priority: string, reason: string} | null>(null);
+  const [isClassifying, setIsClassifying] = useState(false);
+  const [userHasManuallyChangedPriority, setUserHasManuallyChangedPriority] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -135,6 +138,40 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
     fileInputRef.current?.click();
   };
 
+  // AI Priority Classification Effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        if (formData.title.length > 5 || formData.description.length > 10) {
+            classifyPriority();
+        }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [formData.title, formData.description]);
+
+  const classifyPriority = async () => {
+    if (userHasManuallyChangedPriority) return;
+    setIsClassifying(true);
+    try {
+        const response = await fetch(`${API_URL}/cognitive/classify-priority`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: formData.title,
+                description: formData.description
+            })
+        });
+        if (response.ok) {
+            const data = await response.json();
+            setAiPriority(data);
+            setFormData(prev => ({ ...prev, priority: data.priority }));
+        }
+    } catch (err) {
+        console.error("Error classifying priority:", err);
+    } finally {
+        setIsClassifying(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
@@ -154,7 +191,8 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 fileName: file.name,
-                fileType: file.type
+                fileType: file.type,
+                description: formData.description || formData.title
             })
         });
         if (response.ok) {
@@ -309,7 +347,53 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">3. Multimedia (Evidencia)</label>
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">3. Prioridad Operativa</label>
+                                {isClassifying && (
+                                    <div className="flex items-center gap-1.5 text-[9px] text-[var(--color-neon-blue)] font-bold animate-pulse">
+                                        <Loader2 size={10} className="animate-spin" />
+                                        IA ANALIZANDO...
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="grid grid-cols-4 gap-2 mb-4">
+                                {['URGENT', 'HIGH', 'MEDIUM', 'LOW'].map((p) => (
+                                    <button
+                                        key={p}
+                                        onClick={() => {
+                                            setFormData({...formData, priority: p as any});
+                                            setUserHasManuallyChangedPriority(true);
+                                        }}
+                                        className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${
+                                            formData.priority === p 
+                                            ? p === 'URGENT' ? 'bg-red-500/20 border-red-500/50 text-red-400' :
+                                              p === 'HIGH' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' :
+                                              p === 'MEDIUM' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' :
+                                              'bg-gray-500/20 border-gray-500/50 text-gray-400'
+                                            : 'bg-white/5 border-white/5 text-gray-500 hover:border-white/10'
+                                        }`}
+                                    >
+                                        {p === 'URGENT' ? 'URGENTE' : p === 'HIGH' ? 'ALTO' : p === 'MEDIUM' ? 'MEDIO' : 'BAJO'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {aiPriority && !userHasManuallyChangedPriority && (
+                                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 mb-6 animate-in slide-in-from-top-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Shield size={12} className="text-blue-400" />
+                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-tight">Sugerencia Don Atento AI</span>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                        "{aiPriority.reason}"
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">4. Multimedia (Evidencia)</label>
                             
                             <input 
                                 type="file"
@@ -487,6 +571,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
                         <SummaryItem label="Inmueble" value={selectedProperty?.title || "---"} />
                         <SummaryItem label="Ticket" value={formData.title || "---"} />
                         <SummaryItem label="Archivos" value={selectedFiles.length > 0 ? `${selectedFiles.length} adjunto(s)` : "Ninguno"} />
+                        <SummaryItem label="Prioridad" value={formData.priority === 'URGENT' ? '🚨 URGENTE' : formData.priority === 'HIGH' ? '🟠 ALTO' : formData.priority === 'LOW' ? '🟢 BAJO' : '🔵 MEDIO'} />
                         <SummaryItem label="Especialista" value={selectedTechnician ? `${selectedTechnician.firstName} ${selectedTechnician.lastName}` : "Sin asignar (Pendiente)"} />
                         <SummaryItem label="Flujo BPM" value={selectedWorkflow?.name || "---"} />
                     </div>

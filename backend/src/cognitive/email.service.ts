@@ -2,20 +2,31 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class EmailService {
-  async sendEmail(to: string, subject: string, body: string, attachments?: any[]) {
+  async sendEmail(
+    to: string,
+    subject: string,
+    body: string,
+    attachments?: any[],
+  ) {
     // In a real scenario, this would use nodemailer or a service like SendGrid/SES
     console.log(`[Email Service] Sending to ${to}...`);
     console.log(`[Subject] ${subject}`);
     console.log(`[Body Snippet] ${body.substring(0, 100)}...`);
-    
+
     if (attachments && attachments.length > 0) {
-      console.log(`[Attachments] ${attachments.map(a => a.filename).join(', ')}`);
+      console.log(
+        `[Attachments] ${attachments.map((a) => a.filename).join(', ')}`,
+      );
     }
 
     return { success: true, messageId: `mock-msg-${Date.now()}` };
   }
 
-  async sendFormalReport(to: string, propertyTitle: string, reportContent: string) {
+  async sendFormalReport(
+    to: string,
+    propertyTitle: string,
+    reportContent: string,
+  ) {
     const subject = `Reporte de Estado de Propiedad: ${propertyTitle}`;
     const formalBody = `
       ESTIMADO PROPIETARIO,
@@ -32,7 +43,7 @@ export class EmailService {
       Cordialmente,
       Don Atento Brand Brain
     `;
-    
+
     return this.sendEmail(to, subject, formalBody);
   }
 

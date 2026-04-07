@@ -1,7 +1,6 @@
-"use client";
-
-import { useState } from "react";
-import { ShieldCheck, UserPlus, Users, Key, Plus, X, Trash2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ShieldCheck, UserPlus, Users, Key, Plus, Trash2, Loader2 } from "lucide-react";
+import { API_URL, TENANT_ID } from "@/lib/config";
 
 type Permission = 'crm' | 'tickets' | 'inmuebles' | 'analitica' | 'configuracion';
 
@@ -12,26 +11,63 @@ interface RoleDef {
   permissions: Permission[];
 }
 
+const SYSTEM_ROLES = [
+  { id: 'ADMIN_TENANT', name: 'Administrador', roleEnum: 'ADMIN_TENANT' },
+  { id: 'AGENT', name: 'Asesor Comercial', roleEnum: 'AGENT' },
+  { id: 'TECHNICIAN', name: 'Personal Técnico', roleEnum: 'TECHNICIAN' },
+  { id: 'OWNER', name: 'Propietario', roleEnum: 'OWNER' },
+];
+
 export default function RolesManager() {
   const [activeSubTab, setActiveSubTab] = useState<'roles' | 'users'>('roles');
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Mock Data
-  const [customRoles, setCustomRoles] = useState<RoleDef[]>([
-    { id: '1', name: 'Administrador (Por Defecto)', description: 'Acceso total a la agencia', permissions: ['crm', 'tickets', 'inmuebles', 'analitica', 'configuracion'] },
-    { id: '2', name: 'Asesor Comercial', description: 'Atención a prospectos y gestión de ventas', permissions: ['crm', 'inmuebles'] },
-    { id: '3', name: 'Agente Mantenimiento', description: 'Revisión y despacho de reparaciones', permissions: ['tickets', 'inmuebles'] },
-  ]);
-
-  const [users, setUsers] = useState([
-    { id: '1', name: 'Admin Principal', email: 'admin@inmobiliaria.com', roleId: '1' },
-    { id: '2', name: 'Laura Gómez', email: 'laura@inmobiliaria.com', roleId: '2' },
-  ]);
+  const [customRoles, setCustomRoles] = useState<RoleDef[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [newRole, setNewRole] = useState<{name: string, description: string, permissions: Permission[]}>({ name: '', description: '', permissions: [] });
 
   const [showUserModal, setShowUserModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', roleId: '2' });
+  const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', roleId: '' });
+
+  const fetchRoles = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/roles?tenantId=${TENANT_ID}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCustomRoles(data);
+      }
+    } catch (e) {
+      console.error("Fetch roles error", e);
+    }
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/users?tenantId=${TENANT_ID}`);
+      if (response.ok) {
+        const data = await response.json();
+        const adaptedUsers = data.map((u: any) => ({
+          ...u,
+          name: `${u.firstName} ${u.lastName}`
+        }));
+        setUsers(adaptedUsers);
+      }
+    } catch (e) {
+      console.error("Fetch users error", e);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    await Promise.all([fetchRoles(), fetchUsers()]);
+    setIsLoading(false);
+  }, [fetchRoles, fetchUsers]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const togglePermission = (perm: Permission) => {
     if (newRole.permissions.includes(perm)) {
@@ -41,17 +77,90 @@ export default function RolesManager() {
     }
   };
 
-  const saveRole = () => {
-    setCustomRoles([...customRoles, { ...newRole, id: Date.now().toString() }]);
-    setShowRoleModal(false);
-    setNewRole({ name: '', description: '', permissions: [] });
+  const saveRole = async () => {
+    if (!newRole.name) return;
+    try {
+      const response = await fetch(`${API_URL}/roles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newRole,
+          tenantId: TENANT_ID
+        })
+      });
+      if (response.ok) {
+        await fetchRoles();
+        setShowRoleModal(false);
+        setNewRole({ name: '', description: '', permissions: [] });
+      }
+    } catch (e) {
+      console.error("Save role error", e);
+    }
   };
 
-  const saveUser = () => {
-    setUsers([...users, { ...newUser, id: Date.now().toString() }]);
-    setShowUserModal(false);
-    setNewUser({ name: '', email: '', roleId: '2' });
+  const saveUser = async () => {
+    if (!newUser.email || !newUser.firstName || !newUser.roleId) return;
+    try {
+      // Check if it's a system role or custom role
+      const isSystemRole = SYSTEM_ROLES.some(r => r.id === newUser.roleId);
+      const payload = {
+        ...newUser,
+        tenantId: TENANT_ID,
+        role: isSystemRole ? newUser.roleId : "TENANT_USER",
+        roleId: isSystemRole ? null : newUser.roleId
+      };
+
+      const response = await fetch(`${API_URL}/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        await fetchUsers();
+        setShowUserModal(false);
+        setNewUser({ firstName: '', lastName: '', email: '', roleId: '' });
+      }
+    } catch (e) {
+      console.error("Save user error", e);
+    }
   };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm("¿Seguro que desea eliminar este usuario?")) return;
+    try {
+      const response = await fetch(`${API_URL}/users/${id}`, {
+        method: "DELETE"
+      });
+      if (response.ok) {
+        fetchUsers();
+      }
+    } catch (e) {
+      console.error("Delete user error", e);
+    }
+  };
+
+  const handleDeleteRole = async (id: string) => {
+    if (!confirm("¿Seguro que desea eliminar este rol? Al no haber asignaciones de roles dinámicos críticas esto no romperá el sistema.")) return;
+    try {
+      const response = await fetch(`${API_URL}/roles/${id}`, {
+        method: "DELETE"
+      });
+      if (response.ok) {
+        fetchRoles();
+      }
+    } catch (e) {
+      console.error("Delete role error", e);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <Loader2 className="animate-spin text-[var(--color-neon-blue)]" size={32} />
+        <p className="text-gray-400 text-sm animate-pulse">Cargando equipo y roles...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -92,7 +201,13 @@ export default function RolesManager() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {customRoles.map(role => (
-              <div key={role.id} className="glass p-5 rounded-2xl border border-white/5 flex flex-col group">
+              <div key={role.id} className="glass p-5 rounded-2xl border border-white/5 flex flex-col group relative">
+                <button 
+                  onClick={() => handleDeleteRole(role.id)}
+                  className="absolute top-4 right-4 text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 size={14} />
+                </button>
                 <h3 className="text-white font-bold mb-1 group-hover:text-[var(--color-neon-cyan)] transition-colors">{role.name}</h3>
                 <p className="text-xs text-gray-400 mb-4 h-8">{role.description}</p>
                 <div className="flex flex-wrap gap-1.5 mt-auto pt-4 border-t border-white/5">
@@ -104,6 +219,13 @@ export default function RolesManager() {
                 </div>
               </div>
             ))}
+            {customRoles.length === 0 && (
+              <div className="col-span-full py-12 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-2xl bg-white/5">
+                <ShieldCheck size={48} className="mb-4 opacity-10" />
+                <p className="text-gray-500 text-sm">No has creado roles personalizados aún.</p>
+                <p className="text-gray-600 text-xs">Usa "Nuevo Rol Dinámico" para definir permisos a medida.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -132,18 +254,25 @@ export default function RolesManager() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {users.map(u => {
-                  const role = customRoles.find(r => r.id === u.roleId);
+                  // Find display name for role
+                  const customRole = u.roleId ? customRoles.find(r => r.id === u.roleId) : null;
+                  const systemRole = !customRole ? SYSTEM_ROLES.find(r => r.roleEnum === u.role) : null;
+                  const roleName = customRole?.name || systemRole?.name || 'Usuario General';
+
                   return (
                     <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3 px-4 font-bold text-white">{u.name}</td>
                       <td className="py-3 px-4 text-gray-400">{u.email}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2 py-1 rounded-lg bg-[var(--color-neon-blue)]/10 text-[var(--color-neon-blue)] text-[10px] font-bold uppercase">
-                          {role?.name || 'Desconocido'}
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${customRole ? 'bg-purple-500/10 text-purple-400' : 'bg-[var(--color-neon-blue)]/10 text-[var(--color-neon-blue)]'}`}>
+                          {roleName}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button className="text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors">
+                        <button 
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors"
+                        >
                           <Trash2 size={16} />
                         </button>
                       </td>
@@ -159,7 +288,7 @@ export default function RolesManager() {
       {/* Role Creation Modal */}
       {showRoleModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass w-full max-w-lg rounded-3xl p-6 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+          <div className="glass-strong w-full max-w-lg rounded-3xl p-6 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
             <h2 className="text-xl font-bold text-white mb-4">Constructor de Roles Dinámicos</h2>
             <div className="space-y-4">
               <div>
@@ -206,12 +335,18 @@ export default function RolesManager() {
       {/* User Creation Modal */}
       {showUserModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+          <div className="glass-strong w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
             <h2 className="text-xl font-bold text-white mb-4">Invitar Miembro del Equipo</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nombre Completo</label>
-                <input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="Ej. Camila M." />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nombre</label>
+                  <input value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="Ej. Camila" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Apellido</label>
+                  <input value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="Ej. Motlak" />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Correo Electrónico</label>
@@ -220,15 +355,31 @@ export default function RolesManager() {
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Asignar Rol</label>
                 <select value={newUser.roleId} onChange={e => setNewUser({...newUser, roleId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500 appearance-none">
-                  {customRoles.map(r => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
+                  <option value="">Seleccione un Rol...</option>
+                  <optgroup label="Roles del Sistema">
+                    {SYSTEM_ROLES.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </optgroup>
+                  {customRoles.length > 0 && (
+                    <optgroup label="Roles Personalizados">
+                      {customRoles.map(r => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
               <div className="flex gap-3 justify-end pt-4">
                 <button onClick={() => setShowUserModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-gray-400 hover:text-white">Cancelar</button>
-                <button onClick={saveUser} className="px-6 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(168,85,247,0.4)]">Invitar Empleado</button>
+                <button 
+                  onClick={saveUser} 
+                  disabled={!newUser.roleId}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(168,85,247,0.4)] ${!newUser.roleId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-500'}`}
+                >
+                  Invitar Empleado
+                </button>
               </div>
             </div>
           </div>

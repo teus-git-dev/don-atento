@@ -7,13 +7,9 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { SlaMatrixService } from './sla-matrix.service';
 
 @Module({
-  imports: [
-    forwardRef(() => WhatsappModule),
-    CognitiveModule,
-    PrismaModule
-  ],
+  imports: [forwardRef(() => WhatsappModule), CognitiveModule, PrismaModule],
   controllers: [TicketsController],
   providers: [TicketsService, SlaMatrixService],
-  exports: [TicketsService, SlaMatrixService]
+  exports: [TicketsService, SlaMatrixService],
 })
 export class TicketsModule {}

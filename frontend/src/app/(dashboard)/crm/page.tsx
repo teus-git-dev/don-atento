@@ -45,14 +45,17 @@ export default function CrmDashboard() {
         fetch(`${API_URL}/crm/analytics/sentiment?tenantId=${TENANT_ID}`).then(r => r.json()),
       ]);
 
-      setProspects(pRes);
-      if (fRes.length > 0) setFunnelData(fRes);
+      // Defensive checks — backend may return {message, statusCode} on auth error
+      setProspects(Array.isArray(pRes) ? pRes : []);
+      if (Array.isArray(fRes) && fRes.length > 0) setFunnelData(fRes);
       
-      const mappedSentiment = sentimentData.map(s => ({
-        ...s,
-        count: sRes.find((r: any) => r.sentiment === s.sentiment)?.count || 0
-      }));
-      setSentimentData(mappedSentiment);
+      if (Array.isArray(sRes)) {
+        const mappedSentiment = sentimentData.map(s => ({
+          ...s,
+          count: sRes.find((r: any) => r.sentiment === s.sentiment)?.count || 0
+        }));
+        setSentimentData(mappedSentiment);
+      }
 
     } catch (error) {
       console.error("Error fetching CRM data:", error);

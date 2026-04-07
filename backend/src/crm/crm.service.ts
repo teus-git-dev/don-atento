@@ -1,13 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProspectStatus, ProspectSource, SentimentAnalysis } from '@prisma/client';
+import {
+  ProspectStatus,
+  ProspectSource,
+  SentimentAnalysis,
+  ContractStatus,
+  UserRole,
+  RelationType,
+  InteractionChannel,
+} from '@prisma/client';
 import { BrandBrainService } from '../cognitive/brand-brain.service';
+import { EmailService } from '../cognitive/email.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class CrmService {
   constructor(
     private prisma: PrismaService,
-    private brandBrain: BrandBrainService
+    private brandBrain: BrandBrainService,
+    private usersService: UsersService,
+    private emailService: EmailService,
+    @Inject(forwardRef(() => WhatsappService))
+    private whatsappService: WhatsappService,
   ) {}
 
   async createProspect(data: {
@@ -19,14 +35,33 @@ export class CrmService {
     whatsappId?: string;
     source?: ProspectSource;
     assignedAgentId?: string;
+    propertyIds?: string[];
     initialMessage?: string;
   }) {
     let initialSentiment: SentimentAnalysis = SentimentAnalysis.NEUTRAL;
-    
+
     if (data.initialMessage) {
-        const alignment = await this.brandBrain.getToneAlignmentScore(data.initialMessage, data.tenantId);
-        if (alignment.score > 0.8) initialSentiment = SentimentAnalysis.POSITIVE;
-        if (alignment.score < 0.4) initialSentiment = SentimentAnalysis.NEGATIVE;
+      const alignment = await this.brandBrain.getToneAlignmentScore(
+        data.initialMessage,
+        data.tenantId,
+      );
+      if (alignment.score > 0.8) initialSentiment = SentimentAnalysis.POSITIVE;
+      if (alignment.score < 0.4) initialSentiment = SentimentAnalysis.NEGATIVE;
+    }
+
+    // Phone validation and prefix enforcement
+    let phone = data.phone;
+    if (phone) {
+      phone = phone.replace(/\s+/g, '');
+      if (!phone.startsWith('+57')) {
+        // If it starts with 57 but no +, add +
+        if (phone.startsWith('57')) {
+          phone = '+' + phone;
+        } else {
+          // Add +57 prefix
+          phone = '+57' + phone;
+        }
+      }
     }
 
     return this.prisma.prospect.create({
@@ -35,12 +70,18 @@ export class CrmService {
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
-        phone: data.phone,
+        phone: phone,
         whatsappId: data.whatsappId,
         source: data.source || ProspectSource.MANUAL,
         assignedAgentId: data.assignedAgentId,
         status: ProspectStatus.NEW,
         sentiment: initialSentiment,
+        interestedProperties:
+          data.propertyIds && data.propertyIds.length > 0
+            ? {
+                connect: data.propertyIds.map((id) => ({ id })),
+              }
+            : undefined,
       },
     });
   }
@@ -48,18 +89,22 @@ export class CrmService {
   async findAll(tenantId: string) {
     return this.prisma.prospect.findMany({
       where: { tenantId },
-      include: { 
+      include: {
         interactions: { orderBy: { createdAt: 'desc' }, take: 5 },
         tasks: { orderBy: { createdAt: 'desc' } },
         assignedAgent: {
-          select: { id: true, firstName: true, lastName: true, email: true }
-        }
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        interestedProperties: true,
       },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async createTask(prospectId: string, data: { title: string; description?: string; dueDate?: Date }) {
+  async createTask(
+    prospectId: string,
+    data: { title: string; description?: string; dueDate?: Date },
+  ) {
     return this.prisma.prospectTask.create({
       data: {
         prospectId,
@@ -70,7 +115,15 @@ export class CrmService {
     });
   }
 
-  async updateTask(taskId: string, data: { title?: string; description?: string; dueDate?: Date; isCompleted?: boolean }) {
+  async updateTask(
+    taskId: string,
+    data: {
+      title?: string;
+      description?: string;
+      dueDate?: Date;
+      isCompleted?: boolean;
+    },
+  ) {
     return this.prisma.prospectTask.update({
       where: { id: taskId },
       data,
@@ -92,32 +145,38 @@ export class CrmService {
 
   async scoreLead(prospectId: string) {
     const prospect = await this.prisma.prospect.findUnique({
-        where: { id: prospectId },
-        include: { interactions: true }
+      where: { id: prospectId },
+      include: { interactions: true },
     });
 
     if (!prospect) return null;
 
     const interactionCount = prospect.interactions.length;
     const lastSentiment = prospect.sentiment;
-    
+
     let urgencyScore = 50;
     if (lastSentiment === SentimentAnalysis.NEGATIVE) urgencyScore += 30;
     if (interactionCount > 5) urgencyScore += 20;
 
     return {
-        prospectId,
-        urgencyScore: Math.min(100, urgencyScore),
-        qualityLabel: lastSentiment === SentimentAnalysis.POSITIVE ? 'HOT LEAD' : 'WARM',
-        nextAction: urgencyScore > 70 ? 'CALL IMMEDIATELY' : 'FOLLOW UP IN 24H'
+      prospectId,
+      urgencyScore: Math.min(100, urgencyScore),
+      qualityLabel:
+        lastSentiment === SentimentAnalysis.POSITIVE ? 'HOT LEAD' : 'WARM',
+      nextAction: urgencyScore > 70 ? 'CALL IMMEDIATELY' : 'FOLLOW UP IN 24H',
     };
   }
 
   async addInteraction(prospectId: string, message: string, channel: any) {
-    const prospect = await this.prisma.prospect.findUnique({ where: { id: prospectId } });
+    const prospect = await this.prisma.prospect.findUnique({
+      where: { id: prospectId },
+    });
     if (!prospect) throw new Error('Prospect not found');
 
-    const alignment = await this.brandBrain.getToneAlignmentScore(message, prospect.tenantId);
+    const alignment = await this.brandBrain.getToneAlignmentScore(
+      message,
+      prospect.tenantId,
+    );
     let sentiment: SentimentAnalysis = SentimentAnalysis.NEUTRAL;
     if (alignment.score > 0.8) sentiment = SentimentAnalysis.POSITIVE;
     if (alignment.score < 0.4) sentiment = SentimentAnalysis.NEGATIVE;
@@ -132,8 +191,8 @@ export class CrmService {
     });
 
     await this.prisma.prospect.update({
-        where: { id: prospectId },
-        data: { sentiment }
+      where: { id: prospectId },
+      data: { sentiment },
     });
 
     return interaction;
@@ -146,7 +205,7 @@ export class CrmService {
       _count: { _all: true },
     });
 
-    return prospects.map(p => ({
+    return prospects.map((p) => ({
       status: p.status,
       count: p._count._all,
     }));
@@ -159,13 +218,163 @@ export class CrmService {
       _count: { _all: true },
     });
 
-    return prospects.map(p => ({
+    return prospects.map((p) => ({
       sentiment: p.sentiment,
       count: p._count._all,
     }));
   }
 
+  async startContractProcess(
+    prospectId: string,
+    propertyId: string,
+    tenantId: string,
+    formData: any,
+  ) {
+    const request = await this.prisma.contractRequest.create({
+      data: {
+        tenantId,
+        prospectId,
+        propertyId,
+        formData,
+        status: 'PENDING_AI',
+      },
+    });
+
+    // Update prospect status
+    await this.prisma.prospect.update({
+      where: { id: prospectId },
+      data: { status: ProspectStatus.NEGOTIATION },
+    });
+
+    return request;
+  }
+
+  async approveContract(requestId: string, approvedByUserId: string) {
+    const request = await this.prisma.contractRequest.findUnique({
+      where: { id: requestId },
+      include: { prospect: true, property: true },
+    });
+
+    if (!request) throw new Error('Contract request not found');
+
+    // 1. Convert Prospect to User (Tenant)
+    const newUser = await this.prisma.user.create({
+      data: {
+        tenantId: request.tenantId,
+        email:
+          request.prospect.email ||
+          `client_${request.id.substring(0, 8)}@example.com`,
+        passwordHash: 'PROSPECT_CONVERTED',
+        firstName: request.prospect.firstName,
+        lastName: request.prospect.lastName || '',
+        phone: request.prospect.phone,
+        whatsappId: request.prospect.whatsappId,
+        role: UserRole.TENANT_USER,
+      },
+    });
+
+    // 2. Link User to Property
+    await this.prisma.propertyRelation.create({
+      data: {
+        propertyId: request.propertyId,
+        userId: newUser.id,
+        relationType: RelationType.TENANT,
+        startDate: new Date(),
+        status: 'ACTIVE',
+      },
+    });
+
+    // 3. Update Statuses
+    await this.prisma.contractRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'APPROVED',
+        approvedByUserId,
+      },
+    });
+
+    await this.prisma.prospect.update({
+      where: { id: request.prospectId },
+      data: { status: ProspectStatus.CLOSED_WON },
+    });
+
+    await this.prisma.property.update({
+      where: { id: request.propertyId },
+      data: { status: 'RENTED' },
+    });
+
+    // 4. Send Welcome Kit (IA + Agent Branding)
+    await this.sendWelcomeKit(newUser.id, request.propertyId, approvedByUserId);
+
+    return { newUser, property: request.property };
+  }
+
+  private async sendWelcomeKit(
+    tenantUserId: string,
+    propertyId: string,
+    agentUserId: string,
+  ) {
+    const tenant = await this.prisma.user.findUnique({
+      where: { id: tenantUserId },
+    });
+    const agent = await this.prisma.user.findUnique({
+      where: { id: agentUserId },
+    });
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+    });
+
+    if (!tenant || !agent || !property) return;
+
+    const agentName = `${agent.firstName} ${agent.lastName}`;
+    const welcomeSubject = `¡Bienvenido a tu nuevo hogar! - Don Atento & ${agentName}`;
+
+    // IA Personalizada: Actúa como el puente entre Don Atento y el Agente
+    const emailBody = `
+      <h1>¡Felicidades, ${tenant.firstName}!</h1>
+      <p>Tu contrato para el inmueble <strong>${property.title}</strong> ha sido aprobado formalmente.</p>
+      
+      <div style="background: #f8fafc; border-radius: 1rem; padding: 2rem; border-left: 4px solid #06b6d4; margin: 2rem 0;">
+        <p><em>"Es un placer para mí darte la bienvenida oficial. Estoy aquí para asegurar que tu estancia sea impecable, gestionando tus requerimientos de forma inteligente y predictiva."</em></p>
+        <p><strong>— Don Atento (Tu Asistente IA)</strong></p>
+      </div>
+
+      <p>Este proceso fue liderado por tu Agente Comercial asignado:</p>
+      
+      <div style="display: flex; align-items: center; gap: 1rem; margin: 2rem 0;">
+        <img src="${agent.photoUrl || 'https://donatento.ai/api/placeholder-avatar.png'}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" alt="${agentName}">
+        <div>
+          <h3 style="margin: 0;">${agentName}</h3>
+          <p style="margin: 0; color: #64748b; font-size: 0.9rem;">Agente Comercial Don Atento</p>
+          <p style="margin: 0; color: #64748b; font-size: 0.8rem;">${agent.phone || ''}</p>
+        </div>
+      </div>
+
+      <p>A partir de ahora, puedes reportar cualquier novedad sobre el inmueble simplemente enviando un mensaje a nuestro WhatsApp oficial.</p>
+      
+      <p>Cordialmente,<br>El equipo de Don Atento.</p>
+    `;
+
+    // 1. Send Email
+    await this.emailService.sendEmail(tenant.email, welcomeSubject, emailBody);
+
+    // 2. Send WhatsApp
+    if (tenant.phone || tenant.whatsappId) {
+      const waTarget = tenant.whatsappId || tenant.phone!;
+      const waMessage = `¡Hola ${tenant.firstName}! 🏠 Soy Don Atento. Tu contrato para ${property.title} ha sido aprobado. Tu asesor comercial ${agentName} y yo te damos la bienvenida oficial. ¡Estamos a un mensaje de distancia!`;
+      await this.whatsappService.sendMessage(waTarget, waMessage);
+    }
+
+    // Log the welcome interaction
+    await this.addInteraction(
+      tenantUserId,
+      'ENVÍO KIT DE BIENVENIDA AUTOMÁTICO (EMAIL/WA)',
+      InteractionChannel.SYSTEM_AI,
+    );
+  }
+
   async convertToClient(prospectId: string, tenantId: string) {
+    // Legacy method - redirecting to newer flow or keeping for simple cases
     const prospect = await this.prisma.prospect.findUnique({
       where: { id: prospectId },
     });
@@ -175,13 +384,14 @@ export class CrmService {
     const user = await this.prisma.user.create({
       data: {
         tenantId,
-        email: prospect.email || `client_${prospect.id.substring(0, 8)}@example.com`,
+        email:
+          prospect.email || `client_${prospect.id.substring(0, 8)}@example.com`,
         passwordHash: 'PROSPECT_CONVERTED',
         firstName: prospect.firstName,
         lastName: prospect.lastName || '',
         phone: prospect.phone,
         whatsappId: prospect.whatsappId,
-        role: 'TENANT_USER',
+        role: UserRole.TENANT_USER,
       },
     });
 

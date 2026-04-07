@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import { Bell, Clock, AlertCircle, X, CheckSquare } from "lucide-react";
 import { API_URL, TENANT_ID } from "@/lib/config";
+import { useRouter } from "next/navigation";
 
 export default function NotificationCenter() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,13 @@ export default function NotificationCenter() {
     }
   };
 
+  const handleTaskClick = (taskId?: string) => {
+    setIsOpen(false);
+    router.push("/tickets");
+    // Optionally we could pass the taskId via query param to focus it
+    // router.push(`/tickets?focus=${taskId}`);
+  };
+
   const unreadCount = tasks.length;
 
   return (
@@ -67,7 +76,7 @@ export default function NotificationCenter() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 mt-4 w-80 glass rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="absolute right-0 mt-4 w-80 glass-strong rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="p-5 border-b border-white/5 bg-white/5 flex justify-between items-center">
               <h3 className="text-xs font-black uppercase tracking-widest text-gray-300">Tareas por Rol</h3>
               <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-lg">{unreadCount} Pendientes</span>
@@ -81,7 +90,11 @@ export default function NotificationCenter() {
                 </div>
               ) : (
                 tasks.map((task) => (
-                  <div key={task.id} className="p-4 border-b border-white/5 hover:bg-white/5 transition-all cursor-pointer group">
+                  <div 
+                    key={task.id} 
+                    onClick={() => handleTaskClick(task.id)}
+                    className="p-4 border-b border-white/5 hover:bg-white/5 transition-all cursor-pointer group"
+                  >
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-[10px] font-mono text-[var(--color-neon-cyan)] uppercase">TKT-{task.id.split('-')[0]}</span>
                       <span className="text-[9px] text-gray-600 flex items-center gap-1 font-mono uppercase">
@@ -95,7 +108,10 @@ export default function NotificationCenter() {
               )}
             </div>
             
-            <button className="w-full py-3 bg-white/5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all">
+            <button 
+              onClick={() => handleTaskClick()}
+              className="w-full py-3 bg-white/5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all"
+            >
               Ver Todas las Tareas
             </button>
           </div>

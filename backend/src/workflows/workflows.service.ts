@@ -8,11 +8,11 @@ export class WorkflowsService {
   async findAllByTenant(tenantId: string) {
     return this.prisma.workflow.findMany({
       where: { tenantId },
-      include: { 
-        states: { 
+      include: {
+        states: {
           orderBy: { order: 'asc' },
-          include: { responsible: true }
-        } 
+          include: { responsible: true },
+        },
       },
     });
   }
@@ -47,5 +47,24 @@ export class WorkflowsService {
       orderBy: { order: 'asc' },
     });
     return firstState;
+  }
+
+  async update(id: string, data: { name?: string; description?: string }) {
+    return this.prisma.workflow.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteStatesByWorkflow(workflowId: string) {
+    return this.prisma.workflowState.deleteMany({
+      where: { workflowId },
+    });
+  }
+
+  async delete(id: string) {
+    return this.prisma.workflow.delete({
+      where: { id },
+    });
   }
 }

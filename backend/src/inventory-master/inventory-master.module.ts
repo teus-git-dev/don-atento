@@ -9,10 +9,10 @@ import { InventoryTemplatesModule } from '../inventory-templates/inventory-templ
 
 @Module({
   imports: [
-    PrismaModule, 
-    WhatsappModule, 
-    TicketsModule, 
-    InventoryTemplatesModule
+    PrismaModule,
+    WhatsappModule,
+    TicketsModule,
+    InventoryTemplatesModule,
   ],
   providers: [InventoryMasterService, InventoryReportService],
   controllers: [InventoryMasterController],

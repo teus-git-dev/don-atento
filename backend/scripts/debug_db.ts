@@ -13,8 +13,11 @@ async function main() {
   const tenants = await prisma.tenant.findMany({
     select: { id: true, name: true }
   });
-  console.log('--- TENANTS IN DB ---');
-  console.log(JSON.stringify(tenants, null, 2));
+  const users = await prisma.user.findMany({
+    select: { id: true, firstName: true, email: true, role: true }
+  });
+  console.log('--- USERS IN DB ---');
+  console.log(JSON.stringify(users, null, 2));
   console.log('---------------------');
 }
 

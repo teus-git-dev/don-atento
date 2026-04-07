@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { TicketsModule } from './tickets/tickets.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -13,23 +16,37 @@ import { CrmModule } from './crm/crm.module';
 import { ProvidersModule } from './providers/providers.module';
 import { InventoryMasterModule } from './inventory-master/inventory-master.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { RolesModule } from './roles/roles.module';
+import { AccountingModule } from './accounting/accounting.module';
+import { InvoicingModule } from './invoicing/invoicing.module';
 
 @Module({
   imports: [
-    PrismaModule, 
-    TicketsModule, 
-    WhatsappModule, 
-    PropertiesModule, 
-    WorkflowsModule, 
+    PrismaModule,
+    AuthModule,
+    TicketsModule,
+    WhatsappModule,
+    PropertiesModule,
+    WorkflowsModule,
     UsersModule,
     InventoryTemplatesModule,
     CognitiveModule,
     CrmModule,
     ProvidersModule,
     InventoryMasterModule,
-    IntegrationsModule
+    IntegrationsModule,
+    RolesModule,
+    AccountingModule,
+    InvoicingModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Global JWT guard — all routes protected unless decorated with @Public()
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}

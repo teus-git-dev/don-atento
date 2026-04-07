@@ -194,7 +194,7 @@ type MasterZone = { id: string; name: string; type: string; items: InventoryComp
 
 const DEFAULT_COMPONENTS: any[] = [];
 
-export default function MasterInventoryPage() {
+function MasterInventoryContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isTemplateMode = searchParams.get('mode') === 'template';
@@ -712,5 +712,13 @@ export default function MasterInventoryPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function MasterInventoryPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen bg-[#050505] text-white flex items-center justify-center font-mono uppercase tracking-[0.2em] animate-pulse">Sincronizando Sensorica...</div>}>
+      <MasterInventoryContent />
+    </React.Suspense>
   );
 }

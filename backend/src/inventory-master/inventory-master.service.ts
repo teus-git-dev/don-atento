@@ -107,7 +107,9 @@ export class InventoryMasterService {
     const template = await this.templatesService.findOne(templateId);
     if (!template) throw new Error('Template not found');
 
-    const property = await this.prisma.property.findUnique({ where: { id: propertyId } });
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+    });
     if (!property) throw new Error('Property not found');
 
     // Create zones and items from template
@@ -138,9 +140,13 @@ export class InventoryMasterService {
     return { zones, propertyId };
   }
 
-  async createHandover(propertyId: string, type: 'DELIVERY' | 'RETURN' | 'ASSIGNMENT', handoverData: any) {
+  async createHandover(
+    propertyId: string,
+    type: 'DELIVERY' | 'RETURN' | 'ASSIGNMENT',
+    handoverData: any,
+  ) {
     // handoverData should contain the list of item updates: { itemId, condition, comments, evidences }
-    
+
     const updates = await Promise.all(
       handoverData.items.map(async (itemUpdate: any) => {
         const updatedItem: any = await this.prisma.inventoryItem.update({
@@ -159,9 +165,12 @@ export class InventoryMasterService {
         });
 
         // Auto-Ticket Logic: If regular or bad, create a ticket
-        if (itemUpdate.condition === 'REGULAR' || itemUpdate.condition === 'BAD') {
+        if (
+          itemUpdate.condition === 'REGULAR' ||
+          itemUpdate.condition === 'BAD'
+        ) {
           await this.ticketsService.createTicket({
-            tenantId: updatedItem.property.tenantId, 
+            tenantId: updatedItem.property.tenantId,
             propertyId,
             reportedByUserId: handoverData.userId, // The agent performing the handover
             title: `Reparación: ${updatedItem.name} (${type})`,
@@ -173,7 +182,7 @@ export class InventoryMasterService {
         }
 
         return updatedItem;
-      })
+      }),
     );
 
     await this.inventoryReport.sendInventoryReport(propertyId, type as any);

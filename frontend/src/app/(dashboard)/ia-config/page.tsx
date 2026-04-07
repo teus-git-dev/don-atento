@@ -48,7 +48,7 @@ export default function IAConfigPage() {
       }
     };
     fetchBrain();
-  }, [currentTenant.id]);
+  }, [currentTenant?.id, currentTenant]);
 
   const handleSave = async () => {
     if (!currentTenant) return;
@@ -178,7 +178,7 @@ export default function IAConfigPage() {
               <h3 className="text-xl font-bold flex items-center gap-2 text-white">
                 <ShieldAlert className="text-red-400" /> Políticas de la Inmobiliaria
               </h3>
-              <p className="text-gray-400 text-sm italic">Define las 'verdades' de tu negocio que la IA debe respetar estrictamente.</p>
+              <p className="text-gray-400 text-sm italic">Define las &apos;verdades&apos; de tu negocio que la IA debe respetar estrictamente.</p>
               <textarea 
                 value={brain.policies || ''}
                 onChange={(e) => setBrain({...brain, policies: e.target.value})}
@@ -236,7 +236,7 @@ export default function IAConfigPage() {
   );
 }
 
-function TabButton({ active, onClick, icon, label }: any) {
+function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
     <button 
       onClick={onClick}
@@ -251,7 +251,7 @@ function TabButton({ active, onClick, icon, label }: any) {
   );
 }
 
-function ToneCard({ selected, onClick, title, desc }: any) {
+function ToneCard({ selected, onClick, title, desc }: { selected: boolean; onClick: () => void; title: string; desc: string }) {
   return (
     <div 
       onClick={onClick}

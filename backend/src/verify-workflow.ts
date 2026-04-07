@@ -4,19 +4,23 @@ const prisma = new PrismaClient();
 
 async function verify() {
   console.log('--- VERIFYING ENHANCED WORKFLOW ---');
-  
+
   // 1. Get a tenant and property
   const tenant = await prisma.tenant.findFirst();
   const property = await prisma.property.findFirst();
   const user = await prisma.user.findFirst();
-  const workflow = await prisma.workflow.findFirst({ include: { states: true } });
+  const workflow = await prisma.workflow.findFirst({
+    include: { states: true },
+  });
 
   if (!tenant || !property || !user || !workflow) {
     console.log('Missing data to verify.');
     return;
   }
 
-  console.log(`Using Tenant: ${tenant.id}, Property: ${property.id}, User: ${user.id}`);
+  console.log(
+    `Using Tenant: ${tenant.id}, Property: ${property.id}, User: ${user.id}`,
+  );
 
   // 2. Create a ticket (simulating TicketsService.createTicket logic)
   const ticket = await prisma.ticket.create({
@@ -27,8 +31,8 @@ async function verify() {
       workflowId: workflow.id,
       currentStateId: workflow.states[0].id,
       title: 'Test Workflow Ticket',
-      description: 'Testing state logs and SLAs'
-    }
+      description: 'Testing state logs and SLAs',
+    },
   });
 
   // Start first log
@@ -37,43 +41,62 @@ async function verify() {
       ticketId: ticket.id,
       stateId: workflow.states[0].id,
       startedAt: new Date(),
-    }
+    },
   });
 
   console.log(`Created Ticket: ${ticket.id}`);
 
   // 3. Verify Log exists
-  const logs = await prisma.ticketStateLog.findMany({ where: { ticketId: ticket.id } });
+  const logs = await prisma.ticketStateLog.findMany({
+    where: { ticketId: ticket.id },
+  });
   console.log(`State Logs Count: ${logs.length} (Expected: 1)`);
   console.log(`Current State: ${ticket.currentStateId}`);
 
   // 4. Complete Task (simulating completeStateTask)
-  const comment = "Visita técnica realizada, se requiere repuesto.";
+  const comment = 'Visita técnica realizada, se requiere repuesto.';
   await prisma.ticketStateLog.updateMany({
     where: { ticketId: ticket.id, completedAt: null },
-    data: { completedAt: new Date(), comment, completedByUserId: user.id }
+    data: { completedAt: new Date(), comment, completedByUserId: user.id },
   });
 
-  const nextState = workflow.states.find(s => s.order > workflow.states[0].order);
+  const nextState = workflow.states.find(
+    (s) => s.order > workflow.states[0].order,
+  );
   if (nextState) {
     await prisma.ticket.update({
       where: { id: ticket.id },
-      data: { currentStateId: nextState.id }
+      data: { currentStateId: nextState.id },
     });
     await prisma.ticketStateLog.create({
-      data: { ticketId: ticket.id, stateId: nextState.id, startedAt: new Date() }
+      data: {
+        ticketId: ticket.id,
+        stateId: nextState.id,
+        startedAt: new Date(),
+      },
     });
     console.log(`Transitioned to: ${nextState.name}`);
   }
 
   // 5. Final check
-  const finalLogs = await prisma.ticketStateLog.findMany({ 
+  const finalLogs = await prisma.ticketStateLog.findMany({
     where: { ticketId: ticket.id },
-    include: { state: true }
+    include: { state: true },
   });
-  console.log('Final Logs:', JSON.stringify(finalLogs.map(l => ({ state: l.state.name, done: !!l.completedAt, comment: l.comment })), null, 2));
+  console.log(
+    'Final Logs:',
+    JSON.stringify(
+      finalLogs.map((l) => ({
+        state: l.state.name,
+        done: !!l.completedAt,
+        comment: l.comment,
+      })),
+      null,
+      2,
+    ),
+  );
 }
 
 verify()
-  .catch(e => console.error(e))
+  .catch((e) => console.error(e))
   .finally(() => prisma.$disconnect());

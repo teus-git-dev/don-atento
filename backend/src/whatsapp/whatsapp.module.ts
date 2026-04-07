@@ -9,9 +9,16 @@ import { CognitiveModule } from '../cognitive/cognitive.module';
 import { CrmModule } from '../crm/crm.module';
 
 @Module({
-  imports: [HttpModule, forwardRef(() => TicketsModule), PrismaModule, PropertiesModule, CognitiveModule, CrmModule],
+  imports: [
+    HttpModule,
+    forwardRef(() => TicketsModule),
+    PrismaModule,
+    PropertiesModule,
+    CognitiveModule,
+    forwardRef(() => CrmModule),
+  ],
   controllers: [WhatsappController],
   providers: [WhatsappService],
-  exports: [WhatsappService]
+  exports: [WhatsappService],
 })
 export class WhatsappModule {}

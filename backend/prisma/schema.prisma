@@ -6,188 +6,136 @@ datasource db {
   provider = "postgresql"
 }
 
-model SubscriptionPlan {
-  id            String   @id @default(uuid())
-  name          String
-  priceMonthly  Decimal
-  maxProperties Int
-  maxUsers      Int
-  createdAt     DateTime @default(now())
-  tenants       Tenant[]
+model AccountingAccount {
+  id                      String              @id
+  tenantId                String
+  code                    String
+  name                    String
+  level                   AccountLevel
+  nature                  AccountNature
+  isActive                Boolean             @default(true)
+  parentId                String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime
+  AccountingAccount       AccountingAccount?  @relation("AccountingAccountToAccountingAccount", fields: [parentId], references: [id])
+  other_AccountingAccount AccountingAccount[] @relation("AccountingAccountToAccountingAccount")
+  Tenant                  Tenant              @relation(fields: [tenantId], references: [id])
+  BillingItem             BillingItem[]
+  TransactionLine         TransactionLine[]
+
+  @@unique([tenantId, code])
 }
 
-model Tenant {
-  id                     String              @id @default(uuid())
-  name                   String
-  nit                    String
-  status                 TenantStatus        @default(ACTIVE)
-  subscriptionPlanId     String
-  createdAt              DateTime            @default(now())
-  aiTone                 String?
-  brandManualUrl         String?
-  communicationTemplates Json?
-  brandBrain             BrandBrain?
-  inventoryTemplates     InventoryTemplate[]
-  properties             Property[]
-  prospects              Prospect[]
-  providers              Provider[]
-  roles                  Role[]
-  subscriptionPlan       SubscriptionPlan    @relation(fields: [subscriptionPlanId], references: [id])
-  tickets                Ticket[]
-  users                  User[]
-  workflows              Workflow[]
+model AccountingThirdParty {
+  id               String            @id
+  tenantId         String
+  documentType     String
+  documentNumber   String
+  name             String
+  email            String?
+  phone            String?
+  userId           String?           @unique
+  providerId       String?           @unique
+  taxLevelCode     String?
+  ciiuCode         String?
+  municipalityCode String?
+  postalCode       String?
+  createdAt        DateTime          @default(now())
+  Provider         Provider?         @relation(fields: [providerId], references: [id])
+  Tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  User             User?             @relation(fields: [userId], references: [id])
+  Invoice          Invoice[]
+  TransactionLine  TransactionLine[]
+
+  @@unique([tenantId, documentType, documentNumber])
+}
+
+model BillingItem {
+  id                String            @id
+  tenantId          String
+  code              String            @unique
+  name              String
+  basePrice         Decimal?          @db.Decimal(19, 4)
+  taxRate           Decimal           @default(0) @db.Decimal(5, 2)
+  accountId         String
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  AccountingAccount AccountingAccount @relation(fields: [accountId], references: [id])
+  Tenant            Tenant            @relation(fields: [tenantId], references: [id])
+  InvoiceLine       InvoiceLine[]
 }
 
 model BrandBrain {
-  id            String   @id @default(uuid())
+  id            String   @id
   tenantId      String   @unique
   tone          String   @default("PROFESSIONAL")
   policies      String?
   faq           Json?
   responseRules String?
-  updatedAt     DateTime @updatedAt
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime
+  Tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
-model User {
-  id                     String                    @id @default(uuid())
-  tenantId               String?
-  email                  String                    @unique
-  passwordHash           String
-  firstName              String
-  lastName               String
-  governmentId           String?
-  role                   UserRole                  @default(TENANT_USER)
-  roleId                 String?
-  phone                  String?
-  whatsappId             String?
-  photoUrl               String?
-  isActive               Boolean                   @default(true)
-  createdAt              DateTime                  @default(now())
-  additionalContacts     String?
-  personType             String?
-  isTaxDeclarant         Boolean                   @default(false)
-  regimeType             String?
-  applyReteIva           Boolean                   @default(false)
-  applyReteFuente        Boolean                   @default(false)
-  applyReteIca           Boolean                   @default(false)
-  bankName               String?
-  accountNumber          String?
-  providerId             String?
-  accountType            String?
-  assignments            PropertyAgentAssignment[]
-  relations              PropertyRelation[]
-  assignedProspects      Prospect[]                @relation("AgentProspects")
-  prospectInteractions   ProspectInteraction[]     @relation("AgentProspectInteractions")
-  ticketsAssigned        Ticket[]                  @relation("AssignedTickets")
-  ticketsReported        Ticket[]                  @relation("ReportedTickets")
-  interactions           TicketInteraction[]
-  completedStateLogs     TicketStateLog[]
-  provider               Provider?                 @relation("ProviderTechnicians", fields: [providerId], references: [id])
-  roleRef                Role?                     @relation(fields: [roleId], references: [id])
-  tenant                 Tenant?                   @relation(fields: [tenantId], references: [id])
-  responsibleForStates   WorkflowState[]           @relation("StateResponsibility")
-  workflowStatesAssigned WorkflowState[]           @relation("RoleAssignments")
-}
-
-model Role {
-  id          String   @id @default(uuid())
-  tenantId    String
-  name        String
-  description String?
-  permissions Json?
-  createdAt   DateTime @default(now())
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
-  users       User[]
-}
-
-model Property {
-  id               String                    @id @default(uuid())
+model ContractRequest {
+  id               String         @id
   tenantId         String
-  parentPropertyId String?
-  propertyType     PropertyType
-  title            String
-  description      String?
-  address          String
-  city             String
-  department       String
-  country          String
-  latitude         Float?
-  longitude        Float?
-  areaM2           Float?
-  rooms            Int?
-  bathrooms        Int?
-  status           PropertyStatus            @default(AVAILABLE)
-  propertyCode     String?                   @unique
-  isVip            Boolean                   @default(false)
-  isActive         Boolean                   @default(true)
-  rentAmount       Decimal?
-  adminAmount      Decimal?
-  taxAmount        Decimal?
-  managementName   String?
-  managementNit    String?
-  insuranceCompany String?
-  splatUrl         String?
-  attachments      Json?
-  createdAt        DateTime                  @default(now())
-  accessToken      String?                   @unique
-  workflowId       String?
-  managementEmail  String?
-  managementPhone  String?
-  visionAnalysis   Json?
-  visionVideoUrl   String?
-  inventoryItems   InventoryItem[]
-  meterReadings    MeterReading[]
-  parentProperty   Property?                 @relation("PropertyHierarchy", fields: [parentPropertyId], references: [id])
-  childProperties  Property[]                @relation("PropertyHierarchy")
-  tenant           Tenant                    @relation(fields: [tenantId], references: [id])
-  workflow         Workflow?                 @relation(fields: [workflowId], references: [id])
-  accessItems      PropertyAccessItem[]
-  assignments      PropertyAgentAssignment[]
-  relations        PropertyRelation[]
-  tickets          Ticket[]
-  zones            Zone[]
+  prospectId       String
+  propertyId       String
+  status           ContractStatus @default(PENDING_AI)
+  formData         Json?
+  aiDraft          String?
+  approvedByUserId String?
+  rejectionReason  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime
+  User             User?          @relation(fields: [approvedByUserId], references: [id])
+  Property         Property       @relation(fields: [propertyId], references: [id])
+  Prospect         Prospect       @relation(fields: [prospectId], references: [id])
 }
 
-model PropertyRelation {
-  id                  String         @id @default(uuid())
-  propertyId          String
-  userId              String
-  relationType        RelationType
-  percentageOwnership Float?
-  startDate           DateTime
-  endDate             DateTime?
-  status              RelationStatus @default(ACTIVE)
-  contractNumber      String?
-  insuranceCompany    String?
-  contractType        String?
-  property            Property       @relation(fields: [propertyId], references: [id])
-  user                User           @relation(fields: [userId], references: [id])
+model DianResolution {
+  id               String   @id
+  tenantId         String
+  prefix           String
+  resolutionNumber String
+  startNumber      Int
+  endNumber        Int
+  currentNumber    Int
+  validFrom        DateTime
+  validTo          DateTime
+  technicalKey     String?
+  softwareId       String?
+  softwarePin      String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  Tenant           Tenant   @relation(fields: [tenantId], references: [id])
 }
 
-model PropertyAgentAssignment {
-  id         String   @id @default(uuid())
-  propertyId String
-  agentId    String
-  assignedAt DateTime @default(now())
-  agent      User     @relation(fields: [agentId], references: [id])
-  property   Property @relation(fields: [propertyId], references: [id])
+model DigitalCertificate {
+  id           String    @id
+  tenantId     String    @unique
+  filePath     String    @default("")
+  fileBuffer   Bytes?
+  passwordHash String
+  validUntil   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime
+  Tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
-model Zone {
-  id            String                  @id @default(uuid())
-  propertyId    String?
-  templateId    String?
-  name          String
-  type          ZoneType                @default(ZONAS_COMUNES)
-  items         InventoryItem[]
-  templateItems InventoryTemplateItem[]
-  property      Property?               @relation(fields: [propertyId], references: [id])
-  template      InventoryTemplate?      @relation(fields: [templateId], references: [id])
+model InventoryEvidence {
+  id                 String              @id
+  inventoryItemId    String
+  evidenceType       EvidenceType
+  url                String
+  aiAnalysisStatus   AIAnalysisStatus    @default(PENDING)
+  aiComparisonResult AIComparisonResult?
+  captureDate        DateTime            @default(now())
+  InventoryItem      InventoryItem       @relation(fields: [inventoryItemId], references: [id])
 }
 
 model InventoryItem {
-  id                     String              @id @default(uuid())
+  id                     String              @id
   propertyId             String
   zoneId                 String?
   category               InventoryCategory
@@ -198,239 +146,274 @@ model InventoryItem {
   model                  String?
   serialNumber           String?
   material               String?
-  quantity               Int                 @default(1)
-  comments               String?
   isFunctional           Boolean             @default(true)
   technicalDetails       Json?
   expectedLifespanMonths Int?
   lastInspectionDate     DateTime?
   createdAt              DateTime            @default(now())
-  evidences              InventoryEvidence[]
-  property               Property            @relation(fields: [propertyId], references: [id])
-  zone                   Zone?               @relation(fields: [zoneId], references: [id])
-  tickets                Ticket[]            @relation("InventoryTickets")
+  comments               String?
+  quantity               Int                 @default(1)
+  InventoryEvidence      InventoryEvidence[]
+  Property               Property            @relation(fields: [propertyId], references: [id])
+  Zone                   Zone?               @relation(fields: [zoneId], references: [id])
+  Ticket                 Ticket[]
 }
 
 model InventoryTemplate {
-  id          String                  @id @default(uuid())
-  tenantId    String
-  name        String
-  description String?
-  status      TemplateStatus          @default(ACTIVE)
-  createdAt   DateTime                @default(now())
-  tenant      Tenant                  @relation(fields: [tenantId], references: [id])
-  items       InventoryTemplateItem[]
-  zones       Zone[]
+  id                    String                  @id
+  tenantId              String
+  name                  String
+  description           String?
+  status                TemplateStatus          @default(ACTIVE)
+  createdAt             DateTime                @default(now())
+  Tenant                Tenant                  @relation(fields: [tenantId], references: [id])
+  InventoryTemplateItem InventoryTemplateItem[]
+  Zone                  Zone[]
 }
 
 model InventoryTemplateItem {
-  id          String             @id @default(uuid())
-  templateId  String?
-  zoneId      String?
-  name        String
-  category    InventoryCategory
-  material    String?
-  description String?
-  template    InventoryTemplate? @relation(fields: [templateId], references: [id])
-  zone        Zone?              @relation(fields: [zoneId], references: [id])
+  id                String             @id
+  templateId        String?
+  zoneId            String?
+  name              String
+  category          InventoryCategory
+  material          String?
+  description       String?
+  InventoryTemplate InventoryTemplate? @relation(fields: [templateId], references: [id])
+  Zone              Zone?              @relation(fields: [zoneId], references: [id])
+}
+
+model Invoice {
+  id                   String               @id
+  tenantId             String
+  type                 InvoiceType          @default(SALES_INVOICE)
+  sequence             String               @unique
+  issueDate            DateTime             @default(now())
+  dueDate              DateTime?
+  subtotal             Decimal              @default(0) @db.Decimal(19, 4)
+  taxAmount            Decimal              @default(0) @db.Decimal(19, 4)
+  total                Decimal              @default(0) @db.Decimal(19, 4)
+  thirdPartyId         String
+  journalEntryId       String?
+  dianStatus           DianStatus           @default(DRAFT)
+  cufe                 String?
+  qrCodeUrl            String?
+  xmlResponse          String?
+  createdAt            DateTime             @default(now())
+  dianZipKey           String?
+  JournalEntry         JournalEntry?        @relation(fields: [journalEntryId], references: [id])
+  Tenant               Tenant               @relation(fields: [tenantId], references: [id])
+  AccountingThirdParty AccountingThirdParty @relation(fields: [thirdPartyId], references: [id])
+  InvoiceLine          InvoiceLine[]
+}
+
+model InvoiceLine {
+  id            String      @id
+  invoiceId     String
+  billingItemId String
+  quantity      Decimal     @default(1) @db.Decimal(19, 4)
+  unitPrice     Decimal     @db.Decimal(19, 4)
+  taxAmount     Decimal     @default(0) @db.Decimal(19, 4)
+  total         Decimal     @db.Decimal(19, 4)
+  BillingItem   BillingItem @relation(fields: [billingItemId], references: [id])
+  Invoice       Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model JournalEntry {
+  id              String            @id
+  tenantId        String
+  date            DateTime
+  documentType    String
+  documentNumber  String?
+  description     String
+  status          EntryStatus       @default(DRAFT)
+  createdByUserId String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  Invoice         Invoice[]
+  User            User              @relation(fields: [createdByUserId], references: [id])
+  Tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  TransactionLine TransactionLine[]
+
+  @@index([tenantId, date])
 }
 
 model MeterReading {
-  id          String    @id @default(uuid())
+  id          String    @id
   propertyId  String
   type        MeterType
   value       String
   photoUrl    String?
   readingDate DateTime  @default(now())
-  property    Property  @relation(fields: [propertyId], references: [id])
+  Property    Property  @relation(fields: [propertyId], references: [id])
+}
+
+model Property {
+  id                      String                    @id
+  tenantId                String
+  parentPropertyId        String?
+  propertyType            PropertyType
+  title                   String
+  description             String?
+  address                 String
+  city                    String
+  department              String
+  country                 String
+  latitude                Float?
+  longitude               Float?
+  areaM2                  Float?
+  rooms                   Int?
+  bathrooms               Int?
+  status                  PropertyStatus            @default(AVAILABLE)
+  propertyCode            String?                   @unique
+  isVip                   Boolean                   @default(false)
+  isActive                Boolean                   @default(true)
+  rentAmount              Decimal?
+  adminAmount             Decimal?
+  taxAmount               Decimal?
+  managementName          String?
+  managementNit           String?
+  insuranceCompany        String?
+  splatUrl                String?
+  attachments             Json?
+  createdAt               DateTime                  @default(now())
+  accessToken             String?                   @unique
+  workflowId              String?
+  managementEmail         String?
+  managementPhone         String?
+  visionAnalysis          Json?
+  admonEmail              String?
+  admonName               String?
+  admonPhone              String?
+  admonPorteria           String?
+  visionVideoUrl          Json?
+  ContractRequest         ContractRequest[]
+  InventoryItem           InventoryItem[]
+  MeterReading            MeterReading[]
+  Property                Property?                 @relation("PropertyToProperty", fields: [parentPropertyId], references: [id])
+  other_Property          Property[]                @relation("PropertyToProperty")
+  Tenant                  Tenant                    @relation(fields: [tenantId], references: [id])
+  Workflow                Workflow?                 @relation(fields: [workflowId], references: [id])
+  PropertyAccessItem      PropertyAccessItem[]
+  PropertyAgentAssignment PropertyAgentAssignment[]
+  PropertyRelation        PropertyRelation[]
+  Ticket                  Ticket[]
+  TransactionLine         TransactionLine[]
+  Zone                    Zone[]
+  Prospect                Prospect[]                @relation("PropertyInterests")
 }
 
 model PropertyAccessItem {
-  id          String     @id @default(uuid())
+  id          String     @id
   propertyId  String
   type        AccessType
   description String
   quantity    Int        @default(1)
   photoUrl    String?
-  property    Property   @relation(fields: [propertyId], references: [id])
+  Property    Property   @relation(fields: [propertyId], references: [id])
 }
 
-model InventoryEvidence {
-  id                 String              @id @default(uuid())
-  inventoryItemId    String
-  evidenceType       EvidenceType
-  url                String
-  aiAnalysisStatus   AIAnalysisStatus    @default(PENDING)
-  aiComparisonResult AIComparisonResult?
-  captureDate        DateTime            @default(now())
-  inventoryItem      InventoryItem       @relation(fields: [inventoryItemId], references: [id])
+model PropertyAgentAssignment {
+  id         String   @id
+  propertyId String
+  agentId    String
+  assignedAt DateTime @default(now())
+  User       User     @relation(fields: [agentId], references: [id])
+  Property   Property @relation(fields: [propertyId], references: [id])
 }
 
-model Workflow {
-  id          String          @id @default(uuid())
-  tenantId    String
-  name        String
-  description String?
-  createdAt   DateTime        @default(now())
-  properties  Property[]
-  tickets     Ticket[]
-  tenant      Tenant          @relation(fields: [tenantId], references: [id])
-  states      WorkflowState[]
-}
-
-model WorkflowState {
-  id             String           @id @default(uuid())
-  workflowId     String
-  name           String
-  order          Int
-  assignedRole   UserRole?
-  assignedUserId String?
-  slaHours       Int?
-  color          String?
-  aiInstructions String?
-  tickets        Ticket[]
-  stateLogs      TicketStateLog[]
-  responsible    User?            @relation("StateResponsibility", fields: [assignedUserId], references: [id])
-  workflow       Workflow         @relation(fields: [workflowId], references: [id])
-  assignedUsers  User[]           @relation("RoleAssignments")
-}
-
-model Ticket {
-  id                   String              @id @default(uuid())
-  tenantId             String
-  propertyId           String
-  reportedByUserId     String
-  workflowId           String?
-  currentStateId       String?
-  reportedByUserPhone  String?
-  assignedTechnicianId String?
-  priority             TicketPriority      @default(MEDIUM)
-  severity             TicketSeverity      @default(MEDIUM)
-  title                String
-  description          String
-  aiDiagnosisSummary   String?
-  estimatedCost        Decimal?
-  ownerApproved        Boolean             @default(false)
-  coordinates3d        Json?
-  payerResponsible     PayerResponsible?   @default(AGENCY)
-  createdAt            DateTime            @default(now())
-  resolvedAt           DateTime?
-  satisfactionStars    Int?
-  satisfactionComment  String?
-  assignedProviderId   String?
-  attachments          Json?
-  closureReason        String?
-  inventoryItemId      String?
-  assignedProvider     Provider?           @relation("ProviderTickets", fields: [assignedProviderId], references: [id])
-  assignedTechnician   User?               @relation("AssignedTickets", fields: [assignedTechnicianId], references: [id])
-  currentState         WorkflowState?      @relation(fields: [currentStateId], references: [id])
-  inventoryItem        InventoryItem?      @relation("InventoryTickets", fields: [inventoryItemId], references: [id])
-  property             Property            @relation(fields: [propertyId], references: [id])
-  reportedByUser       User                @relation("ReportedTickets", fields: [reportedByUserId], references: [id])
-  tenant               Tenant              @relation(fields: [tenantId], references: [id])
-  workflow             Workflow?           @relation(fields: [workflowId], references: [id])
-  interactions         TicketInteraction[]
-  stateLogs            TicketStateLog[]
-}
-
-model TicketStateLog {
-  id                String        @id @default(uuid())
-  ticketId          String
-  stateId           String
-  startedAt         DateTime      @default(now())
-  completedAt       DateTime?
-  comment           String?
-  completedByUserId String?
-  completedByUser   User?         @relation(fields: [completedByUserId], references: [id])
-  state             WorkflowState @relation(fields: [stateId], references: [id])
-  ticket            Ticket        @relation(fields: [ticketId], references: [id])
+model PropertyRelation {
+  id                  String         @id
+  propertyId          String
+  userId              String
+  relationType        RelationType
+  percentageOwnership Float?
+  startDate           DateTime
+  endDate             DateTime?
+  status              RelationStatus @default(ACTIVE)
+  contractNumber      String?
+  insuranceCompany    String?
+  contractType        String?
+  Property            Property       @relation(fields: [propertyId], references: [id])
+  User                User           @relation(fields: [userId], references: [id])
 }
 
 model Prospect {
-  id              String                @id @default(uuid())
-  tenantId        String
-  firstName       String
-  lastName        String?
-  email           String?
-  phone           String?
-  whatsappId      String?               @unique
-  status          ProspectStatus        @default(NEW)
-  source          ProspectSource        @default(MANUAL)
-  sentiment       SentimentAnalysis     @default(NEUTRAL)
-  assignedAgentId String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  assignedAgent   User?                 @relation("AgentProspects", fields: [assignedAgentId], references: [id])
-  tenant          Tenant                @relation(fields: [tenantId], references: [id])
-  interactions    ProspectInteraction[]
-  tasks           ProspectTask[]
-}
-
-model ProspectTask {
-  id          String    @id @default(uuid())
-  prospectId  String
-  title       String
-  description String?
-  dueDate     DateTime?
-  isCompleted Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  prospect    Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  id                  String                @id
+  tenantId            String
+  firstName           String
+  lastName            String?
+  email               String?
+  phone               String?
+  whatsappId          String?               @unique
+  status              ProspectStatus        @default(NEW)
+  source              ProspectSource        @default(MANUAL)
+  sentiment           SentimentAnalysis     @default(NEUTRAL)
+  assignedAgentId     String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  ContractRequest     ContractRequest[]
+  User                User?                 @relation(fields: [assignedAgentId], references: [id])
+  Tenant              Tenant                @relation(fields: [tenantId], references: [id])
+  ProspectInteraction ProspectInteraction[]
+  ProspectTask        ProspectTask[]
+  Property            Property[]            @relation("PropertyInterests")
 }
 
 model ProspectInteraction {
-  id         String             @id @default(uuid())
+  id         String             @id
   prospectId String
   userId     String?
   channel    InteractionChannel
   message    String
   sentiment  SentimentAnalysis?
   createdAt  DateTime           @default(now())
-  prospect   Prospect           @relation(fields: [prospectId], references: [id])
-  user       User?              @relation("AgentProspectInteractions", fields: [userId], references: [id])
+  Prospect   Prospect           @relation(fields: [prospectId], references: [id])
+  User       User?              @relation(fields: [userId], references: [id])
 }
 
-model TicketInteraction {
-  id                String             @id @default(uuid())
-  ticketId          String
-  userId            String?
-  channel           InteractionChannel
-  message           String
-  sentimentAnalysis SentimentAnalysis?
-  sentAt            DateTime           @default(now())
-  ticket            Ticket             @relation(fields: [ticketId], references: [id])
-  user              User?              @relation(fields: [userId], references: [id])
+model ProspectTask {
+  id          String    @id
+  prospectId  String
+  title       String
+  description String?
+  dueDate     DateTime?
+  isCompleted Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+  Prospect    Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
 }
 
 model Provider {
-  id                 String                      @id @default(uuid())
-  tenantId           String
-  name               String
-  nit                String?
-  email              String?
-  phone              String?
-  address            String?
-  specialty          ProviderSpecialty           @default(GENERAL)
-  status             ProviderStatus              @default(ACTIVE)
-  rating             Float?                      @default(5.0)
-  contactName        String?
-  contactLastName    String?
-  contactId          String?
-  contactPhone       String?
-  photoUrl           String?
-  legalArl           String?
-  legalSst           Boolean                     @default(false)
-  legalPolicyNumber  String?
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
-  tenant             Tenant                      @relation(fields: [tenantId], references: [id])
-  additionalContacts ProviderAdditionalContact[]
-  assignedTickets    Ticket[]                    @relation("ProviderTickets")
-  technicians        User[]                      @relation("ProviderTechnicians")
+  id                        String                      @id
+  tenantId                  String
+  name                      String
+  nit                       String?
+  email                     String?
+  phone                     String?
+  address                   String?
+  specialty                 ProviderSpecialty           @default(GENERAL)
+  status                    ProviderStatus              @default(ACTIVE)
+  rating                    Float?                      @default(5.0)
+  contactName               String?
+  contactLastName           String?
+  contactId                 String?
+  contactPhone              String?
+  photoUrl                  String?
+  legalArl                  String?
+  legalSst                  Boolean                     @default(false)
+  legalPolicyNumber         String?
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime
+  AccountingThirdParty      AccountingThirdParty?
+  Tenant                    Tenant                      @relation(fields: [tenantId], references: [id])
+  ProviderAdditionalContact ProviderAdditionalContact[]
+  Ticket                    Ticket[]
+  User                      User[]
 }
 
 model ProviderAdditionalContact {
-  id           String   @id @default(uuid())
+  id           String   @id
   providerId   String
   firstName    String
   lastName     String
@@ -438,25 +421,232 @@ model ProviderAdditionalContact {
   phone        String?
   photoUrl     String?
   createdAt    DateTime @default(now())
-  provider     Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  Provider     Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 }
 
-enum ZoneType {
-  ZONAS_COMUNES
-  ZONAS_PRIVADAS
-  ZONAS_DE_SERVICIO
-  EXTERIORES
+model Role {
+  id          String   @id
+  tenantId    String
+  name        String
+  description String?
+  permissions Json?
+  createdAt   DateTime @default(now())
+  Tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  User        User[]
 }
 
-enum TemplateStatus {
-  ACTIVE
-  INACTIVE
+model SubscriptionPlan {
+  id            String   @id
+  name          String
+  priceMonthly  Decimal
+  maxProperties Int
+  maxUsers      Int
+  createdAt     DateTime @default(now())
+  Tenant        Tenant[]
 }
 
-enum MeterType {
-  ENERGY
-  WATER
-  GAS
+model Tenant {
+  id                     String                 @id
+  name                   String
+  nit                    String
+  status                 TenantStatus           @default(ACTIVE)
+  subscriptionPlanId     String
+  createdAt              DateTime               @default(now())
+  aiTone                 String?
+  brandManualUrl         String?
+  communicationTemplates Json?
+  AccountingAccount      AccountingAccount[]
+  AccountingThirdParty   AccountingThirdParty[]
+  BillingItem            BillingItem[]
+  BrandBrain             BrandBrain?
+  DianResolution         DianResolution[]
+  DigitalCertificate     DigitalCertificate?
+  InventoryTemplate      InventoryTemplate[]
+  Invoice                Invoice[]
+  JournalEntry           JournalEntry[]
+  Property               Property[]
+  Prospect               Prospect[]
+  Provider               Provider[]
+  Role                   Role[]
+  SubscriptionPlan       SubscriptionPlan       @relation(fields: [subscriptionPlanId], references: [id])
+  Ticket                 Ticket[]
+  User                   User[]
+  Workflow               Workflow[]
+}
+
+model Ticket {
+  id                                     String              @id
+  tenantId                               String
+  propertyId                             String
+  reportedByUserId                       String
+  workflowId                             String?
+  currentStateId                         String?
+  reportedByUserPhone                    String?
+  assignedTechnicianId                   String?
+  priority                               TicketPriority      @default(MEDIUM)
+  severity                               TicketSeverity      @default(MEDIUM)
+  title                                  String
+  description                            String
+  aiDiagnosisSummary                     String?
+  estimatedCost                          Decimal?
+  ownerApproved                          Boolean             @default(false)
+  coordinates3d                          Json?
+  payerResponsible                       PayerResponsible?   @default(AGENCY)
+  createdAt                              DateTime            @default(now())
+  resolvedAt                             DateTime?
+  satisfactionStars                      Int?
+  satisfactionComment                    String?
+  assignedProviderId                     String?
+  closureReason                          String?
+  attachments                            Json?
+  clientSignature                        String?
+  inventoryItemId                        String?
+  Provider                               Provider?           @relation(fields: [assignedProviderId], references: [id])
+  User_Ticket_assignedTechnicianIdToUser User?               @relation("Ticket_assignedTechnicianIdToUser", fields: [assignedTechnicianId], references: [id])
+  WorkflowState                          WorkflowState?      @relation(fields: [currentStateId], references: [id])
+  InventoryItem                          InventoryItem?      @relation(fields: [inventoryItemId], references: [id])
+  Property                               Property            @relation(fields: [propertyId], references: [id])
+  User_Ticket_reportedByUserIdToUser     User                @relation("Ticket_reportedByUserIdToUser", fields: [reportedByUserId], references: [id])
+  Tenant                                 Tenant              @relation(fields: [tenantId], references: [id])
+  Workflow                               Workflow?           @relation(fields: [workflowId], references: [id])
+  TicketInteraction                      TicketInteraction[]
+  TicketStateLog                         TicketStateLog[]
+}
+
+model TicketInteraction {
+  id                String             @id
+  ticketId          String
+  userId            String?
+  channel           InteractionChannel
+  message           String
+  sentimentAnalysis SentimentAnalysis?
+  sentAt            DateTime           @default(now())
+  Ticket            Ticket             @relation(fields: [ticketId], references: [id])
+  User              User?              @relation(fields: [userId], references: [id])
+}
+
+model TicketStateLog {
+  id                String        @id
+  ticketId          String
+  stateId           String
+  startedAt         DateTime      @default(now())
+  completedAt       DateTime?
+  comment           String?
+  completedByUserId String?
+  attachments       Json?
+  User              User?         @relation(fields: [completedByUserId], references: [id])
+  WorkflowState     WorkflowState @relation(fields: [stateId], references: [id])
+  Ticket            Ticket        @relation(fields: [ticketId], references: [id])
+}
+
+model TransactionLine {
+  id                   String                @id
+  journalEntryId       String
+  accountId            String
+  debit                Decimal               @default(0) @db.Decimal(19, 4)
+  credit               Decimal               @default(0) @db.Decimal(19, 4)
+  thirdPartyId         String?
+  propertyId           String?
+  description          String?
+  AccountingAccount    AccountingAccount     @relation(fields: [accountId], references: [id])
+  JournalEntry         JournalEntry          @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  Property             Property?             @relation(fields: [propertyId], references: [id])
+  AccountingThirdParty AccountingThirdParty? @relation(fields: [thirdPartyId], references: [id])
+}
+
+model User {
+  id                                               String                    @id
+  tenantId                                         String?
+  email                                            String                    @unique
+  passwordHash                                     String
+  firstName                                        String
+  lastName                                         String
+  governmentId                                     String?
+  role                                             UserRole                  @default(TENANT_USER)
+  roleId                                           String?
+  phone                                            String?
+  whatsappId                                       String?
+  photoUrl                                         String?
+  isActive                                         Boolean                   @default(true)
+  createdAt                                        DateTime                  @default(now())
+  additionalContacts                               String?
+  personType                                       String?
+  isTaxDeclarant                                   Boolean                   @default(false)
+  regimeType                                       String?
+  applyReteIva                                     Boolean                   @default(false)
+  applyReteFuente                                  Boolean                   @default(false)
+  applyReteIca                                     Boolean                   @default(false)
+  bankName                                         String?
+  accountNumber                                    String?
+  providerId                                       String?
+  accountType                                      String?
+  AccountingThirdParty                             AccountingThirdParty?
+  ContractRequest                                  ContractRequest[]
+  JournalEntry                                     JournalEntry[]
+  PropertyAgentAssignment                          PropertyAgentAssignment[]
+  PropertyRelation                                 PropertyRelation[]
+  Prospect                                         Prospect[]
+  ProspectInteraction                              ProspectInteraction[]
+  Ticket_Ticket_assignedTechnicianIdToUser         Ticket[]                  @relation("Ticket_assignedTechnicianIdToUser")
+  Ticket_Ticket_reportedByUserIdToUser             Ticket[]                  @relation("Ticket_reportedByUserIdToUser")
+  TicketInteraction                                TicketInteraction[]
+  TicketStateLog                                   TicketStateLog[]
+  Provider                                         Provider?                 @relation(fields: [providerId], references: [id])
+  Role                                             Role?                     @relation(fields: [roleId], references: [id])
+  Tenant                                           Tenant?                   @relation(fields: [tenantId], references: [id])
+  WorkflowState_WorkflowState_assignedUserIdToUser WorkflowState[]           @relation("WorkflowState_assignedUserIdToUser")
+  WorkflowState_RoleAssignments                    WorkflowState[]           @relation("RoleAssignments")
+}
+
+model Workflow {
+  id            String          @id
+  tenantId      String
+  name          String
+  description   String?
+  createdAt     DateTime        @default(now())
+  Property      Property[]
+  Ticket        Ticket[]
+  Tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  WorkflowState WorkflowState[]
+}
+
+model WorkflowState {
+  id                                      String           @id
+  workflowId                              String
+  name                                    String
+  order                                   Int
+  assignedRole                            UserRole?
+  slaHours                                Int?
+  color                                   String?
+  aiInstructions                          String?
+  assignedUserId                          String?
+  Ticket                                  Ticket[]
+  TicketStateLog                          TicketStateLog[]
+  User_WorkflowState_assignedUserIdToUser User?            @relation("WorkflowState_assignedUserIdToUser", fields: [assignedUserId], references: [id])
+  Workflow                                Workflow         @relation(fields: [workflowId], references: [id])
+  User_RoleAssignments                    User[]           @relation("RoleAssignments")
+}
+
+model Zone {
+  id                    String                  @id
+  propertyId            String?
+  templateId            String?
+  name                  String
+  type                  ZoneType                @default(ZONAS_COMUNES)
+  InventoryItem         InventoryItem[]
+  InventoryTemplateItem InventoryTemplateItem[]
+  Property              Property?               @relation(fields: [propertyId], references: [id])
+  InventoryTemplate     InventoryTemplate?      @relation(fields: [templateId], references: [id])
+}
+
+enum AIAnalysisStatus {
+  PENDING
+  ANALYZED
+}
+
+enum AIComparisonResult {
+  SAME
+  DETERIORATED
 }
 
 enum AccessType {
@@ -466,44 +656,51 @@ enum AccessType {
   SECURITY_CARD
 }
 
-enum TenantStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
+enum AccountLevel {
+  CLASE
+  GRUPO
+  CUENTA
+  SUBCUENTA
+  AUXILIAR
 }
 
-enum UserRole {
-  SUPERADMIN
-  ADMIN_TENANT
-  AGENT
-  TECHNICIAN
-  OWNER
-  TENANT_USER
+enum AccountNature {
+  DEBIT
+  CREDIT
 }
 
-enum PropertyType {
-  APARTMENT
-  HOUSE
-  BUILDING
-  WAREHOUSE
-  OFFICE
+enum ContractStatus {
+  PENDING_AI
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
 }
 
-enum PropertyStatus {
-  AVAILABLE
-  RENTED
-  UNDER_MAINTENANCE
-  FOR_SALE
+enum DianStatus {
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  SENT_TO_DIAN
 }
 
-enum RelationType {
-  OWNER
-  TENANT
+enum EntryStatus {
+  DRAFT
+  POSTED
+  ANNULLED
 }
 
-enum RelationStatus {
-  ACTIVE
-  HISTORIC
+enum EvidenceType {
+  IMAGE
+  VIDEO
+  SPLAT_360
+  VOICE_NOTE
+}
+
+enum InteractionChannel {
+  WHATSAPP
+  WEB
+  SYSTEM_AI
 }
 
 enum InventoryCategory {
@@ -521,48 +718,37 @@ enum InventoryCondition {
   BAD
 }
 
-enum EvidenceType {
-  IMAGE
-  VIDEO
-  SPLAT_360
-  VOICE_NOTE
+enum InvoiceType {
+  SALES_INVOICE
+  CREDIT_NOTE
+  DEBIT_NOTE
 }
 
-enum AIAnalysisStatus {
-  PENDING
-  ANALYZED
+enum MeterType {
+  ENERGY
+  WATER
+  GAS
 }
 
-enum AIComparisonResult {
-  SAME
-  DETERIORATED
+enum PayerResponsible {
+  OWNER
+  TENANT
+  AGENCY
 }
 
-enum TicketPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
+enum PropertyStatus {
+  AVAILABLE
+  RENTED
+  UNDER_MAINTENANCE
+  FOR_SALE
 }
 
-enum InteractionChannel {
-  WHATSAPP
-  WEB
-  SYSTEM_AI
-}
-
-enum SentimentAnalysis {
-  POSITIVE
-  NEUTRAL
-  NEGATIVE
-}
-
-enum ProspectStatus {
-  NEW
-  QUALIFIED
-  NEGOTIATION
-  CLOSED_WON
-  CLOSED_LOST
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  BUILDING
+  WAREHOUSE
+  OFFICE
 }
 
 enum ProspectSource {
@@ -574,17 +760,12 @@ enum ProspectSource {
   RADAR_IA
 }
 
-enum TicketSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-enum PayerResponsible {
-  OWNER
-  TENANT
-  AGENCY
+enum ProspectStatus {
+  NEW
+  QUALIFIED
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
 }
 
 enum ProviderSpecialty {
@@ -601,4 +782,61 @@ enum ProviderStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+enum RelationStatus {
+  ACTIVE
+  HISTORIC
+}
+
+enum RelationType {
+  OWNER
+  TENANT
+}
+
+enum SentimentAnalysis {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum TemplateStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN_TENANT
+  AGENT
+  TECHNICIAN
+  OWNER
+  TENANT_USER
+}
+
+enum ZoneType {
+  ZONAS_COMUNES
+  ZONAS_PRIVADAS
+  ZONAS_DE_SERVICIO
+  EXTERIORES
 }

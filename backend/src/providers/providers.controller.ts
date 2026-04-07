@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { ProviderSpecialty } from '@prisma/client';
 
@@ -19,7 +28,8 @@ export class ProvidersController {
   @Post()
   create(
     @Query('tenantId') tenantId: string,
-    @Body() data: {
+    @Body()
+    data: {
       name: string;
       nit?: string;
       email?: string;
@@ -35,7 +45,7 @@ export class ProvidersController {
       legalSst?: boolean;
       legalPolicyNumber?: string;
       additionalContacts?: any[];
-    }
+    },
   ) {
     return this.providersService.create(tenantId, data);
   }
@@ -51,10 +61,7 @@ export class ProvidersController {
   }
 
   @Post(':id/assign-technician/:userId')
-  assignTechnician(
-    @Param('id') id: string,
-    @Param('userId') userId: string
-  ) {
+  assignTechnician(@Param('id') id: string, @Param('userId') userId: string) {
     return this.providersService.assignTechnician(id, userId);
   }
 }

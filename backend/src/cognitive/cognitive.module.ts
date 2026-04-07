@@ -9,27 +9,27 @@ import { AiChatService } from './ai-chat.service';
 import { DocumentGeneratorService } from './document-generator.service';
 import { EmailService } from './email.service';
 import { MaintenancePredictorService } from './maintenance-predictor.service';
-import { AssetRecognitionService } from './asset-recognition.service';
+import { LegalAiService } from './legal-ai.service';
 
 @Module({
   imports: [PrismaModule],
   controllers: [CognitiveController, BrandBrainController, AiChatController],
   providers: [
-    CognitiveService, 
-    BrandBrainService, 
-    DocumentGeneratorService, 
-    EmailService, 
+    CognitiveService,
+    BrandBrainService,
+    DocumentGeneratorService,
+    EmailService,
     MaintenancePredictorService,
-    AssetRecognitionService,
-    AiChatService
+    AiChatService,
+    LegalAiService,
   ],
   exports: [
-    CognitiveService, 
-    BrandBrainService, 
-    DocumentGeneratorService, 
-    EmailService, 
+    CognitiveService,
+    BrandBrainService,
+    DocumentGeneratorService,
+    EmailService,
     MaintenancePredictorService,
-    AssetRecognitionService
+    LegalAiService,
   ],
 })
 export class CognitiveModule {}

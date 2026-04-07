@@ -23,7 +23,7 @@ export default function DashboardLayout({
           <div className="absolute top-[-10%] right-[-5%] w-[30%] h-[30%] bg-[var(--color-neon-blue)] rounded-full blur-[120px] opacity-10 pointer-events-none" />
           <div className="absolute bottom-[-10%] left-[-5%] w-[20%] h-[20%] bg-[var(--color-neon-cyan)] rounded-full blur-[100px] opacity-10 pointer-events-none" />
           
-          <div className="relative z-10 w-full max-w-7xl mx-auto">
+          <div className="relative w-full max-w-7xl mx-auto">
             {children}
           </div>
         </main>

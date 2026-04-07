@@ -8,12 +8,12 @@ export class IntegrationsService {
 
   constructor(
     private prisma: PrismaService,
-    private propertiesService: PropertiesService
+    private propertiesService: PropertiesService,
   ) {}
 
   async handleFincaRaizWebhook(tenantId: string, data: any) {
     this.logger.log(`Received Finca Raiz Webhook for tenant: ${tenantId}`);
-    
+
     // 1. Determine if it's a Property or a Prospect
     // Finca Raiz webhooks usually come from a lead or a new listing
     if (data.type === 'NEW_LISTING' || data.propertyData) {
@@ -25,7 +25,7 @@ export class IntegrationsService {
 
   private async handleNewListing(tenantId: string, data: any) {
     const propertyData = data.propertyData;
-    
+
     // Map Finca Raiz fields to Don Atento Property
     const newProperty = await this.propertiesService.create({
       tenantId,
@@ -42,7 +42,7 @@ export class IntegrationsService {
       propertyCode: propertyData.externalId || `FR-${Date.now()}`,
       rentAmount: propertyData.price,
       // Integration specific metadata
-      visionAnalysis: `Imported via Finca Raiz Webhook on ${new Date().toISOString()}`
+      visionAnalysis: `Imported via Finca Raiz Webhook on ${new Date().toISOString()}`,
     });
 
     this.logger.log(`Property auto-created from Finca Raiz: ${newProperty.id}`);
@@ -65,10 +65,10 @@ export class IntegrationsService {
         interactions: {
           create: {
             channel: 'SYSTEM_AI',
-            message: `Lead automatically created from Finca Raiz webhook. Interest in listing: ${leadData.listingId || 'N/A'}`
-          }
-        }
-      }
+            message: `Lead automatically created from Finca Raiz webhook. Interest in listing: ${leadData.listingId || 'N/A'}`,
+          },
+        },
+      },
     });
 
     this.logger.log(`Prospect auto-created from Finca Raiz: ${prospect.id}`);
@@ -77,11 +77,11 @@ export class IntegrationsService {
 
   private mapPropertyType(frType: string): string {
     const mapping: Record<string, string> = {
-      'Apartamento': 'APARTMENT',
-      'Casa': 'HOUSE',
-      'Oficina': 'OFFICE',
-      'Bodega': 'WAREHOUSE',
-      'Local': 'OFFICE'
+      Apartamento: 'APARTMENT',
+      Casa: 'HOUSE',
+      Oficina: 'OFFICE',
+      Bodega: 'WAREHOUSE',
+      Local: 'OFFICE',
     };
     return mapping[frType] || 'APARTMENT';
   }

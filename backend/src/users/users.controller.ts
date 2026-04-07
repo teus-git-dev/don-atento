@@ -1,4 +1,12 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Delete,
+  Param,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UserRole } from '@prisma/client';
 
@@ -24,5 +32,15 @@ export class UsersController {
   @Get()
   async findAll(@Query('tenantId') tenantId: string) {
     return this.usersService.findAllByTenant(tenantId);
+  }
+
+  @Post()
+  async create(@Body() data: any) {
+    return this.usersService.create(data);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    return this.usersService.delete(id);
   }
 }

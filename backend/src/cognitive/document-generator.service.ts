@@ -5,9 +5,13 @@ import { BrandBrainService } from '../cognitive/brand-brain.service';
 export class DocumentGeneratorService {
   constructor(private readonly brandBrain: BrandBrainService) {}
 
-  async generateWelcomeLetter(tenantId: string, tenantName: string, propertyAddress: string) {
+  async generateWelcomeLetter(
+    tenantId: string,
+    tenantName: string,
+    propertyAddress: string,
+  ) {
     const brandProfile = await this.brandBrain.getBrandTone(tenantId);
-    
+
     let content = '';
     if (brandProfile.tone === 'CUSTOM') {
       content = `[BRAND VOICE ADAPTED]\nEstimado(a) ${tenantName},\n\nEs un gusto para nosotros darle la bienvenida a su nuevo hogar en ${propertyAddress}. Siguiendo nuestra filosofía de excelencia...`;
@@ -19,7 +23,7 @@ export class DocumentGeneratorService {
       fileName: `Welcome_Letter_${Date.now()}.pdf`,
       content,
       toneUsed: brandProfile.tone,
-      alignmentScore: brandProfile.alignmentScore
+      alignmentScore: brandProfile.alignmentScore,
     };
   }
 }

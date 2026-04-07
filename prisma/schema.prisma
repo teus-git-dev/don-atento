@@ -27,6 +27,7 @@ model Tenant {
   brandManualUrl         String?
   communicationTemplates Json?
   brandBrain             BrandBrain?
+  digitalCertificate     DigitalCertificate?
   inventoryTemplates     InventoryTemplate[]
   properties             Property[]
   prospects              Prospect[]
@@ -36,6 +37,18 @@ model Tenant {
   tickets                Ticket[]
   users                  User[]
   workflows              Workflow[]
+}
+
+model DigitalCertificate {
+  id           String    @id @default(uuid())
+  tenantId     String    @unique
+  filePath     String    @default("")
+  fileBuffer   Bytes?
+  passwordHash String
+  validUntil   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model BrandBrain {

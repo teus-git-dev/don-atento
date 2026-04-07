@@ -10,7 +10,7 @@ export class AiChatController {
     @Body('tenantId') tenantId: string,
     @Body('userId') userId: string,
     @Body('message') message: string,
-    @Body('history') history: any[]
+    @Body('history') history: any[],
   ) {
     if (!tenantId || !message) {
       return { error: 'tenantId and message are required' };

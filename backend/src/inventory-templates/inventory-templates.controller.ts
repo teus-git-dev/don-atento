@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Param, Body, Delete, Patch, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  Delete,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import { InventoryTemplatesService } from './inventory-templates.service';
 import { CreateInventoryTemplateDto } from './dto/create-inventory-template.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';

@@ -19,7 +19,10 @@ export class TicketsService {
   ) {}
 
   async createTicket(data: CreateTicketDto): Promise<Ticket> {
-    console.log("[TicketsService] Creating ticket with data:", JSON.stringify(data, null, 2));
+    console.log(
+      '[TicketsService] Creating ticket with data:',
+      JSON.stringify(data, null, 2),
+    );
     try {
       // 1. Initial State from Workflow (if provided)
       let initialStateId: string | undefined;
@@ -33,6 +36,24 @@ export class TicketsService {
         }
       }
 
+      // 1.5 AI Priority Classification (if not explicitly set or to validate)
+      let finalPriority = data.priority;
+      let aiReason = null;
+
+      if (!data.priority || data.priority === TicketPriority.MEDIUM) {
+        const aiAnalysis = await this.cognitiveService.classifyPriority(
+          data.title,
+          data.description,
+        );
+        if (aiAnalysis.priority !== TicketPriority.MEDIUM || !data.priority) {
+          finalPriority = aiAnalysis.priority;
+          aiReason = aiAnalysis.reason;
+          console.log(
+            `[TicketsService] AI suggested priority: ${finalPriority} - Reason: ${aiReason}`,
+          );
+        }
+      }
+
       // 2. Map DTO to Prisma data
       const ticket = await this.prisma.ticket.create({
         data: {
@@ -43,89 +64,106 @@ export class TicketsService {
           currentStateId: initialStateId,
           reportedByUserPhone: data.reportedByUserPhone,
           assignedTechnicianId: data.assignedTechnicianId,
-          priority: (data.priority as TicketPriority) || TicketPriority.MEDIUM,
+          priority: (finalPriority as TicketPriority) || TicketPriority.MEDIUM,
           title: data.title,
           description: data.description,
           attachments: data.attachments,
+          aiDiagnosisSummary: aiReason
+            ? `Clasificación Automática: ${aiReason}`
+            : null,
         },
         include: {
           property: {
             include: {
               relations: {
-                include: { user: true }
-              }
-            }
+                include: { user: true },
+              },
+            },
           },
           assignedTechnician: true,
           currentState: true,
-          reportedByUser: true
-        }
+          reportedByUser: true,
+        },
       });
 
       // 2.1 Initialize State Log
       if (initialStateId) {
-          await this.prisma.ticketStateLog.create({
-              data: {
-                  ticketId: ticket.id,
-                  stateId: initialStateId,
-                  startedAt: new Date(),
-              }
-          });
+        await this.prisma.ticketStateLog.create({
+          data: {
+            ticketId: ticket.id,
+            stateId: initialStateId,
+            startedAt: new Date(),
+          },
+        });
       }
 
       // 3. Calculate SLA (New Pillar)
       const dueDate = await this.slaMatrix.calculateDueDate(ticket.id);
-      
+
       // 4. Automated Notifications (Phase 10)
       const ticketWithSla = { ...ticket, dueDate };
-      this.sendTicketNotifications(ticketWithSla).catch(err => console.error("Notification Error:", err));
+      this.sendTicketNotifications(ticketWithSla).catch((err) =>
+        console.error('Notification Error:', err),
+      );
 
       return ticket;
     } catch (error) {
-      console.error("[TicketsService] Error creating ticket:", error);
+      console.error('[TicketsService] Error creating ticket:', error);
       throw error;
     }
   }
 
   private async sendTicketNotifications(ticket: any) {
     const property = ticket.property;
-    const tenantRel = property.relations.find((r: any) => r.relationType === RelationType.TENANT);
-    const ownerRel = property.relations.find((r: any) => r.relationType === RelationType.OWNER);
+    const tenantRel = property.relations.find(
+      (r: any) => r.relationType === RelationType.TENANT,
+    );
+    const ownerRel = property.relations.find(
+      (r: any) => r.relationType === RelationType.OWNER,
+    );
 
     const reporter = ticket.reportedByUser;
     const technician = ticket.assignedTechnician;
 
     // Omnichannel logic for WhatsApp (Short Response)
-    const { shortResponse, longEmail } = await this.cognitiveService.generateResponse(
-      ticket.id,
-      ticket.description,
-      reporter.phone || 'SYSTEM',
-      ticket.tenantId
-    );
+    const { shortResponse, longEmail } =
+      await this.cognitiveService.generateResponse(
+        ticket.id,
+        ticket.description,
+        reporter.phone || 'SYSTEM',
+        ticket.tenantId,
+      );
 
     const messageToReporter = `Hola ${reporter.firstName}, ${shortResponse}`;
-    
+
     // Notify Reporter (if WhatsApp available)
-    if (reporter.phone) await this.whatsappService.sendMessage(reporter.phone, messageToReporter);
+    if (reporter.phone)
+      await this.whatsappService.sendMessage(reporter.phone, messageToReporter);
 
     // Notify Tenant (if different from reporter)
     if (tenantRel?.user?.phone && tenantRel.user.id !== reporter.id) {
-        const messageToTenant = `Hola ${tenantRel.user.firstName}, se ha reportado una novedad en tu inmueble: "${ticket.title}". Estaremos informándote de los avances.`;
-        await this.whatsappService.sendMessage(tenantRel.user.phone, messageToTenant);
+      const messageToTenant = `Hola ${tenantRel.user.firstName}, se ha reportado una novedad en tu inmueble: "${ticket.title}". Estaremos informándote de los avances.`;
+      await this.whatsappService.sendMessage(
+        tenantRel.user.phone,
+        messageToTenant,
+      );
     }
 
     // Notify Owner (Omnichannel: WhatsApp + Formal Email)
     if (ownerRel?.user?.phone) {
-        const messageToOwner = `Don Atento Informa: Se ha generado un requerimiento de mantenimiento ("${ticket.title}") para su propiedad "${property.title}".`;
-        await this.whatsappService.sendMessage(ownerRel.user.phone, messageToOwner);
+      const messageToOwner = `Don Atento Informa: Se ha generado un requerimiento de mantenimiento ("${ticket.title}") para su propiedad "${property.title}".`;
+      await this.whatsappService.sendMessage(
+        ownerRel.user.phone,
+        messageToOwner,
+      );
     }
 
     if (ownerRel?.user?.email) {
-        await this.emailService.sendFormalReport(
-            ownerRel.user.email,
-            property.title,
-            longEmail
-        );
+      await this.emailService.sendFormalReport(
+        ownerRel.user.email,
+        property.title,
+        longEmail,
+      );
     }
   }
 
@@ -135,7 +173,7 @@ export class TicketsService {
       orderBy: { createdAt: 'desc' },
       include: {
         currentState: true,
-      }
+      },
     });
   }
 
@@ -143,19 +181,25 @@ export class TicketsService {
     return this.prisma.ticket.update({
       where: { id },
       data: { currentStateId: statusId },
-      include: { currentState: true }
+      include: { currentState: true },
     });
   }
 
-  async transitionState(id: string, userId: string, newStateId: string): Promise<Ticket> {
-    const newState = await this.prisma.workflowState.findUnique({ where: { id: newStateId } });
-    if (!newState) throw new Error("Estado no encontrado");
+  async transitionState(
+    id: string,
+    userId: string,
+    newStateId: string,
+  ): Promise<Ticket> {
+    const newState = await this.prisma.workflowState.findUnique({
+      where: { id: newStateId },
+    });
+    if (!newState) throw new Error('Estado no encontrado');
 
     const isResolved = newState.name.toLowerCase().includes('resuelto');
 
     const ticket = await this.prisma.ticket.update({
       where: { id },
-      data: { 
+      data: {
         currentStateId: newStateId,
         resolvedAt: isResolved ? new Date() : undefined,
       },
@@ -164,8 +208,8 @@ export class TicketsService {
         property: true,
         assignedTechnician: true,
         reportedByUser: true,
-        tenant: true
-      }
+        tenant: true,
+      },
     });
 
     // 0. Update State Logs
@@ -179,11 +223,18 @@ export class TicketsService {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey`;
       const surveyMessage = `¡Hola! Don Atento informa: Tu requerimiento "${ticket.title}" ha sido marcado como RESUELTO. \n\nPor favor, califica nuestro servicio aquí: ${surveyLink} \n\no responde con un número del 1 al 5.`;
-      
-      await this.whatsappService.sendMessage(ticket.reportedByUserPhone, surveyMessage);
-      
+
+      await this.whatsappService.sendMessage(
+        ticket.reportedByUserPhone,
+        surveyMessage,
+      );
+
       if (ticket.reportedByUser.email) {
-          await this.emailService.sendSurveyRequest(ticket.reportedByUser.email, ticket.title, surveyLink);
+        await this.emailService.sendSurveyRequest(
+          ticket.reportedByUser.email,
+          ticket.title,
+          surveyLink,
+        );
       }
     }
 
@@ -197,15 +248,17 @@ export class TicketsService {
     const relevantUsers = await this.prisma.user.findMany({
       where: {
         tenantId: ticket.tenantId,
-        role: state.assignedRole
-      }
+        role: state.assignedRole,
+      },
     });
 
     const message = `Don Atento Tareas: Tienes un nuevo ticket en estado "${state.name}" para la propiedad ${ticket.property.title}. Título: ${ticket.title}`;
 
     for (const user of relevantUsers) {
       if (user.phone) {
-        await this.whatsappService.sendMessage(user.phone, message).catch(e => console.error("WA Error:", e));
+        await this.whatsappService
+          .sendMessage(user.phone, message)
+          .catch((e) => console.error('WA Error:', e));
       }
       if (user.email) {
         // Simple alert email
@@ -214,97 +267,264 @@ export class TicketsService {
     }
   }
 
-  async resolveTicket(id: string, closureReason: string): Promise<Ticket> {
-      const ticket = await this.prisma.ticket.findUnique({
-          where: { id },
-          include: { workflow: { include: { states: true } } }
-      });
+  async resolveTicket(
+    id: string,
+    closureReason: string,
+    signature?: string,
+  ): Promise<Ticket> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      include: { workflow: { include: { states: true } } },
+    });
 
-      if (!ticket || !ticket.workflow) throw new Error("Ticket or Workflow not found");
+    if (!ticket || !ticket.workflow)
+      throw new Error('Ticket or Workflow not found');
 
-      const resolvedState = ticket.workflow.states.find(s => s.name.toLowerCase().includes('resuelto'));
-      if (!resolvedState) throw new Error("No 'Resuelto' state found in workflow");
+    let resolvedState = ticket.workflow.states.find((s) =>
+      s.name.toLowerCase().includes('resuelto'),
+    );
 
-      // Transicionamos y guardamos el motivo
-      await this.prisma.ticket.update({
-          where: { id },
-          data: { closureReason } as any,
-      });
+    // Fallback: If no "Resuelto" named state, pick the one with the highest order
+    if (!resolvedState && ticket.workflow.states.length > 0) {
+      resolvedState = [...ticket.workflow.states].sort(
+        (a, b) => b.order - a.order,
+      )[0];
+    }
 
-      return this.transitionState(id, 'SYSTEM', resolvedState.id);
+    if (!resolvedState)
+      throw new Error('No resolution state found in workflow');
+
+    // Transicionamos y guardamos el motivo y firma
+    await this.prisma.ticket.update({
+      where: { id },
+      data: {
+        closureReason,
+        clientSignature: signature || null,
+      },
+    });
+
+    return this.transitionState(id, 'SYSTEM', resolvedState.id);
   }
 
-  async completeStateTask(ticketId: string, userId: string, comment: string): Promise<Ticket> {
-      // 1. Mark current log as completed
-      await this.prisma.ticketStateLog.updateMany({
-          where: { ticketId, completedAt: null },
-          data: { 
-              completedAt: new Date(),
-              comment,
-              completedByUserId: userId 
+  async completeStateTask(
+    ticketId: string,
+    userId: string,
+    comment: string,
+    attachments?: any[],
+  ): Promise<Ticket> {
+    let finalComment = comment;
+
+    // 0. Fetch Ticket to check state
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        currentState: true,
+        reportedByUser: true,
+        workflow: { include: { states: { orderBy: { order: 'asc' } } } },
+      },
+    });
+    if (!ticket) throw new Error('Ticket not found');
+
+    // SPECIAL AI POLISH: Executive Quotation
+    if (ticket.currentState?.name?.toLowerCase().includes('cotización')) {
+      try {
+        let quoteItems = [];
+        if (comment.startsWith('[{')) {
+          quoteItems = JSON.parse(comment);
+          finalComment = await this.cognitiveService.generateExecutiveQuotation(
+            ticket.tenantId,
+            quoteItems,
+          );
+        } else if (attachments && attachments.length > 0) {
+          const quoteFile = attachments.find(
+            (a) => a.type === 'image' || a.url.toLowerCase().endsWith('.pdf'),
+          );
+          if (quoteFile) {
+            console.log(
+              '[Smart Quotation] Document detected, triggering Vision...',
+            );
+            // In a real scenario, this would extract items. For now, we use simulated ones.
+            quoteItems = [
+              {
+                description:
+                  'Mano de obra especializada (reparación filtración)',
+                price: 150000,
+                quantity: 1,
+              },
+              {
+                description: 'Suministro de tubería PVC y accesorios presión',
+                price: 85000,
+                quantity: 1,
+              },
+              {
+                description: 'Sellado y acabado de superficie',
+                price: 45000,
+                quantity: 1,
+              },
+            ];
+            finalComment =
+              await this.cognitiveService.generateExecutiveQuotation(
+                ticket.tenantId,
+                quoteItems,
+              );
           }
-      });
+        }
 
-      // 2. Find next state
-      const ticket = await this.prisma.ticket.findUnique({
-          where: { id: ticketId },
-          include: { 
-              currentState: true,
-              workflow: { include: { states: { orderBy: { order: 'asc' } } } }
-          }
-      });
+        // GENERATE OFFICIAL DOCUMENTS (.docx & .pdf)
+        if (quoteItems.length > 0) {
+          console.log('[Smart Quotation] Generating official documents...');
+          const docxUrl = await this.cognitiveService.generateQuotationDocx(
+            ticket.tenantId,
+            ticket.id,
+            quoteItems,
+          );
+          const pdfUrl = await this.cognitiveService.generateQuotationPdf(
+            ticket.tenantId,
+            ticket.id,
+            quoteItems,
+          );
 
-      if (!ticket || !ticket.workflow) throw new Error("Ticket or Workflow not found");
+          // Add to process attachments
+          const newDocx = {
+            name: 'Cotización Formal.docx',
+            url: docxUrl,
+            type: 'document',
+            category: 'quotation',
+          };
+          const newPdf = {
+            name: 'Cotización Formal.pdf',
+            url: pdfUrl,
+            type: 'pdf',
+            category: 'quotation',
+          };
 
-      const currentOrder = ticket.currentState?.order ?? 0;
-      const nextState = ticket.workflow.states.find(s => s.order > currentOrder);
+          if (!attachments) attachments = [];
+          attachments.push(newDocx, newPdf);
 
-      if (!nextState) {
-          // If no next state, maybe auto-resolve?
-          return ticket;
+          // Update Ticket historical attachments
+          const currentTicketAttachments = (ticket.attachments as any[]) || [];
+          await this.prisma.ticket.update({
+            where: { id: ticketId },
+            data: {
+              attachments: [...currentTicketAttachments, newDocx, newPdf],
+            },
+          });
+
+          finalComment += `\n\n📎 **Cotizaciones Disponibles:** \n- [Descargar .PDF](${pdfUrl}) \n- [Descargar .DOCX](${docxUrl})`;
+        }
+      } catch (e) {
+        console.error('[TicketsService] Error polishing executive quote:', e);
       }
+    }
 
-      // 3. Transition
-      return this.transitionState(ticketId, userId, nextState.id);
+    // 1. Mark current log as completed
+    await this.prisma.ticketStateLog.updateMany({
+      where: { ticketId, completedAt: null },
+      data: {
+        completedAt: new Date(),
+        comment: finalComment,
+        completedByUserId: userId,
+        attachments: attachments ? (attachments as any) : undefined,
+      },
+    });
+
+    if (!ticket || !ticket.workflow)
+      throw new Error('Ticket or Workflow not found');
+
+    // SPECIAL TRIGGER: Smart Scheduling (Agendamiento)
+    if (
+      finalComment.includes('Opciones de agendamiento propuestas') &&
+      ticket.reportedByUser
+    ) {
+      console.log(
+        `[Smart Scheduling] Triggering notification for Ticket ${ticketId}`,
+      );
+      try {
+        const clientName = ticket.reportedByUser.firstName || 'Cliente';
+        const optionsText =
+          finalComment.split(':\n')[1] || 'No se especificaron fechas.';
+        const message = `Hola ${clientName}, Don Atento te propone las siguientes opciones de visita para tu requerimiento "${ticket.title}":\n\n${optionsText}\n\nPor favor, responde con el número de la opción que prefieras.`;
+
+        // Trigger WhatsApp (Simulated/Real)
+        if (this.whatsappService) {
+          await (this.whatsappService as any).sendRawMessage(
+            ticket.reportedByUser.phone,
+            message,
+          );
+        }
+
+        // Trigger Email
+        if (this.emailService && ticket.reportedByUser.email) {
+          await this.emailService.sendEmail(
+            ticket.reportedByUser.email,
+            `Opciones de Agendamiento - Ticket #${ticketId.split('-')[0].toUpperCase()}`,
+            message,
+          );
+        }
+      } catch (notifErr) {
+        console.error('[Smart Scheduling] Error sending proposal:', notifErr);
+      }
+    }
+
+    const currentOrder = ticket.currentState?.order ?? 0;
+    const nextState = ticket.workflow.states.find(
+      (s) => s.order > currentOrder,
+    );
+
+    if (!nextState) {
+      // If no next state, maybe auto-resolve?
+      return ticket;
+    }
+
+    // 3. Transition
+    return this.transitionState(ticketId, userId, nextState.id);
   }
 
-  private async updateTicketStateLogs(ticketId: string, newStateId: string, userId: string) {
-      // Complete active log
-      await this.prisma.ticketStateLog.updateMany({
-          where: { ticketId, completedAt: null },
-          data: { 
-              completedAt: new Date(),
-              completedByUserId: userId === 'SYSTEM' ? null : userId
-          }
-      });
+  private async updateTicketStateLogs(
+    ticketId: string,
+    newStateId: string,
+    userId: string,
+  ) {
+    // Complete active log
+    await this.prisma.ticketStateLog.updateMany({
+      where: { ticketId, completedAt: null },
+      data: {
+        completedAt: new Date(),
+        completedByUserId: userId === 'SYSTEM' ? null : userId,
+      },
+    });
 
-      // Start new log
-      await this.prisma.ticketStateLog.create({
-          data: {
-              ticketId,
-              stateId: newStateId,
-              startedAt: new Date(),
-          }
-      });
+    // Start new log
+    await this.prisma.ticketStateLog.create({
+      data: {
+        ticketId,
+        stateId: newStateId,
+        startedAt: new Date(),
+      },
+    });
   }
 
   async suggestTransition(ticketId: string): Promise<string> {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { stateLogs: { orderBy: { startedAt: 'desc' }, take: 1 } }
+      include: { stateLogs: { orderBy: { startedAt: 'desc' }, take: 1 } },
     });
 
-    if (!ticket) return "No se puede sugerir en este momento.";
+    if (!ticket) return 'No se puede sugerir en este momento.';
 
-    const lastComment = ticket.stateLogs[0]?.comment || "";
+    const lastComment = ticket.stateLogs[0]?.comment || '';
     // Integration with CognitiveService for actual AI logic would go here
     return `La IA sugiere avanzar al siguiente estado basado en el último comentario: "${lastComment.substring(0, 30)}..."`;
   }
 
-  async updateSatisfaction(id: string, stars: number, comment?: string): Promise<Ticket> {
+  async updateSatisfaction(
+    id: string,
+    stars: number,
+    comment?: string,
+  ): Promise<Ticket> {
     return this.prisma.ticket.update({
       where: { id },
-      data: { 
+      data: {
         satisfactionStars: stars,
         satisfactionComment: comment,
       },
@@ -313,13 +533,13 @@ export class TicketsService {
 
   async addAttachment(id: string, attachmentUrl: string): Promise<Ticket> {
     const ticket = await this.prisma.ticket.findUnique({ where: { id } });
-    if (!ticket) throw new Error("Ticket not found");
+    if (!ticket) throw new Error('Ticket not found');
 
     const currentAttachments = (ticket.attachments as string[]) || [];
     return this.prisma.ticket.update({
       where: { id },
-      data: { 
-        attachments: [...currentAttachments, attachmentUrl]
+      data: {
+        attachments: [...currentAttachments, attachmentUrl],
       },
     });
   }
@@ -328,18 +548,26 @@ export class TicketsService {
     return this.prisma.ticket.findMany({
       where: { tenantId },
       include: {
-        property: true,
+        property: {
+          include: {
+            relations: { include: { user: true } },
+            assignments: { include: { agent: true } },
+          },
+        },
         reportedByUser: true,
         assignedTechnician: true,
         currentState: true,
         interactions: {
           orderBy: { sentAt: 'desc' },
-          take: 5
+          take: 5,
         },
         stateLogs: {
-            include: { state: true, completedByUser: true },
-            orderBy: { startedAt: 'desc' }
-        }
+          include: {
+            state: { include: { responsible: true } },
+            completedByUser: true,
+          },
+          orderBy: { startedAt: 'desc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -349,18 +577,26 @@ export class TicketsService {
     return this.prisma.ticket.findUnique({
       where: { id },
       include: {
-        property: true,
+        property: {
+          include: {
+            relations: { include: { user: true } },
+            assignments: { include: { agent: true } },
+          },
+        },
         reportedByUser: true,
         assignedTechnician: true,
         currentState: true,
         workflow: {
-            include: { states: { orderBy: { order: 'asc' } } }
+          include: { states: { orderBy: { order: 'asc' } } },
         },
         stateLogs: {
-            include: { state: true, completedByUser: true },
-            orderBy: { startedAt: 'desc' }
-        }
-      }
+          include: {
+            state: { include: { responsible: true } },
+            completedByUser: true,
+          },
+          orderBy: { startedAt: 'desc' },
+        },
+      },
     });
   }
 
@@ -368,12 +604,20 @@ export class TicketsService {
     return this.prisma.ticket.findMany({
       where: { assignedTechnicianId: technicianId },
       include: {
-        property: true,
+        property: {
+          include: {
+            relations: { include: { user: true } },
+            assignments: { include: { agent: true } },
+          },
+        },
         currentState: true,
         stateLogs: {
-            include: { state: true, completedByUser: true },
-            orderBy: { startedAt: 'desc' }
-        }
+          include: {
+            state: { include: { responsible: true } },
+            completedByUser: true,
+          },
+          orderBy: { startedAt: 'desc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -387,24 +631,32 @@ export class TicketsService {
             some: {
               userId: ownerId,
               relationType: RelationType.OWNER,
-              status: 'ACTIVE'
-            }
-          }
-        }
+              status: 'ACTIVE',
+            },
+          },
+        },
       },
       include: {
-        property: true,
+        property: {
+          include: {
+            relations: { include: { user: true } },
+            assignments: { include: { agent: true } },
+          },
+        },
         reportedByUser: true,
         assignedTechnician: true,
         currentState: true,
         interactions: {
           orderBy: { sentAt: 'desc' },
-          take: 5
+          take: 5,
         },
         stateLogs: {
-            include: { state: true, completedByUser: true },
-            orderBy: { startedAt: 'desc' }
-        }
+          include: {
+            state: { include: { responsible: true } },
+            completedByUser: true,
+          },
+          orderBy: { startedAt: 'desc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

@@ -13,7 +13,13 @@ export class BrandBrainController {
   @Put(':tenantId')
   async updateBrain(
     @Param('tenantId') tenantId: string,
-    @Body() body: { tone?: string; policies?: string; faq?: any; responseRules?: string }
+    @Body()
+    body: {
+      tone?: string;
+      policies?: string;
+      faq?: any;
+      responseRules?: string;
+    },
   ) {
     return this.brandBrainService.updateBrain(tenantId, body);
   }

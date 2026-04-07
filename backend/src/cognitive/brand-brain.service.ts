@@ -15,7 +15,7 @@ export class BrandBrainService {
 
   async getBrandTone(tenantId: string) {
     const brain = await this.prisma.brandBrain.findUnique({
-      where: { tenantId }
+      where: { tenantId },
     });
 
     if (brain) {
@@ -25,7 +25,7 @@ export class BrandBrainService {
         policies: brain.policies,
         faq: brain.faq,
         alignmentScore: 0.95,
-        style: brain.tone === 'PROFESSIONAL' ? 'PROFESSIONAL_HIGH' : 'FRIENDLY'
+        style: brain.tone === 'PROFESSIONAL' ? 'PROFESSIONAL_HIGH' : 'FRIENDLY',
       };
     }
 
@@ -38,7 +38,7 @@ export class BrandBrainService {
           tone: 'CUSTOM_FILE',
           description: 'Using custom brand voice from uploaded documents.',
           alignmentScore: 0.95,
-          style: 'PROFESSIONAL_HIGH'
+          style: 'PROFESSIONAL_HIGH',
         };
       }
     }
@@ -47,30 +47,53 @@ export class BrandBrainService {
       tone: 'DEFAULT',
       description: 'Using Don Atento standard helpful and professional tone.',
       alignmentScore: 1.0,
-      style: 'FRIENDLY'
+      style: 'FRIENDLY',
     };
   }
 
   async getToneAlignmentScore(message: string, tenantId: string) {
     const brand = await this.getBrandTone(tenantId);
-    
+
     // Simulation: check for keywords based on policies or tone
     if (brand.tone !== 'DEFAULT') {
-      const keywords = ['estimado', 'atentamente', 'cordial', 'procesando', 'filosofía', 'inmobiliaria'];
-      const matches = keywords.filter(k => message.toLowerCase().includes(k)).length;
-      const score = Math.min(0.99, 0.7 + (matches * 0.1));
-      return { 
-        score, 
-        feedback: score > 0.85 ? 'Excelente alineación con el Cerebro de Marca' : 'Requiere un tono más alineado a las políticas' 
+      const keywords = [
+        'estimado',
+        'atentamente',
+        'cordial',
+        'procesando',
+        'filosofía',
+        'inmobiliaria',
+      ];
+      const matches = keywords.filter((k) =>
+        message.toLowerCase().includes(k),
+      ).length;
+      const score = Math.min(0.99, 0.7 + matches * 0.1);
+      return {
+        score,
+        feedback:
+          score > 0.85
+            ? 'Excelente alineación con el Cerebro de Marca'
+            : 'Requiere un tono más alineado a las políticas',
       };
     }
 
     return { score: 1.0, feedback: 'Tono estándar Don Atento verificado' };
   }
 
-  async updateBrain(tenantId: string, data: { tone?: string; policies?: string; faq?: any; responseRules?: string }) {
-    console.log(`[BrandBrain] Updating for tenant: ${tenantId}`, JSON.stringify(data));
-    
+  async updateBrain(
+    tenantId: string,
+    data: {
+      tone?: string;
+      policies?: string;
+      faq?: any;
+      responseRules?: string;
+    },
+  ) {
+    console.log(
+      `[BrandBrain] Updating for tenant: ${tenantId}`,
+      JSON.stringify(data),
+    );
+
     const updateData = {
       tone: data.tone || 'PROFESSIONAL',
       policies: data.policies || '',
@@ -84,33 +107,40 @@ export class BrandBrainService {
         update: updateData,
         create: {
           tenantId,
-          ...updateData
-        }
+          ...updateData,
+        },
       });
     } catch (error) {
-      console.error("[BrandBrain] Error in updateBrain:", error);
+      console.error('[BrandBrain] Error in updateBrain:', error);
       throw error;
     }
   }
 
-  async uploadBrandDocument(tenantId: string, fileName: string, content: Buffer) {
+  async uploadBrandDocument(
+    tenantId: string,
+    fileName: string,
+    content: Buffer,
+  ) {
     const brandPath = path.join(this.storagePath, tenantId, 'brand_brain');
     if (!fs.existsSync(brandPath)) {
       fs.mkdirSync(brandPath, { recursive: true });
     }
-    
+
     const filePath = path.join(brandPath, fileName);
     fs.writeFileSync(filePath, content);
     return { success: true, path: filePath };
   }
 
   async recordContractKnowledge(tenantId: string, summary: string) {
-    const brand = await this.prisma.brandBrain.findUnique({ where: { tenantId } });
-    const currentPolicies = brand?.policies || "";
-    const newPolicies = currentPolicies + `\n[CONOCIMIENTO APRENDIDO - CONTRATO]: ${summary}\n`;
-    
+    const brand = await this.prisma.brandBrain.findUnique({
+      where: { tenantId },
+    });
+    const currentPolicies = brand?.policies || '';
+    const newPolicies =
+      currentPolicies + `\n[CONOCIMIENTO APRENDIDO - CONTRATO]: ${summary}\n`;
+
     return this.updateBrain(tenantId, {
-      policies: newPolicies.substring(0, 5000) // Keep within limits
+      policies: newPolicies.substring(0, 5000), // Keep within limits
     });
   }
 }
