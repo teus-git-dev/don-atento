@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileText, Plus, CheckCircle2, Save, Receipt, Building2, Building, Trash2 } from "lucide-react";
+import { FileText, Plus, CheckCircle2, Save, Receipt, Building2, Building, Trash2, ShieldCheck } from "lucide-react";
 import { invoicingService } from "@/services/invoicingService";
 import { accountingService } from "@/services/accountingService";
 

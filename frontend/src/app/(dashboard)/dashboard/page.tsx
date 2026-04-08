@@ -13,16 +13,16 @@ export default function DashboardOverview() {
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) {
+  const user = authService.getUser();
+  const currentRole = user?.role;
+
+  if (!isMounted || !user) {
     return (
        <div className="flex h-[80vh] items-center justify-center">
          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-neon-blue)]"></div>
        </div>
     );
   }
-
-  const currentUser = authService.getCurrentUser();
-  const currentRole = currentUser.role;
 
   return (
     <div className="space-y-6">

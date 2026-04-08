@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { X, Search, MapPin, User, Shield, Zap, AlertTriangle, Check, FileCode, Trash2, Loader2 } from "lucide-react";
-import { TENANT_ID, API_URL } from "@/lib/config";
+import { TENANT_ID } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 
 interface CreateTicketModalProps {
   isOpen: boolean;
@@ -48,46 +49,26 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
     setLoading(true);
     setBackendError(null);
     try {
-      const [propsRes, wfRes, techRes] = await Promise.all([
-        fetch(`${API_URL}/properties?tenantId=${TENANT_ID}`),
-        fetch(`${API_URL}/workflows?tenantId=${TENANT_ID}`),
-        fetch(`${API_URL}/users/technicians?tenantId=${TENANT_ID}`)
-      ]);
-
       const [props, wfs, techs] = await Promise.all([
-        propsRes.ok ? propsRes.json().catch(() => []) : [],
-        wfRes.ok ? wfRes.json().catch(() => []) : [],
-        techRes.ok ? techRes.json().catch(() => []) : []
+        apiClient.get<any[]>(`/properties?tenantId=${TENANT_ID}`).catch(() => []),
+        apiClient.get<any[]>(`/workflows?tenantId=${TENANT_ID}`).catch(() => []),
+        apiClient.get<any[]>(`/users/technicians?tenantId=${TENANT_ID}`).catch(() => []),
       ]);
 
       if (!Array.isArray(props) || !Array.isArray(wfs) || !Array.isArray(techs)) {
-        const msg = (props as any)?.message || (wfs as any)?.message || 'Error del servidor';
-        setBackendError(`Backend no disponible: ${msg}`);
-        setProperties([]);
-        setWorkflows([]);
-        setTechnicians([]);
+        setBackendError('Error del servidor: datos inválidos');
+        setProperties([]); setWorkflows([]); setTechnicians([]);
       } else {
-        setProperties(props);
-        setWorkflows(wfs);
-        setTechnicians(techs);
+        setProperties(props); setWorkflows(wfs); setTechnicians(techs);
       }
 
       // Fetch admin user for reportedByUserId
-      const adminRes = await fetch(`${API_URL}/users/admin?tenantId=${TENANT_ID}`);
-      if (adminRes.ok) {
-        const text = await adminRes.text();
-        const adminData = text ? JSON.parse(text) : null;
-        if (adminData?.id) setAdminUserId(adminData.id);
-        else setAdminUserId("admin-teus-id"); // Demo fallback
-      } else {
-        setAdminUserId("admin-teus-id"); // Demo fallback
-      }
+      const adminData = await apiClient.get<any>(`/users/admin?tenantId=${TENANT_ID}`).catch(() => null);
+      setAdminUserId(adminData?.id ?? null);
     } catch (err) {
       console.error("Error fetching modal data", err);
-      setBackendError('No se pudo conectar al backend. Verifica que el servidor esté corriendo.');
-      setProperties([]);
-      setWorkflows([]);
-      setTechnicians([]);
+      setBackendError('No se pudo conectar al backend.');
+      setProperties([]); setWorkflows([]); setTechnicians([]);
     } finally {
       setLoading(false);
     }
@@ -104,31 +85,21 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const handleSave = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/tickets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: TENANT_ID,
-          propertyId: selectedProperty.id,
-          reportedByUserId: adminUserId,
-          workflowId: selectedWorkflow.id,
-          title: formData.title,
-          description: formData.description,
-          priority: formData.priority,
-          assignedTechnicianId: selectedTechnician?.id,
-        })
+      await apiClient.post(`/tickets`, {
+        tenantId: TENANT_ID,
+        propertyId: selectedProperty.id,
+        reportedByUserId: adminUserId,
+        workflowId: selectedWorkflow.id,
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        assignedTechnicianId: selectedTechnician?.id,
       });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || "Failed to create ticket");
-      }
-      
       onSuccess();
       onClose();
-    } catch (err: any) {
-      console.error("Error saving ticket:", err);
-      alert(`Error al guardar el ticket: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar';
+      alert(`Error al guardar el ticket: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -152,19 +123,12 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
     if (userHasManuallyChangedPriority) return;
     setIsClassifying(true);
     try {
-        const response = await fetch(`${API_URL}/cognitive/classify-priority`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                title: formData.title,
-                description: formData.description
-            })
+        const data = await apiClient.post<{priority: string; reason: string}>(`/cognitive/classify-priority`, {
+            title: formData.title,
+            description: formData.description,
         });
-        if (response.ok) {
-            const data = await response.json();
-            setAiPriority(data);
-            setFormData(prev => ({ ...prev, priority: data.priority }));
-        }
+        setAiPriority(data);
+        setFormData(prev => ({ ...prev, priority: data.priority as typeof formData.priority }));
     } catch (err) {
         console.error("Error classifying priority:", err);
     } finally {
@@ -186,19 +150,12 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const validateWithAI = async (file: File) => {
     setIsValidatingAI(true);
     try {
-        const response = await fetch(`${API_URL}/cognitive/validate-evidence`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                fileName: file.name,
-                fileType: file.type,
-                description: formData.description || formData.title
-            })
+        const data = await apiClient.post<{verdict: string; confidence: number}>(`/cognitive/validate-evidence`, {
+            fileName: file.name,
+            fileType: file.type,
+            description: formData.description || formData.title,
         });
-        if (response.ok) {
-            const data = await response.json();
-            setAiDictamen(data);
-        }
+        setAiDictamen(data);
     } catch (err) {
         console.error("AI Validation error", err);
     } finally {

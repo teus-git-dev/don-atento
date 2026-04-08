@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { Bell, Clock, AlertCircle, X, CheckSquare } from "lucide-react";
-import { API_URL, TENANT_ID } from "@/lib/config";
+import { TENANT_ID } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
+import { authService } from "@/services/authService";
 import { useRouter } from "next/navigation";
 
 export default function NotificationCenter() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<{id: string; title: string; currentState?: {name: string; assignedRole?: string}; resolvedAt?: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [showLoginReminder, setShowLoginReminder] = useState(false);
 
-  // Mock roles for demo
-  const userRole = "ADMIN_TENANT"; 
+  const userRole = authService.getUser()?.role ?? "ADMIN_TENANT";
 
   useEffect(() => {
     fetchTasks();
@@ -29,20 +30,9 @@ export default function NotificationCenter() {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      // In a real scenario, the backend would filter by user's role
-      // We'll fetch all and filter for the demo
-      const res = await fetch(`${API_URL}/tickets?tenantId=${TENANT_ID}`);
-      const data = await res.json();
-      
-      if (!Array.isArray(data)) {
-        console.warn("NotificationCenter: Received non-array data from tickets API", data);
-        setTasks([]);
-        return;
-      }
-
-      // Filter tickets that are in a state assigned to our role
-      // Or just active tickets for the demo
-      setTasks(data.filter((t: any) => t.currentState?.assignedRole === userRole || !t.resolvedAt).slice(0, 5));
+      const data = await apiClient.get<typeof tasks>(`/tickets?tenantId=${TENANT_ID}`);
+      if (!Array.isArray(data)) { setTasks([]); return; }
+      setTasks(data.filter(t => t.currentState?.assignedRole === userRole || !t.resolvedAt).slice(0, 5));
     } catch (error) {
       console.error("Error fetching tasks:", error);
     } finally {

@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { Building2, Search, Plus, MoreVertical, Edit2, MapPin, Eye, Loader2, Clock, Zap, UserPlus, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
-import { TENANT_ID, API_URL } from "@/lib/config";
+import { TENANT_ID } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 import TransferModal from "./TransferModal";
 
 export default function PropertyMasterTable() {
@@ -20,11 +21,8 @@ export default function PropertyMasterTable() {
   const fetchProperties = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/properties?tenantId=${TENANT_ID}`);
-      if (response.ok) {
-        const data = await response.json();
-        setProperties(data);
-      }
+      const data = await apiClient.get<any[]>(`/properties?tenantId=${TENANT_ID}`);
+      setProperties(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching properties:", error);
     } finally {
@@ -34,14 +32,8 @@ export default function PropertyMasterTable() {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      const response = await fetch(`${API_URL}/properties/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !currentStatus })
-      });
-      if (response.ok) {
-        setProperties(properties.map(p => p.id === id ? { ...p, isActive: !currentStatus } : p));
-      }
+      await apiClient.patch(`/properties/${id}/status`, { isActive: !currentStatus });
+      setProperties(properties.map(p => p.id === id ? { ...p, isActive: !currentStatus } : p));
     } catch (error) {
       console.error("Error toggling property status:", error);
       alert("Error al cambiar el estado del inmueble");

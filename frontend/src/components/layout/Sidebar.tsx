@@ -22,8 +22,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   
   // Real Role from Authentication Service
-  const currentUser = authService.getCurrentUser();
-  const currentRole = currentUser.role;
+  const user = authService.getUser();
+  const currentRole = user?.role;
 
   // Hydration safety
   const [mounted, setMounted] = useState(false);
@@ -39,7 +39,7 @@ export default function Sidebar() {
   const canSeeInmuebles = currentRole !== 'SUPERADMIN'; 
   const canSeeDashboard = currentRole !== 'SUPERADMIN';
 
-  if (!mounted) {
+  if (!mounted || !user) {
     return <aside className="w-64 flex-shrink-0 glass border-r border-[var(--color-glass-border)] hidden md:flex flex-col relative"></aside>;
   }
 
@@ -53,8 +53,8 @@ export default function Sidebar() {
 
       {/* User Info Block */}
       <div className="p-4 border-b border-white/5 bg-black/20 flex flex-col gap-1">
-        <p className="text-white text-sm font-bold truncate">{currentUser.name}</p>
-        <p className="text-xs text-[var(--color-neon-cyan)] uppercase font-mono tracking-widest">{currentUser.role.replace('_', ' ')}</p>
+        <p className="text-white text-sm font-bold truncate">{user.firstName} {user.lastName}</p>
+        <p className="text-xs text-[var(--color-neon-cyan)] uppercase font-mono tracking-widest">{user.role?.replace('_', ' ')}</p>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">

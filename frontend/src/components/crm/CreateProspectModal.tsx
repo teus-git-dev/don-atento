@@ -29,8 +29,8 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeout = useRef<any>(null);
   const [agents, setAgents] = useState<any[]>([]);
-  const user = authService.getCurrentUser();
-  const isAdmin = user.role === 'ADMIN_TENANT' || user.role === 'SUPERADMIN';
+  const user = authService.getUser();
+  const isAdmin = user ? (user.role === 'ADMIN_TENANT' || user.role === 'SUPERADMIN') : false;
 
   useEffect(() => {
     if (isOpen && isAdmin) {
@@ -118,7 +118,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
         ...formData,
         phone: cleanPhone,
         tenantId: TENANT_ID,
-        assignedAgentId: isAdmin ? (formData.assignedAgentId || null) : user.id,
+        assignedAgentId: isAdmin ? (formData.assignedAgentId || null) : (user?.id || null),
         propertyIds: selectedProperties.map(p => p.id),
         status: 'NEW'
       };

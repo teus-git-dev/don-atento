@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Filter, AlertCircle, Clock, MoreVertical, Loader2, MapPin, Zap, Users } from "lucide-react";
-import { TENANT_ID, API_URL } from "@/lib/config";
+import { TENANT_ID } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 import TicketDetailModal from "./TicketDetailModal";
 
 interface ITicket {
@@ -39,22 +40,16 @@ export default function TicketBoard({ refreshTrigger: externalRefresh = 0 }: { r
     setIsOffline(false);
     try {
       // Fetch Owners for filter
-      const ownerRes = await fetch(`${API_URL}/users/owners?tenantId=${TENANT_ID}`);
-      if (ownerRes.ok) {
-        const ownerData = await ownerRes.json();
-        setOwners(ownerData);
-      }
+      const ownerData = await apiClient.get<IOwner[]>(`/users/owners?tenantId=${TENANT_ID}`).catch(() => []);
+      if (Array.isArray(ownerData)) setOwners(ownerData);
 
       // Fetch Tickets
       const ownerQuery = selectedOwnerId ? `&ownerId=${selectedOwnerId}` : "";
-      const response = await fetch(`${API_URL}/tickets?tenantId=${TENANT_ID}${ownerQuery}`);
-      if (!response.ok) throw new Error("Backend unreachable");
-      const data = await response.json();
-      setTickets(data);
+      const data = await apiClient.get<ITicket[]>(`/tickets?tenantId=${TENANT_ID}${ownerQuery}`);
+      setTickets(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       setIsOffline(true);
-      // Fallback
     } finally {
       setLoading(false);
     }

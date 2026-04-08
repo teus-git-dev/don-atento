@@ -1,59 +1,80 @@
-"use client";
+/**
+ * authService.ts — Servicio de autenticación JWT real
+ * Reemplaza el modo Demo con login real contra el backend NestJS.
+ */
+'use client';
 
-export type UserRole = 'SUPERADMIN' | 'ADMIN_TENANT' | 'AGENT' | 'TECHNICIAN';
+import { API_URL } from '@/lib/config';
 
-export interface User {
+export type UserRole = 'SUPERADMIN' | 'ADMIN_TENANT' | 'AGENT' | 'TECHNICIAN' | 'OWNER';
+
+export interface AuthUser {
   id: string;
-  name: string;
   email: string;
+  firstName: string;
+  lastName: string;
   role: UserRole;
-  tenantId?: string;
+  tenantId: string | null;
+  tenant?: { id: string; name: string } | null;
 }
 
-// In a real application, this would come from a JWT or a backend session.
-// Were using localStorage to persist the "real" state across reloads.
+const TOKEN_KEY = 'don_atento_token';
+const USER_KEY  = 'don_atento_user';
+
 export const authService = {
-  getCurrentUser: (): User => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('don_atento_user');
-      if (stored) return JSON.parse(stored);
-    }
-    
-    // Default fallback user (simulate a logged-in ADMIN_TENANT by default)
-    const defaultUser: User = {
-      id: "u-123",
-      name: "Juan Administrador",
-      email: "admin@horizonte.com",
-      role: "ADMIN_TENANT",
-      tenantId: "teus-tenant-id"
-    };
+  /** Llama a POST /auth/login y guarda el token + usuario en localStorage */
+  async login(email: string, password: string): Promise<AuthUser> {
+    const res = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('don_atento_user', JSON.stringify(defaultUser));
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        (err as { message?: string }).message ?? 'Credenciales inválidas'
+      );
     }
 
-    return defaultUser;
+    const data = (await res.json()) as { accessToken: string; user: AuthUser };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TOKEN_KEY, data.accessToken);
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      // Sync to cookie so Next.js middleware can protect routes
+      document.cookie = `don_atento_token=${data.accessToken}; path=/; max-age=86400; SameSite=Strict`;
+    }
+    return data.user;
   },
 
-  loginAs: (role: UserRole) => {
-    const user: User = {
-      id: `u-${Date.now()}`,
-      name: `User ${role}`,
-      email: `${role.toLowerCase()}@example.com`,
-      role: role,
-      tenantId: role === 'SUPERADMIN' ? undefined : 'teus-tenant-id'
-    };
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('don_atento_user', JSON.stringify(user));
-      // Force full navigation to apply changes everywhere as a real app would after login
-      window.location.href = role === 'SUPERADMIN' ? '/admin' : '/dashboard';
-    }
+  /** Devuelve el JWT almacenado, o null si no hay sesión */
+  getToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(TOKEN_KEY);
   },
 
-  logout: () => {
+  /** Devuelve el usuario autenticado, o null si no hay sesión */
+  getUser(): AuthUser | null {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem(USER_KEY);
+    if (!stored) return null;
+    try { return JSON.parse(stored) as AuthUser; }
+    catch { return null; }
+  },
+
+  /** Retorna true si hay un token almacenado */
+  isAuthenticated(): boolean {
+    return !!authService.getToken();
+  },
+
+  /** Cierra sesión: limpia localStorage, cookie y redirige al login */
+  logout(): void {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('don_atento_user');
-      window.location.href = '/';
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      // Clear the auth cookie
+      document.cookie = 'don_atento_token=; path=/; max-age=0; SameSite=Strict';
+      window.location.href = '/login';
     }
-  }
+  },
 };

@@ -15,7 +15,7 @@ export default function LoginTeus() {
     e.preventDefault();
     // Hardcoded Teus validation
     if (username === "teus" && password === "teus2024") {
-      authService.loginAs("SUPERADMIN");
+      authService.getUser() // Legacy: use /login instead;
     } else {
       setError("Credenciales incorrectas. Acceso restringido.");
     }
