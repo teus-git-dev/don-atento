@@ -6,7 +6,7 @@ import FunnelChart from "@/components/crm/FunnelChart";
 import { TENANT_ID, API_URL } from "@/lib/config";
 import CreateProspectModal from "@/components/crm/CreateProspectModal";
 import ProspectTaskSidebar from "@/components/crm/ProspectTaskSidebar";
-import RadarTab from "@/components/crm/RadarTab";
+import RadarIA from "@/components/crm/RadarIA";
 import { CheckCircle2, Circle } from "lucide-react";
 
 export default function CrmDashboard() {
@@ -113,7 +113,7 @@ export default function CrmDashboard() {
       />
 
       {activeTab === 'RADAR' ? (
-        <RadarTab onConvert={() => {
+        <RadarIA onConvert={() => {
           setRefreshTrigger(prev => prev + 1);
           setActiveTab('GENERAL');
         }} />
