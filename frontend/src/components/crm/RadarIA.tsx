@@ -48,9 +48,13 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
 
   const handleCapture = async (lead: RadarLead) => {
     try {
+      const nameParts = lead.ownerName.trim().split(/\s+/);
+      const firstName = nameParts[0] || 'Interesado';
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Radar IA';
+
       const response = await apiClient.post<any>('/crm/prospects', {
-        firstName: lead.ownerName.split(' ')[0],
-        lastName: lead.ownerName.split(' ').slice(1).join(' '),
+        firstName,
+        lastName,
         phone: lead.phone,
         source: 'RADAR_IA',
         notes: `Captado de ${lead.portal}. Propiedad: ${lead.propertyTitle}. Price: ${lead.price}`
