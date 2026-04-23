@@ -75,7 +75,7 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
               <Radar className={`text-[var(--color-neon-cyan)] ${scanning ? 'animate-pulse' : ''}`} size={24} />
               {scanning && <div className="absolute inset-0 bg-[var(--color-neon-cyan)]/20 rounded-full animate-ping" />}
             </div>
-            <h2 className="text-xl font-bold text-white uppercase tracking-widest">Radar de Captación IA</h2>
+            <h2 className="text-xl font-bold text-white uppercase tracking-widest">Radar de Captación IA v1.2.0</h2>
           </div>
           <p className="text-gray-500 text-sm max-w-xl">
             Nuestra IA escanea portales inmobiliarios en tiempo real buscando publicaciones de particulares ("Dueño Directo"). 
