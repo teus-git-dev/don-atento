@@ -26,7 +26,7 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
     setScanning(true);
     setFeedback(null);
     try {
-      const data = await apiClient.get('/crm/radar/scan');
+      const data = await apiClient.get<{ success: boolean; leads: RadarLead[] }>('/crm/radar/scan');
       if (data.success) {
         setLeads(data.leads);
       } else {
@@ -48,7 +48,7 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
 
   const handleCapture = async (lead: RadarLead) => {
     try {
-      const response = await apiClient.post('/crm/prospects', {
+      const response = await apiClient.post<any>('/crm/prospects', {
         firstName: lead.ownerName.split(' ')[0],
         lastName: lead.ownerName.split(' ').slice(1).join(' '),
         phone: lead.phone,
