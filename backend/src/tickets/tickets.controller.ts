@@ -8,22 +8,30 @@ import {
   Patch,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 
 @ApiTags('tickets')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @Post()
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
-  async create(@Body() createTicketDto: CreateTicketDto) {
+  async create(@Req() req: any, @Body() createTicketDto: CreateTicketDto) {
+    createTicketDto.tenantId = req['tenantId'];
     return this.ticketsService.createTicket(createTicketDto);
   }
 
@@ -32,13 +40,13 @@ export class TicketsController {
     summary: 'Listar todos los tickets por tenant o propietario',
   })
   async findAll(
-    @Query('tenantId') tenantId: string,
+    @Req() req: any,
     @Query('ownerId') ownerId?: string,
   ) {
     if (ownerId) {
       return this.ticketsService.findAllByOwner(ownerId);
     }
-    return this.ticketsService.findAllByTenant(tenantId);
+    return this.ticketsService.findAllByTenant(req['tenantId']);
   }
 
   @Get('technician/:id')
@@ -49,18 +57,20 @@ export class TicketsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Ver detalle de un ticket' })
-  async findOne(@Param('id') id: string) {
-    return this.ticketsService.findOne(id);
+  async findOne(@Req() req: any, @Param('id') id: string) {
+    return this.ticketsService.findOne(id, req['tenantId']);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Transición de estado y cálculo automático de ANS' })
   async transition(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() data: { userId: string; newStateId: string },
   ) {
     return this.ticketsService.transitionState(
       id,
+      req['tenantId'],
       data.userId,
       data.newStateId,
     );
@@ -69,11 +79,13 @@ export class TicketsController {
   @Patch(':id/resolve')
   @ApiOperation({ summary: 'Cerrar ticket con motivo de resolución y firma' })
   async resolve(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() data: { closureReason: string; signature?: string },
   ) {
     return this.ticketsService.resolveTicket(
       id,
+      req['tenantId'],
       data.closureReason,
       data.signature,
     );
@@ -82,11 +94,13 @@ export class TicketsController {
   @Patch(':id/complete-task')
   @ApiOperation({ summary: 'Completar tarea de estado actual y avanzar' })
   async completeTask(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() data: { userId: string; comment: string; attachments?: any[] },
   ) {
     return this.ticketsService.completeStateTask(
       id,
+      req['tenantId'],
       data.userId,
       data.comment,
       data.attachments,
@@ -126,9 +140,10 @@ export class TicketsController {
   @Patch(':id/satisfaction')
   @ApiOperation({ summary: 'Actualizar satisfacción del cliente' })
   async updateSatisfaction(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() data: { stars: number; comment?: string },
   ) {
-    return this.ticketsService.updateSatisfaction(id, data.stars, data.comment);
+    return this.ticketsService.updateSatisfaction(id, req['tenantId'], data.stars, data.comment);
   }
 }

@@ -6,6 +6,8 @@ import {
   Body,
   Patch,
   Param,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,13 +16,20 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { PropertiesService } from './properties.service';
 import { BulkImportService } from './bulk-import.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { TenantGuard } from '../auth/tenant.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @ApiTags('properties')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('properties')
 export class PropertiesController {
   constructor(
@@ -33,7 +42,8 @@ export class PropertiesController {
     summary: 'Alias para creación de inmueble (Plug & Play Connect)',
   })
   @ApiResponse({ status: 201, description: 'Inmueble creado con éxito' })
-  async createInmueble(@Body() data: CreatePropertyDto) {
+  async createInmueble(@Req() req: any, @Body() data: CreatePropertyDto) {
+    data.tenantId = req['tenantId'];
     return this.propertiesService.create(data);
   }
 
@@ -45,14 +55,14 @@ export class PropertiesController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener todos los inmuebles de un tenant' })
-  async findAll(@Query('tenantId') tenantId: string) {
-    return this.propertiesService.findAllByTenant(tenantId);
+  async findAll(@Req() req: any) {
+    return this.propertiesService.findAllByTenant(req['tenantId']);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de un inmueble por UUID' })
-  async findOne(@Param('id') id: string) {
-    return this.propertiesService.findOne(id);
+  async findOne(@Req() req: any, @Param('id') id: string) {
+    return this.propertiesService.findOneDetail(id, req['tenantId']);
   }
 
   @Get('search/:code')
@@ -63,15 +73,16 @@ export class PropertiesController {
     description: 'Código externo del inmueble (ej: INC-99)',
   })
   async findByCode(
-    @Query('tenantId') tenantId: string,
+    @Req() req: any,
     @Param('code') code: string,
   ) {
-    return this.propertiesService.findByPropertyCode(tenantId, code);
+    return this.propertiesService.findByPropertyCode(req['tenantId'], code);
   }
 
   @Post()
   @ApiOperation({ summary: 'Crear nuevo inmueble' })
-  async create(@Body() data: CreatePropertyDto) {
+  async create(@Req() req: any, @Body() data: CreatePropertyDto) {
+    data.tenantId = req['tenantId'];
     return this.propertiesService.create(data);
   }
 
@@ -81,23 +92,24 @@ export class PropertiesController {
     type: [CreatePropertyDto],
     description: 'Array de objetos de propiedad extraídos de CSV/Excel',
   })
-  async bulkImport(@Query('tenantId') tenantId: string, @Body() data: any[]) {
-    return this.bulkImportService.processImport(tenantId, data);
+  async bulkImport(@Req() req: any, @Body() data: any[]) {
+    return this.bulkImportService.processImport(req['tenantId'], data);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Activar/Desactivar inmueble' })
   async patchStatus(
+    @Req() req: any,
     @Param('id') id: string,
     @Body('isActive') isActive: boolean,
   ) {
-    return this.propertiesService.updateStatus(id, isActive);
+    return this.propertiesService.updateStatus(id, req['tenantId'], isActive);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar datos de un inmueble' })
-  async update(@Param('id') id: string, @Body() data: UpdatePropertyDto) {
-    return this.propertiesService.update(id, data);
+  async update(@Req() req: any, @Param('id') id: string, @Body() data: UpdatePropertyDto) {
+    return this.propertiesService.update(id, req['tenantId'], data);
   }
 
   @Post(':id/transfer')
@@ -105,10 +117,11 @@ export class PropertiesController {
     summary: 'Realizar cesión (transferencia) de titularidad o arrendatario',
   })
   async transfer(
+    @Req() req: any,
     @Param('id') id: string,
     @Body()
     data: { newOwnerId: string; newTenantId?: string; startDate: string },
   ) {
-    return this.propertiesService.transferProperty(id, data);
+    return this.propertiesService.transferProperty(id, req['tenantId'], data);
   }
 }

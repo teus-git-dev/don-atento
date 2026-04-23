@@ -177,9 +177,9 @@ export class TicketsService {
     });
   }
 
-  async updateStatus(id: string, statusId: string): Promise<Ticket> {
+  async updateStatus(id: string, tenantId: string, statusId: string): Promise<Ticket> {
     return this.prisma.ticket.update({
-      where: { id },
+      where: { id, tenantId },
       data: { currentStateId: statusId },
       include: { currentState: true },
     });
@@ -187,6 +187,7 @@ export class TicketsService {
 
   async transitionState(
     id: string,
+    tenantId: string,
     userId: string,
     newStateId: string,
   ): Promise<Ticket> {
@@ -198,7 +199,7 @@ export class TicketsService {
     const isResolved = newState.name.toLowerCase().includes('resuelto');
 
     const ticket = await this.prisma.ticket.update({
-      where: { id },
+      where: { id, tenantId },
       data: {
         currentStateId: newStateId,
         resolvedAt: isResolved ? new Date() : undefined,
@@ -269,11 +270,12 @@ export class TicketsService {
 
   async resolveTicket(
     id: string,
+    tenantId: string,
     closureReason: string,
     signature?: string,
   ): Promise<Ticket> {
     const ticket = await this.prisma.ticket.findUnique({
-      where: { id },
+      where: { id, tenantId },
       include: { workflow: { include: { states: true } } },
     });
 
@@ -303,11 +305,12 @@ export class TicketsService {
       },
     });
 
-    return this.transitionState(id, 'SYSTEM', resolvedState.id);
+    return this.transitionState(id, tenantId, 'SYSTEM', resolvedState.id);
   }
 
   async completeStateTask(
     ticketId: string,
+    tenantId: string,
     userId: string,
     comment: string,
     attachments?: any[],
@@ -316,7 +319,7 @@ export class TicketsService {
 
     // 0. Fetch Ticket to check state
     const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+      where: { id: ticketId, tenantId },
       include: {
         currentState: true,
         reportedByUser: true,
@@ -477,7 +480,7 @@ export class TicketsService {
     }
 
     // 3. Transition
-    return this.transitionState(ticketId, userId, nextState.id);
+    return this.transitionState(ticketId, tenantId, userId, nextState.id);
   }
 
   private async updateTicketStateLogs(
@@ -504,9 +507,9 @@ export class TicketsService {
     });
   }
 
-  async suggestTransition(ticketId: string): Promise<string> {
+  async suggestTransition(ticketId: string, tenantId: string): Promise<string> {
     const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+      where: { id: ticketId, tenantId },
       include: { stateLogs: { orderBy: { startedAt: 'desc' }, take: 1 } },
     });
 
@@ -519,11 +522,12 @@ export class TicketsService {
 
   async updateSatisfaction(
     id: string,
+    tenantId: string,
     stars: number,
     comment?: string,
   ): Promise<Ticket> {
     return this.prisma.ticket.update({
-      where: { id },
+      where: { id, tenantId },
       data: {
         satisfactionStars: stars,
         satisfactionComment: comment,
@@ -531,13 +535,13 @@ export class TicketsService {
     });
   }
 
-  async addAttachment(id: string, attachmentUrl: string): Promise<Ticket> {
-    const ticket = await this.prisma.ticket.findUnique({ where: { id } });
+  async addAttachment(id: string, tenantId: string, attachmentUrl: string): Promise<Ticket> {
+    const ticket = await this.prisma.ticket.findUnique({ where: { id, tenantId } });
     if (!ticket) throw new Error('Ticket not found');
 
     const currentAttachments = (ticket.attachments as string[]) || [];
     return this.prisma.ticket.update({
-      where: { id },
+      where: { id, tenantId },
       data: {
         attachments: [...currentAttachments, attachmentUrl],
       },
@@ -573,9 +577,9 @@ export class TicketsService {
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.ticket.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string) {
+    return this.prisma.ticket.findFirst({
+      where: { id, tenantId },
       include: {
         property: {
           include: {

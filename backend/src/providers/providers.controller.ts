@@ -7,27 +7,36 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { ProviderSpecialty } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { TenantGuard } from '../auth/tenant.guard';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('providers')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('providers')
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Get()
-  findAll(@Query('tenantId') tenantId: string) {
-    return this.providersService.findAll(tenantId);
+  findAll(@Req() req: any) {
+    return this.providersService.findAll(req['tenantId']);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.providersService.findOne(id);
+  findOne(@Req() req: any, @Param('id') id: string) {
+    return this.providersService.findOne(id, req['tenantId']);
   }
 
   @Post()
   create(
-    @Query('tenantId') tenantId: string,
+    @Req() req: any,
     @Body()
     data: {
       name: string;
@@ -47,21 +56,21 @@ export class ProvidersController {
       additionalContacts?: any[];
     },
   ) {
-    return this.providersService.create(tenantId, data);
+    return this.providersService.create(req['tenantId'], data);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: any) {
-    return this.providersService.update(id, data);
+  update(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    return this.providersService.update(id, req['tenantId'], data);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.providersService.remove(id);
+  remove(@Req() req: any, @Param('id') id: string) {
+    return this.providersService.remove(id, req['tenantId']);
   }
 
   @Post(':id/assign-technician/:userId')
-  assignTechnician(@Param('id') id: string, @Param('userId') userId: string) {
-    return this.providersService.assignTechnician(id, userId);
+  assignTechnician(@Req() req: any, @Param('id') id: string, @Param('userId') userId: string) {
+    return this.providersService.assignTechnician(id, userId, req['tenantId']);
   }
 }

@@ -7,11 +7,11 @@ import * as bcrypt from 'bcrypt';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findByRole(role: UserRole, tenantId?: string) {
+  async findByRole(role: UserRole, tenantId: string) {
     return this.prisma.user.findMany({
       where: {
         role,
-        ...(tenantId && { tenantId }),
+        tenantId,
       },
     });
   }
@@ -60,9 +60,9 @@ export class UsersService {
     });
   }
 
-  async delete(id: string) {
-    return this.prisma.user.delete({
-      where: { id },
+  async delete(id: string, tenantId: string) {
+    return this.prisma.user.deleteMany({
+      where: { id, tenantId },
     });
   }
 }

@@ -230,9 +230,20 @@ export class PropertiesService {
     });
   }
 
-  async updateStatus(id: string, isActive: boolean) {
-    return this.prisma.property.update({
-      where: { id },
+  async findOne(id: string, tenantId: string) {
+    return this.prisma.property.findFirst({
+      where: { id, tenantId },
+      include: {
+        relations: {
+          include: { user: true },
+        },
+      },
+    });
+  }
+
+  async updateStatus(id: string, tenantId: string, isActive: boolean) {
+    return this.prisma.property.updateMany({
+      where: { id, tenantId },
       data: { isActive },
     });
   }
@@ -248,9 +259,9 @@ export class PropertiesService {
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.property.findUnique({
-      where: { id },
+  async findOneDetail(id: string, tenantId: string) {
+    return this.prisma.property.findFirst({
+      where: { id, tenantId },
       include: {
         relations: {
           include: { user: true },
@@ -259,12 +270,12 @@ export class PropertiesService {
     });
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, tenantId: string, data: any) {
     const { ownerInfo, tenantInfo, attachments, ...propertyFields } = data;
 
     // Update basic fields
-    const property = await this.prisma.property.update({
-      where: { id },
+    const property = await this.prisma.property.updateMany({
+      where: { id, tenantId },
       data: {
         title: propertyFields.title,
         propertyType: propertyFields.propertyType,
@@ -382,8 +393,15 @@ export class PropertiesService {
 
   async transferProperty(
     propertyId: string,
+    tenantId: string,
     data: { newOwnerId: string; newTenantId?: string; startDate: string },
   ) {
+    // 0. Verify property belongs to tenant before proceeding
+    const property = await this.prisma.property.findFirst({
+      where: { id: propertyId, tenantId },
+    });
+    if (!property) return { error: 'Property not found or access denied' };
+
     // 1. Inactivate existing ACTIVE relations
     await this.prisma.propertyRelation.updateMany({
       where: {

@@ -26,9 +26,9 @@ export class ProvidersService {
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.provider.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string) {
+    return this.prisma.provider.findFirst({
+      where: { id, tenantId },
       include: {
         technicians: true,
         additionalContacts: true,
@@ -71,22 +71,28 @@ export class ProvidersService {
     });
   }
 
-  async update(id: string, data: any) {
-    return this.prisma.provider.update({
-      where: { id },
+  async update(id: string, tenantId: string, data: any) {
+    return this.prisma.provider.updateMany({
+      where: { id, tenantId },
       data,
     });
   }
 
-  async remove(id: string) {
-    return this.prisma.provider.delete({
-      where: { id },
+  async remove(id: string, tenantId: string) {
+    return this.prisma.provider.deleteMany({
+      where: { id, tenantId },
     });
   }
 
-  async assignTechnician(providerId: string, userId: string) {
-    return this.prisma.user.update({
-      where: { id: userId },
+  async assignTechnician(providerId: string, userId: string, tenantId: string) {
+    // Verify provider belongs to tenant
+    const provider = await this.prisma.provider.findFirst({
+      where: { id: providerId, tenantId },
+    });
+    if (!provider) throw new Error('Provider not found or access denied');
+
+    return this.prisma.user.updateMany({
+      where: { id: userId, tenantId },
       data: { providerId },
     });
   }
