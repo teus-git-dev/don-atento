@@ -71,10 +71,26 @@ export class WhatsappService {
     return Intent.UNKNOWN;
   }
 
-  async processIncomingMessage(from: string, text: string, mediaUrl?: string) {
+  async processIncomingMessage(
+    from: string,
+    text: string,
+    mediaUrl?: string,
+    phoneNumberId?: string,
+  ) {
     const intent = this.detectIntent(text);
     let finalResponse =
       'Entendido. Soy Don Atento, estoy analizando tu solicitud.';
+
+    // 0. Resolve Tenant by webhook destination (Multi-Tenant WhatsApp)
+    let resolvedTenantId = null;
+    if (phoneNumberId) {
+      const tenantByPhone = await this.prisma.tenant.findFirst({
+        where: { whatsappPhoneNumberId: phoneNumberId },
+      });
+      if (tenantByPhone) {
+        resolvedTenantId = tenantByPhone.id;
+      }
+    }
 
     // 1. Context Lookup: Discover User and Property by phone
     const user = await this.prisma.user.findFirst({
@@ -85,6 +101,10 @@ export class WhatsappService {
     let userRole = 'DESCONOCIDO';
     if (user) {
       userRole = user.role;
+      // If we couldn't resolve tenant from webhook, fallback to user's tenant
+      if (!resolvedTenantId && user.tenantId) {
+        resolvedTenantId = user.tenantId;
+      }
     }
 
     let prospect = null;
@@ -95,15 +115,24 @@ export class WhatsappService {
 
       if (!prospect) {
         // Auto-create lead
-        const defaultTenant = await this.prisma.tenant.findFirst();
+        // Fallback to default if no tenant resolved
+        if (!resolvedTenantId) {
+            const defaultTenant = await this.prisma.tenant.findFirst();
+            resolvedTenantId = defaultTenant?.id || 'default';
+        }
+        
         prospect = await this.crmService.createProspect({
-          tenantId: defaultTenant?.id || 'default',
+          tenantId: resolvedTenantId,
           firstName: 'Lead WhatsApp',
           lastName: from,
           phone: from,
           whatsappId: from,
           source: ProspectSource.WHATSAPP,
         });
+      } else {
+          if (!resolvedTenantId && prospect.tenantId) {
+              resolvedTenantId = prospect.tenantId;
+          }
       }
     }
 
@@ -153,8 +182,7 @@ export class WhatsappService {
     }
 
     // 3. Cognitive Response Generation
-    const contextTenantId =
-      user?.tenantId || prospect?.tenantId || 'DEFAULT_TENANT';
+    const contextTenantId = resolvedTenantId || 'DEFAULT_TENANT';
     let sentiment: SentimentAnalysis = 'NEUTRAL';
 
     // Si el intent es UNKNOWN o GREETING, usamos AiChatService para una respuesta más natural
@@ -250,22 +278,32 @@ export class WhatsappService {
     }
 
     // Simular envío de respuesta a Meta API
-    await this.sendMessage(from, finalResponse);
+    await this.sendMessage(from, finalResponse, resolvedTenantId);
   }
 
-  async sendMessage(to: string, text: string) {
-    console.log(`[WhatsApp API] Sending to ${to}: ${text}`);
+  async sendMessage(to: string, text: string, tenantId?: string) {
+    console.log(`[WhatsApp API] Sending to ${to}: ${text} (Tenant: ${tenantId})`);
 
-    // Log interaction if it's a notification?
-    // Maybe just send for now as requested.
+    let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    let token = process.env.WHATSAPP_ACCESS_TOKEN;
 
-    const url = `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    if (tenantId) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { whatsappPhoneNumberId: true, whatsappAccessToken: true }
+      });
+      if (tenant?.whatsappPhoneNumberId && tenant?.whatsappAccessToken) {
+        phoneNumberId = tenant.whatsappPhoneNumberId;
+        token = tenant.whatsappAccessToken;
+      }
+    }
 
-    if (!token) {
-      console.warn('WHATSAPP_ACCESS_TOKEN not found. Skipping real API call.');
+    if (!token || !phoneNumberId) {
+      console.warn('WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER_ID not found for tenant or global config. Skipping real API call.');
       return;
     }
+
+    const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
 
     try {
       await firstValueFrom(

@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { authService } from "@/services/authService";
+import { API_URL } from "@/lib/config";
 
 function LoginForm() {
   const router = useRouter();
@@ -15,6 +16,13 @@ function LoginForm() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+
+  // Pre-warm the backend to mitigate Render.com free tier cold starts
+  useEffect(() => {
+    fetch(`${API_URL}/`).catch(() => {
+      // Ignore errors, we just want to wake up the server while the user types
+    });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

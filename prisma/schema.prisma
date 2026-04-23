@@ -28,6 +28,8 @@ model Tenant {
   communicationTemplates Json?
   brandBrain             BrandBrain?
   digitalCertificate     DigitalCertificate?
+  whatsappPhoneNumberId  String?
+  whatsappAccessToken    String?
   inventoryTemplates     InventoryTemplate[]
   properties             Property[]
   prospects              Prospect[]
