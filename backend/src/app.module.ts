@@ -19,6 +19,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { RolesModule } from './roles/roles.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { InvoicingModule } from './invoicing/invoicing.module';
+import { TenantsModule } from './tenants/tenants.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { InvoicingModule } from './invoicing/invoicing.module';
     RolesModule,
     AccountingModule,
     InvoicingModule,
+    TenantsModule,
   ],
   controllers: [AppController],
   providers: [

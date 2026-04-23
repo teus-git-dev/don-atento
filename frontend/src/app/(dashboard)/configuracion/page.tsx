@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Settings2, ShieldCheck, BrainCircuit, Database, Webhook, Zap, UserPlus, Fingerprint, Waypoints, Clock, CheckCircle2, ChevronRight, Plus, Trash2, Layers } from "lucide-react";
+import { Settings2, ShieldCheck, BrainCircuit, Database, Webhook, Zap, UserPlus, Fingerprint, Waypoints, Clock, CheckCircle2, ChevronRight, Plus, Trash2, Layers, MessageSquare, CheckCircle, AlertCircle, Eye, EyeOff, Loader2, Link2Off } from "lucide-react";
 import { TENANT_ID, API_URL } from "@/lib/config";
 import RolesManager from "@/components/configuracion/RolesManager";
+import WhatsAppConfigCard from "@/components/configuracion/WhatsAppConfigCard";
+import { authService } from "@/services/authService";
 
 export default function ConfiguracionPage() {
   const router = useRouter();
@@ -426,26 +428,11 @@ export default function ConfiguracionPage() {
           {/* Integrations */}
           {activeTab === "integrations" && (
             <div className="space-y-8 animate-in fade-in duration-300">
-               <div className="border-b border-white/10 pb-4">
-                <h2 className="text-xl font-medium text-white mb-1">Webhook & API Gateway</h2>
-                <p className="text-sm text-gray-400">Sincroniza Don Atento con tus ERPs, CRMs y sistemas contables externos.</p>
+              <div className="border-b border-white/10 pb-4">
+                <h2 className="text-xl font-medium text-white mb-1">Integraciones & Canales</h2>
+                <p className="text-sm text-gray-400">Conecta tu número de WhatsApp Business para recibir y enviar mensajes con el agente cognitivo Don Atento.</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="col-span-full py-10 text-center text-gray-500 font-mono text-xs uppercase tracking-widest opacity-50">
-                  No hay integraciones activas configuradas
-                </div>
-              </div>
-
-              <div className="glass p-6 rounded-2xl border border-white/5 bg-black/40">
-                <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-widest">API Keys de Organización</h3>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 font-mono text-xs text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                    sk_live_....
-                  </div>
-                  <button className="text-[var(--color-neon-cyan)] text-xs font-bold uppercase hover:underline">Revelar Key</button>
-                </div>
-              </div>
+              <WhatsAppConfigCard />
             </div>
           )}
 
