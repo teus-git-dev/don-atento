@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Radar, Zap, ExternalLink, UserPlus, MessageSquare, ShieldCheck, TrendingUp, Search, Info } from "lucide-react";
 import { API_URL, TENANT_ID } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 
 interface RadarLead {
   id: string;
@@ -25,12 +26,7 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
     setScanning(true);
     setFeedback(null);
     try {
-      const token = localStorage.getItem('don_atento_token');
-      const response = await fetch(`${API_URL}/crm/radar/scan`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
-      
+      const data = await apiClient.get('/crm/radar/scan');
       if (data.success) {
         setLeads(data.leads);
       } else {
@@ -52,23 +48,15 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
 
   const handleCapture = async (lead: RadarLead) => {
     try {
-      const token = localStorage.getItem('don_atento_token');
-      const response = await fetch(`${API_URL}/crm/prospects`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          firstName: lead.ownerName.split(' ')[0],
-          lastName: lead.ownerName.split(' ').slice(1).join(' '),
-          phone: lead.phone,
-          source: 'RADAR_IA',
-          notes: `Captado de ${lead.portal}. Propiedad: ${lead.propertyTitle}. Price: ${lead.price}`
-        })
+      const response = await apiClient.post('/crm/prospects', {
+        firstName: lead.ownerName.split(' ')[0],
+        lastName: lead.ownerName.split(' ').slice(1).join(' '),
+        phone: lead.phone,
+        source: 'RADAR_IA',
+        notes: `Captado de ${lead.portal}. Propiedad: ${lead.propertyTitle}. Price: ${lead.price}`
       });
       
-      if (response.ok) {
+      if (response) {
         setLeads(prev => prev.filter(l => l.id !== lead.id));
         onConvert();
       }
