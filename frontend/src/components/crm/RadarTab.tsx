@@ -21,52 +21,30 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [leads, setLeads] = useState<RadarLead[]>([]);
 
-  const simulateScan = () => {
+  const simulateScan = async () => {
     setScanning(true);
-    setLeads([]);
-    
-    setTimeout(() => {
-      setLeads([
-        {
-          id: "1",
-          propertyTitle: "Apartamento Duplex Rosales",
-          ownerName: "Mauricio Restrepo (Dueño Directo)",
-          phone: "+57 310 445 2211",
-          portal: "Finca Raíz",
-          price: "$4.500.000",
-          location: "Bogotá, Rosales",
-          captureScore: 94,
-          aiScript: "Hola Mauricio, vi tu publicación en Finca Raíz. En Don Atento tenemos 3 clientes calificados buscando exactamente en Rosales con presupuesto inmediato. ¿Te interesaría cerrar el negocio esta semana sin trámites notariales?",
-          imageUrl: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&h=300&fit=crop"
-        },
-        {
-          id: "2",
-          propertyTitle: "Casa de Campo El Retiro",
-          ownerName: "Claudia Ximena",
-          phone: "+57 300 123 9988",
-          portal: "Metrocuadrado",
-          price: "$1.200.000.000",
-          location: "Antioquia, El Retiro",
-          captureScore: 88,
-          aiScript: "Claudia, un gusto. Soy [Agente] de Don Atento. Tu propiedad califica para nuestro programa de 'Cierre Express'. Garantizamos el pago del primer mes en 48 horas tras la firma digital. ¿Hablamos?",
-          imageUrl: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400&h=300&fit=crop"
-        },
-        {
-          id: "3",
-          propertyTitle: "Oficina Prime Street 100",
-          ownerName: "Inversiones Beta",
-          phone: "+57 321 000 1122",
-          portal: "Olx",
-          price: "$8.000.000",
-          location: "Bogotá, Calle 100",
-          captureScore: 75,
-          aiScript: "Buenas tardes. Notamos que su oficina lleva 45 días publicada. Nuestra IA detectó que el precio promedio de la zona subió 12%. Podemos ayudarles a ajustar el valor y cerrar con contrato digital hoy mismo.",
-          imageUrl: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=300&fit=crop"
-        }
-      ]);
+    setFeedback(null);
+    try {
+      const token = localStorage.getItem('don_atento_token');
+      const response = await fetch(`${API_URL}/crm/radar/scan`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setLeads(data.leads);
+      } else {
+        setFeedback({ type: 'error', msg: 'Error al escanear portales.' });
+      }
+    } catch (error) {
+      console.error("Error scanning radar:", error);
+      setFeedback({ type: 'error', msg: 'Error de conexión con el radar.' });
+    } finally {
       setScanning(false);
-    }, 2500);
+    }
   };
+
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => {
     simulateScan();
@@ -74,15 +52,18 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
 
   const handleCapture = async (lead: RadarLead) => {
     try {
+      const token = localStorage.getItem('don_atento_token');
       const response = await fetch(`${API_URL}/crm/prospects`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           firstName: lead.ownerName.split(' ')[0],
           lastName: lead.ownerName.split(' ').slice(1).join(' '),
           phone: lead.phone,
           source: 'RADAR_IA',
-          tenantId: TENANT_ID,
           notes: `Captado de ${lead.portal}. Propiedad: ${lead.propertyTitle}. Price: ${lead.price}`
         })
       });
@@ -147,10 +128,15 @@ export default function RadarTab({ onConvert }: { onConvert: () => void }) {
             <div key={lead.id} className="glass rounded-[2.5rem] border border-white/10 overflow-hidden hover:border-[var(--color-neon-cyan)]/40 transition-all group flex flex-col">
                <div className="relative h-48 overflow-hidden">
                   <img src={lead.imageUrl} alt={lead.propertyTitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                  <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[10px] font-bold text-white border border-white/10 flex items-center gap-1.5">
-                    <ExternalLink size={10} className="text-[var(--color-neon-cyan)]" />
+                  <a 
+                    href={(lead as any).url || '#'} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[10px] font-bold text-white border border-white/10 flex items-center gap-1.5 hover:bg-[var(--color-neon-cyan)] hover:text-black transition-colors"
+                  >
+                    <ExternalLink size={10} />
                     {lead.portal}
-                  </div>
+                  </a>
                   <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-xl border border-[var(--color-neon-cyan)]/30 rounded-2xl p-3 flex flex-col items-center">
                       <span className="text-[10px] text-gray-500 font-mono uppercase">Capture Score</span>
                       <span className="text-xl font-black text-[var(--color-neon-cyan)]">{lead.captureScore}%</span>
