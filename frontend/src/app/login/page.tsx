@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { authService } from "@/services/authService";
 
-export default function LoginAgency() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
@@ -128,5 +128,13 @@ export default function LoginAgency() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginAgency() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <LoginForm />
+    </Suspense>
   );
 }

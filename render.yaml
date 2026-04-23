@@ -1,0 +1,33 @@
+# Render Blueprint — Don Atento Backend
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: don-atento-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: FRONTEND_URL
+        sync: false  # Set manually after Vercel deploy
+      - key: DATABASE_URL
+        sync: false  # Set manually (Supabase connection string)
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false  # Set manually (128-char secret)
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: WHATSAPP_ENCRYPTION_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: atento-media
