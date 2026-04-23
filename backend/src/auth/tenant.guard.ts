@@ -24,7 +24,10 @@ export class TenantGuard implements CanActivate {
     // SUPERADMIN can operate across tenants
     if (user.role === 'SUPERADMIN') {
       // Allow explicit tenantId from query for cross-tenant operations
-      request['tenantId'] = request.query?.tenantId || user.tenantId;
+      const resolvedTenant = request.query?.tenantId || user.tenantId;
+      request['tenantId'] = resolvedTenant;
+      if (request.query) request.query.tenantId = resolvedTenant;
+      if (request.body && typeof request.body === 'object') request.body.tenantId = resolvedTenant;
       return true;
     }
 
@@ -35,6 +38,9 @@ export class TenantGuard implements CanActivate {
 
     // Override any client-supplied tenantId with the JWT's tenantId
     request['tenantId'] = user.tenantId;
+    if (request.query) request.query.tenantId = user.tenantId;
+    if (request.body && typeof request.body === 'object') request.body.tenantId = user.tenantId;
+    
     return true;
   }
 }
