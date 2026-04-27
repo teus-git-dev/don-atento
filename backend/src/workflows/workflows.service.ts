@@ -17,9 +17,32 @@ export class WorkflowsService {
     });
   }
 
-  async create(data: { tenantId: string; name: string; description?: string }) {
+  async create(data: { 
+    tenantId: string; 
+    name: string; 
+    description?: string;
+    states?: any[]; // Added support for complete flow creation
+  }) {
+    const { states, ...workflowData } = data;
+
     return this.prisma.workflow.create({
-      data,
+      data: {
+        ...workflowData,
+        states: states ? {
+          create: states.map((state, index) => ({
+            name: state.name,
+            order: state.order || index + 1,
+            slaHours: state.slaHours ? Number(state.slaHours) : null,
+            assignedRole: state.assignedRole,
+            assignedUserId: state.assignedUserId,
+            aiInstructions: state.aiInstructions,
+            color: state.color
+          }))
+        } : undefined
+      },
+      include: {
+        states: true
+      }
     });
   }
 

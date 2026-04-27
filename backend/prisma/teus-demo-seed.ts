@@ -1,18 +1,14 @@
 import { PrismaClient, UserRole } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
 import 'dotenv/config';
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.DIRECT_URL,
-});
-const adapter = new PrismaPg(pool as any);
-const prisma = new PrismaClient({ adapter } as any);
+const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const tenantId = 'teus-tenant-id';
   const propertyId = 'demo-property';
-  console.log(`Seeding demo data for ${tenantId}...`);
+  console.log(`Seeding demo data for ${tenantId} using SQLite...`);
 
   // 1. Create Subscription Plan
   await prisma.subscriptionPlan.upsert({
@@ -48,6 +44,7 @@ async function main() {
       tenantId,
       propertyType: 'APARTMENT',
       title: 'Apartamento Demo - Maestro',
+      description: 'Hermoso apartamento remodelado con vista al parque.',
       address: 'Calle 100 #8-55, Apto 502',
       city: 'Bogotá',
       department: 'Cundinamarca',
@@ -68,11 +65,11 @@ async function main() {
       description: "Flujo estándar para reparaciones de mantenimiento.",
       states: {
         create: [
-          { name: "Reportado", order: 1, color: "#94a3b8" },
-          { name: "Asignado", order: 2, color: "#38bdf8", assignedRole: 'TECHNICIAN' },
-          { name: "En Proceso", order: 3, color: "#fbbf24" },
-          { name: "Validación AI", order: 4, color: "#818cf8" },
-          { name: "Resuelto", order: 5, color: "#22c55e" },
+          { id: 'ws-1', name: "Reportado", order: 1, color: "#94a3b8" },
+          { id: 'ws-2', name: "Asignado", order: 2, color: "#38bdf8", assignedRole: 'TECHNICIAN' },
+          { id: 'ws-3', name: "En Proceso", order: 3, color: "#fbbf24" },
+          { id: 'ws-4', name: "Validación AI", order: 4, color: "#818cf8" },
+          { id: 'ws-5', name: "Resuelto", order: 5, color: "#22c55e" },
         ]
       }
     }
@@ -80,8 +77,8 @@ async function main() {
 
   // 5. Create Technicians
   const techs = [
-    { email: 'tecnico1@teus.com', firstName: 'Jose', lastName: 'Mantenimiento', phone: '+573112223344', governmentId: '87654321' },
-    { email: 'tecnico2@teus.com', firstName: 'Carlos', lastName: 'Reparaciones', phone: '+573223334455', governmentId: '87654322' }
+    { id: 'tech-1', email: 'tecnico1@teus.com', firstName: 'Jose', lastName: 'Mantenimiento', phone: '+573112223344', governmentId: '87654321' },
+    { id: 'tech-2', email: 'tecnico2@teus.com', firstName: 'Carlos', lastName: 'Reparaciones', phone: '+573223334455', governmentId: '87654322' }
   ];
 
   for (const t of techs) {
@@ -92,7 +89,7 @@ async function main() {
         ...t,
         tenantId,
         role: 'TECHNICIAN',
-        passwordHash: '$2b$10$SomethingSecure'
+        passwordHash: '$2b$10$2C4VQMdu5/gygxFzbX/fPuZgKDVjCbrIDxBmtnM7W.f6UF1WrjWsW'
       }
     });
   }
@@ -102,13 +99,14 @@ async function main() {
     where: { email: 'propietario@teus.com' },
     update: {},
     create: {
+      id: 'owner-demo-id',
       email: 'propietario@teus.com',
       firstName: 'Diana',
       lastName: 'Inversora',
       phone: '+573001112233',
       role: 'OWNER',
       tenantId,
-      passwordHash: '$2b$10$SomethingSecure'
+      passwordHash: '$2b$10$2C4VQMdu5/gygxFzbX/fPuZgKDVjCbrIDxBmtnM7W.f6UF1WrjWsW'
     }
   });
 
@@ -124,7 +122,7 @@ async function main() {
       phone: '+573104445566',
       role: 'AGENT',
       tenantId,
-      passwordHash: '$2b$10$SomethingSecure'
+      passwordHash: '$2b$10$2C4VQMdu5/gygxFzbX/fPuZgKDVjCbrIDxBmtnM7W.f6UF1WrjWsW'
     }
   });
 
@@ -140,7 +138,7 @@ async function main() {
       phone: '+573119998877',
       role: 'ADMIN_TENANT',
       tenantId,
-      passwordHash: '$2b$10$SomethingSecure'
+      passwordHash: '$2b$10$2C4VQMdu5/gygxFzbX/fPuZgKDVjCbrIDxBmtnM7W.f6UF1WrjWsW'
     }
   });
 

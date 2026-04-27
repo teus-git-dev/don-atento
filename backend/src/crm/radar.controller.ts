@@ -9,7 +9,7 @@ export class RadarController {
   constructor(private readonly radarService: RadarService) {}
 
   @Get('scan')
-  async scan(@Req() req) {
+  async scan(@Req() req: any) {
     const tenantId = req.user.tenantId;
     const userId = req.user.id;
     const leads = await this.radarService.scanPortals(tenantId, userId);

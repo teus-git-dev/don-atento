@@ -33,7 +33,7 @@ function LoginForm() {
 
     try {
       await authService.login(email, password);
-      router.push(redirect);
+      window.location.href = redirect;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al iniciar sesión";
       setError(message);

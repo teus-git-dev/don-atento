@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { API_URL, TENANT_ID } from '@/lib/config';
+import { apiClient } from '@/lib/apiClient';
 
 const BASE_URL = `${API_URL}/providers`;
 
@@ -61,32 +61,26 @@ export interface Provider {
 
 export const providersService = {
   async getProviders() {
-    const response = await axios.get(`${BASE_URL}?tenantId=${TENANT_ID}`);
-    return response.data;
+    return apiClient.get<Provider[]>(`/providers?tenantId=${TENANT_ID}`);
   },
 
   async getProvider(id: string) {
-    const response = await axios.get(`${BASE_URL}/${id}`);
-    return response.data;
+    return apiClient.get<Provider>(`/providers/${id}`);
   },
 
   async createProvider(data: Omit<Provider, 'id' | 'status'>) {
-    const response = await axios.post(`${BASE_URL}?tenantId=${TENANT_ID}`, data);
-    return response.data;
+    return apiClient.post<Provider>(`/providers?tenantId=${TENANT_ID}`, data);
   },
 
   async updateProvider(id: string, data: Partial<Provider>) {
-    const response = await axios.patch(`${BASE_URL}/${id}`, data);
-    return response.data;
+    return apiClient.patch<Provider>(`/providers/${id}`, data);
   },
 
   async deleteProvider(id: string) {
-    const response = await axios.delete(`${BASE_URL}/${id}`);
-    return response.data;
+    return apiClient.delete<void>(`/providers/${id}`);
   },
 
   async assignTechnician(providerId: string, userId: string) {
-    const response = await axios.post(`${BASE_URL}/${providerId}/assign-technician/${userId}`);
-    return response.data;
+    return apiClient.post<any>(`/providers/${providerId}/assign-technician/${userId}`, {});
   }
 };

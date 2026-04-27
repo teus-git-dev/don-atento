@@ -56,7 +56,7 @@ export default function InspeccionDetallePage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Expediente de Inspección Cognitiva</h1>
             <p className="text-gray-400 text-sm">
-              Inmueble: {property?.title || "Cargando..."} • {property?.address} • ID: {property?.propertyCode || "..."}
+              Inmueble: {property?.title || "Cargando..."} • {property?.address || "..."} • ID: {property?.propertyCode || "..."}
             </p>
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function InspeccionDetallePage() {
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--color-neon-cyan)]">
                         <MessageSquare size={14} /> Historial Cognitivo (WhatsApp)
                     </div>
-                    {cognitiveData?.summary && (
+                    {cognitiveData?.summary?.overallHealth && (
                         <div className={`flex items-center gap-1 text-[10px] font-bold ${getHealthColor(cognitiveData.summary.overallHealth)} uppercase tracking-tighter`}>
                             {cognitiveData.summary.overallHealth === 'HEALTHY' ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
                             Salud: {cognitiveData.summary.overallHealth}
@@ -120,7 +120,7 @@ export default function InspeccionDetallePage() {
                             <div className="h-full flex items-center justify-center text-gray-500 text-xs animate-pulse">
                                 Cargando redes neuronales...
                             </div>
-                        ) : cognitiveData?.interactions.length > 0 ? (
+                        ) : cognitiveData?.interactions?.length > 0 ? (
                             cognitiveData.interactions.map((i: any, idx: number) => (
                                 <div key={idx} className={`flex flex-col gap-1 ${i.channel === 'WHATSAPP' ? 'items-start' : 'items-end'}`}>
                                     <div className={`max-w-[85%] p-3 rounded-2xl text-[11px] leading-relaxed border ${

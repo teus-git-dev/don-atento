@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
   // Verificar token en cookies o localStorage-forwarded header
   // Next.js middleware sólo puede leer cookies, no localStorage.
   // El token se almacena en cookie 'don_atento_token' (sincronizada desde authService).
-  const token = request.cookies.get('don_atento_token')?.value;
+  const token = request.cookies.get('don_atento_token_v1')?.value;
 
   if (!token) {
     const loginUrl = new URL('/login', request.url);

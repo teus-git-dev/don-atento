@@ -125,7 +125,7 @@ Instrucciones Críticas:
 
   private fallbackSimulation(message: string, brain: any, metrics: any) {
     const msg = message.toLowerCase();
-    let reply = `[Modo Offline/Fallback] Hola, soy la inteligencia de Don Atento. `;
+    let reply = `MODO OFFLINE (Sugerencia IA): Hola, soy la inteligencia de Don Atento. `;
 
     if (
       msg.includes('ticket') ||

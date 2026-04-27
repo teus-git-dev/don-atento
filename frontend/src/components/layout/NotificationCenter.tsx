@@ -17,14 +17,9 @@ export default function NotificationCenter() {
   const userRole = authService.getUser()?.role ?? "ADMIN_TENANT";
 
   useEffect(() => {
-    fetchTasks();
-    
-    // Simulate login reminder after 2 seconds
-    const timer = setTimeout(() => {
-      setShowLoginReminder(true);
-    }, 2000);
-
-    return () => clearTimeout(timer);
+    if (authService.isAuthenticated()) {
+      fetchTasks();
+    }
   }, []);
 
   const fetchTasks = async () => {

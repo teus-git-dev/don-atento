@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { API_URL } from '@/lib/config';
+import { apiClient } from '@/lib/apiClient';
 
 export interface BrandBrain {
   tone: string;
@@ -10,12 +10,10 @@ export interface BrandBrain {
 
 export const brainService = {
   getBrain: async (tenantId: string): Promise<BrandBrain> => {
-    const response = await axios.get(`${API_URL}/brand-brain/${tenantId}`);
-    return response.data;
+    return apiClient.get<BrandBrain>(`/brand-brain/${tenantId}`);
   },
 
   updateBrain: async (tenantId: string, data: BrandBrain): Promise<BrandBrain> => {
-    const response = await axios.put(`${API_URL}/brand-brain/${tenantId}`, data);
-    return response.data;
+    return apiClient.put<BrandBrain>(`/brand-brain/${tenantId}`, data);
   }
 };

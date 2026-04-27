@@ -1,5 +1,5 @@
-import axios from 'axios';
 import { API_URL, TENANT_ID } from '@/lib/config';
+import { apiClient } from '@/lib/apiClient';
 
 export interface ChatMessage {
   id: string;
@@ -16,13 +16,13 @@ export const chatService = {
       content: h.content
     }));
 
-    const response = await axios.post(`${API_URL}/ai-chat`, {
+    const data = await apiClient.post<{ reply: string, contextUsed: any }>('/ai-chat', {
       tenantId: TENANT_ID,
       userId: 'user-001', // Ideally would be dynamic
       message,
       history: simplifiedHistory
     });
 
-    return response.data;
+    return data;
   }
 };

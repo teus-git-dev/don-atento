@@ -21,8 +21,8 @@ export class TenantsController {
         id: true,
         name: true,
         whatsappPhoneNumberId: true,
-        // Never expose the raw token — just tell if it's configured
         whatsappAccessToken: true,
+        whatsappProvider: true,
       },
     });
 
@@ -30,6 +30,7 @@ export class TenantsController {
       id: tenant?.id,
       name: tenant?.name,
       whatsappPhoneNumberId: tenant?.whatsappPhoneNumberId ?? null,
+      whatsappProvider: tenant?.whatsappProvider || 'meta',
       whatsappConfigured: !!tenant?.whatsappPhoneNumberId && !!tenant?.whatsappAccessToken,
       // Mask the token for display
       whatsappAccessTokenMasked: tenant?.whatsappAccessToken

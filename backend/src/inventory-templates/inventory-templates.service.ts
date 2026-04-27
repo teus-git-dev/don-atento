@@ -13,10 +13,11 @@ export class InventoryTemplatesService {
         name: dto.name,
         description: dto.description,
         status: dto.status || 'ACTIVE',
+        // Support structured zones
         zones: {
           create: (dto.zones || []).map((zone: any) => ({
             name: zone.name,
-            type: zone.type,
+            type: zone.type || 'ZONAS_COMUNES',
             templateItems: {
               create: (zone.items || []).map((item: any) => ({
                 name: item.name,
@@ -27,11 +28,21 @@ export class InventoryTemplatesService {
             },
           })),
         },
+        // Support top-level items (flat structure)
+        items: {
+          create: (dto.items || []).map((item: any) => ({
+            name: item.name,
+            category: item.category || 'GENERAL',
+            description: item.description,
+            material: item.material,
+          })),
+        },
       },
       include: {
         zones: {
           include: { templateItems: true },
         },
+        items: true,
       },
     });
   }
@@ -43,6 +54,7 @@ export class InventoryTemplatesService {
         zones: {
           include: { templateItems: true },
         },
+        items: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -57,6 +69,7 @@ export class InventoryTemplatesService {
         zones: {
           include: { templateItems: true },
         },
+        items: true,
       },
     });
   }

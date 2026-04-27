@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { TicketsService } from '../tickets/tickets.service';
 import { firstValueFrom } from 'rxjs';
@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { CrmService } from '../crm/crm.service';
+import { BaileysManager } from './baileys.manager';
 
 export enum Intent {
   GREETING = 'GREETING',
@@ -18,13 +19,16 @@ export enum Intent {
   PHOTO_SUBMISSION = 'PHOTO_SUBMISSION',
   CONFIRMATION = 'CONFIRMATION',
   GOODBYE = 'GOODBYE',
-  STATUS_QUERY = 'STATUS_QUERY', // New intent for status check
+  STATUS_QUERY = 'STATUS_QUERY', 
   SURVEY_RESPONSE = 'SURVEY_RESPONSE',
   UNKNOWN = 'UNKNOWN',
 }
 
 @Injectable()
 export class WhatsappService {
+  private readonly logger = new Logger(WhatsappService.name);
+  private conversationState = new Map<string, { step: string; timestamp: number }>();
+
   constructor(
     private readonly httpService: HttpService,
     @Inject(forwardRef(() => TicketsService))
@@ -32,7 +36,15 @@ export class WhatsappService {
     private readonly prisma: PrismaService,
     private readonly cognitiveService: CognitiveService,
     private readonly crmService: CrmService,
-  ) {}
+    private readonly baileysManager: BaileysManager,
+  ) {
+    this.baileysManager.setMessageHandler(
+      async (tenantId, from, text, mediaType) => {
+        this.logger.log(`[Baileys Inbound] Tenant: ${tenantId}, From: ${from}, Text: ${text}`);
+        await this.processIncomingMessage(from, text, mediaType || undefined, undefined, tenantId);
+      },
+    );
+  }
 
   detectIntent(input: string): Intent {
     const normalized = input.toLowerCase();
@@ -76,213 +88,170 @@ export class WhatsappService {
     text: string,
     mediaUrl?: string,
     phoneNumberId?: string,
+    receivedOnTenantId?: string,
   ) {
+    const cleanPhone = from.split('@')[0];
     const intent = this.detectIntent(text);
-    let finalResponse =
-      'Entendido. Soy Don Atento, estoy analizando tu solicitud.';
-
-    // 0. Resolve Tenant by webhook destination (Multi-Tenant WhatsApp)
-    let resolvedTenantId = null;
+    
+    let resolvedTenantId = receivedOnTenantId || null;
     if (phoneNumberId) {
       const tenantByPhone = await this.prisma.tenant.findFirst({
         where: { whatsappPhoneNumberId: phoneNumberId },
       });
-      if (tenantByPhone) {
-        resolvedTenantId = tenantByPhone.id;
-      }
+      resolvedTenantId = tenantByPhone?.id || resolvedTenantId;
     }
 
-    // 1. Context Lookup: Discover User and Property by phone
+    const last10Digits = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    
     const user = await this.prisma.user.findFirst({
-      where: { phone: from },
-      include: { tenant: true, roleRef: true },
+      where: { 
+        OR: [
+          { phone: cleanPhone },
+          { phone: last10Digits },
+          { phone: `57${last10Digits}` },
+          { whatsappId: from },
+          { additionalContacts: { contains: cleanPhone } },
+          { additionalContacts: { contains: last10Digits } }
+        ]
+      },
+      include: { tenant: true },
     });
 
-    let userRole = 'DESCONOCIDO';
-    if (user) {
-      userRole = user.role;
-      // If we couldn't resolve tenant from webhook, fallback to user's tenant
-      if (!resolvedTenantId && user.tenantId) {
-        resolvedTenantId = user.tenantId;
-      }
+    if (!resolvedTenantId && user?.tenantId) {
+      resolvedTenantId = user.tenantId;
     }
 
-    let prospect = null;
     if (!user) {
-      prospect = await this.prisma.prospect.findFirst({
-        where: { OR: [{ phone: from }, { whatsappId: from }] },
-      });
+      const state = this.conversationState.get(from);
 
-      if (!prospect) {
-        // Auto-create lead
-        // Fallback to default if no tenant resolved
-        if (!resolvedTenantId) {
-            const defaultTenant = await this.prisma.tenant.findFirst();
-            resolvedTenantId = defaultTenant?.id || 'default';
-        }
-        
-        prospect = await this.crmService.createProspect({
-          tenantId: resolvedTenantId,
-          firstName: 'Lead WhatsApp',
-          lastName: from,
-          phone: from,
-          whatsappId: from,
-          source: ProspectSource.WHATSAPP,
-        });
-      } else {
-          if (!resolvedTenantId && prospect.tenantId) {
-              resolvedTenantId = prospect.tenantId;
+      if (state?.step === 'AWAITING_OWNER_NAME') {
+        const ownerName = text.trim();
+        const foundOwner = await this.prisma.user.findFirst({
+          where: {
+            role: 'OWNER',
+            OR: [
+              { firstName: { contains: ownerName } },
+              { lastName: { contains: ownerName } },
+              { firstName: { contains: ownerName.split(' ')[0] } }
+            ]
           }
+        });
+
+        if (foundOwner) {
+          const currentContacts = foundOwner.additionalContacts || '';
+          const updatedContacts = currentContacts 
+            ? `${currentContacts}, ${cleanPhone}` 
+            : cleanPhone;
+
+          await this.prisma.user.update({
+            where: { id: foundOwner.id },
+            data: { additionalContacts: updatedContacts }
+          });
+
+          this.conversationState.delete(from);
+          const linkMsg = `¡Perfecto! He verificado que **${foundOwner.firstName} ${foundOwner.lastName}** es el dueño registrado. 
+
+✅ Te he vinculado como contacto autorizado para este inmueble. Ahora ya puedes enviarme tus reportes de mantenimiento por este medio.`;
+          return this.sendMessage(from, linkMsg, resolvedTenantId || undefined);
+        } else {
+          const retryMsg = `Lo siento, no logré encontrar a ningún dueño con el nombre "**${ownerName}**". 
+
+Por favor, asegúrate de escribir el nombre completo como aparece en el contrato, o contacta directamente a la inmobiliaria para autorizar este número.`;
+          return this.sendMessage(from, retryMsg, resolvedTenantId || undefined);
+        }
       }
+
+      // First time asking
+      const unknownMsg = `¡Hola! Soy Don Atento 🤖. No logro encontrarte en mi base de datos de inquilinos activos.
+
+Para poder asistirte, ¿podrías decirme el **Nombre Completo del Dueño** del inmueble? Así podré vincularte como un contacto autorizado.`;
+      
+      this.conversationState.set(from, { step: 'AWAITING_OWNER_NAME', timestamp: Date.now() });
+      return this.sendMessage(from, unknownMsg, resolvedTenantId || undefined);
     }
 
-    const relation = user
-      ? await this.prisma.propertyRelation.findFirst({
-          where: { userId: user.id, status: 'ACTIVE' },
-          include: { property: true },
-        })
-      : null;
+    const relation = await this.prisma.propertyRelation.findFirst({
+      where: { userId: user.id, status: 'ACTIVE' },
+      include: { property: true },
+    });
 
-    // 2. Intent Handling & Ticket Creation
-    const latestTicket = await this.ticketsService.findLatestByPhone(from);
-    let currentTicket = latestTicket;
+    if (!relation || !relation.property) {
+      const noPropertyMsg = `Hola ${user.firstName}, reconozco tu número, pero no veo que tengas un contrato o inmueble activo vinculado actualmente. Por favor, comunícate con la inmobiliaria para regularizar tu estado.`;
+      return this.sendMessage(from, noPropertyMsg, resolvedTenantId || undefined);
+    }
 
-    if (
-      intent === Intent.PHOTO_SUBMISSION &&
-      user &&
-      relation &&
-      !currentTicket
-    ) {
+    const propertyName = relation.property.title || relation.property.address;
+    const propertyId = relation.propertyId;
+
+    let finalResponse = '';
+
+    if (intent === Intent.STATUS_QUERY) {
+       const latestTicket = await this.ticketsService.findLatestByPhone(cleanPhone);
+       if (latestTicket) {
+         const status = (latestTicket as any).currentState?.name || 'En Proceso';
+         finalResponse = `Estimado(a) ${user.firstName}, tu reporte en *${propertyName}* (Ticket #${latestTicket.id.split('-')[0].toUpperCase()}) se encuentra en estado: *${status}*. Don Atento está monitoreando el cumplimiento.`;
+       } else {
+         finalResponse = `Hola ${user.firstName}, no encontré tickets recientes asociados a tu cuenta. ¿Deseas reportar un nuevo daño en *${propertyName}*?`;
+       }
+    } 
+    else if (intent === Intent.SURVEY_RESPONSE) {
+      const lastResolvedTicket = await this.prisma.ticket.findFirst({
+        where: { reportedByUserPhone: cleanPhone, resolvedAt: { not: null }, satisfactionStars: null },
+        orderBy: { resolvedAt: 'desc' },
+      });
+      if (lastResolvedTicket) {
+        const stars = parseInt(text.trim().charAt(0));
+        await this.ticketsService.updateSatisfaction(lastResolvedTicket.id, lastResolvedTicket.tenantId, stars, text);
+        finalResponse = `¡Gracias por calificar con ${stars} estrellas! Tu opinión ayuda a Don Atento a mejorar el servicio en ${propertyName}.`;
+      }
+    }
+    else {
       try {
         const workflow = await this.prisma.workflow.findFirst({
-          where: { tenantId: user.tenantId || relation.property.tenantId },
+          where: { tenantId: resolvedTenantId || user.tenantId || 'default' },
         });
 
-        currentTicket = await this.ticketsService.createTicket({
-          tenantId: user.tenantId || relation.property.tenantId,
-          propertyId: relation.propertyId,
+        const title = text.length > 50 ? text.substring(0, 47) + '...' : text;
+
+        const newTicket = await this.ticketsService.createTicket({
+          tenantId: resolvedTenantId || user.tenantId || 'default',
+          propertyId: propertyId,
           reportedByUserId: user.id,
           workflowId: workflow?.id,
-          title: 'Falla reportada vía WhatsApp',
-          description:
-            'El inquilino reportó un daño y envió evidencia multimedia.',
-          reportedByUserPhone: from,
+          title: `Reporte WA: ${title}`,
+          description: text,
+          reportedByUserPhone: cleanPhone,
           priority: 'MEDIUM',
           attachments: mediaUrl ? [mediaUrl] : undefined,
         });
+
+        finalResponse = `Hola ${user.firstName}, he registrado tu reporte para el inmueble *${propertyName}*. 
+
+✅ *Ticket #${newTicket.id.split('-')[0].toUpperCase()} generado.* 
+
+¿Podrías enviarme una foto o video corto del problema para que el técnico venga preparado?`;
       } catch (error) {
-        console.error(
-          '[WhatsappService] Error creating enriched ticket:',
-          error,
-        );
-      }
-    } else if (mediaUrl && currentTicket) {
-      // Si ya hay un ticket, añadimos la evidencia
-      await this.ticketsService.addAttachment(currentTicket.id, mediaUrl);
-    }
-
-    // 3. Cognitive Response Generation
-    const contextTenantId = resolvedTenantId || 'DEFAULT_TENANT';
-    let sentiment: SentimentAnalysis = 'NEUTRAL';
-
-    // Si el intent es UNKNOWN o GREETING, usamos AiChatService para una respuesta más natural
-    if (intent === Intent.UNKNOWN || intent === Intent.GREETING) {
-      const aiResponse = await this.cognitiveService.generateAiChatResponse(
-        contextTenantId,
-        user?.id || prospect?.id || 'ANONYMOUS',
-        text,
-      );
-      finalResponse = aiResponse.reply;
-      // Determinamos sentimiento básico si es posible
-      sentiment = finalResponse.length > 50 ? 'POSITIVE' : 'NEUTRAL';
-    } else {
-      const cognitiveResult = await this.cognitiveService.generateResponse(
-        currentTicket?.id || 'NO_TICKET',
-        text,
-        from,
-        contextTenantId,
-      );
-      finalResponse = cognitiveResult.shortResponse;
-      sentiment = cognitiveResult.sentiment;
-
-      // Add alignment hint for users during debugging/dev
-      console.log(
-        `[Cognitive] Brand Alignment: ${cognitiveResult.alignment.score * 100}% - ${cognitiveResult.alignment.feedback}`,
-      );
-    }
-
-    // 4. Special Handling: Survey Responses
-    if (intent === Intent.SURVEY_RESPONSE) {
-      const lastResolvedTicket = await this.prisma.ticket.findFirst({
-        where: {
-          reportedByUserPhone: from,
-          resolvedAt: { not: null },
-          satisfactionStars: null,
-        },
-        orderBy: { resolvedAt: 'desc' },
-      });
-
-      if (lastResolvedTicket) {
-        const stars = parseInt(text.trim().charAt(0));
-        const comment = text.length > 2 ? text : undefined;
-        await this.ticketsService.updateSatisfaction(
-          lastResolvedTicket.id,
-          stars,
-          comment,
-        );
-        finalResponse = `¡Muchas gracias por calificar con ${stars} estrellas! Tu feedback es vital para Don Atento. Seguimos a tu servicio.`;
+        this.logger.error('Error auto-creating ticket:', error);
+        finalResponse = `Lo siento ${user.firstName}, tuve un problema técnico al crear tu reporte en *${propertyName}*. Por favor intenta más tarde.`;
       }
     }
 
-    // 5. Status Query Special Handling
-    if (intent === Intent.STATUS_QUERY && currentTicket) {
-      const status = (currentTicket as any).currentState?.name || 'En Proceso';
-      const roleName =
-        userRole === 'TENANT_USER'
-          ? 'Estimado Arrendatario'
-          : userRole === 'OWNER'
-            ? 'Estimado Propietario'
-            : 'Hola';
-
-      finalResponse = `${roleName}, entiendo que quieras estar al tanto. Tu ticket #${currentTicket.id.split('-')[0].toUpperCase()} se encuentra en estado: **${status}**. No te preocupes, Don Atento está monitoreando los tiempos de respuesta para asegurar tu tranquilidad.`;
-    }
-
-    // 5. Logging Interactions
-    if (currentTicket) {
-      await this.cognitiveService.logInteraction(
-        currentTicket.id,
-        user?.id || null,
-        text,
-        InteractionChannel.WHATSAPP,
-        sentiment,
-      );
-      await this.cognitiveService.logInteraction(
-        currentTicket.id,
-        null,
-        finalResponse,
-        InteractionChannel.SYSTEM_AI,
-        sentiment,
-      );
-    } else if (prospect) {
-      // Log for CRM purposes if not a ticket related message
-      await this.crmService.addInteraction(
-        prospect.id,
-        text,
-        InteractionChannel.WHATSAPP,
-      );
-      await this.crmService.addInteraction(
-        prospect.id,
-        finalResponse,
-        InteractionChannel.SYSTEM_AI,
-      );
-    }
-
-    // Simular envío de respuesta a Meta API
-    await this.sendMessage(from, finalResponse, resolvedTenantId);
+    await this.sendMessage(from, finalResponse, resolvedTenantId || undefined);
   }
 
   async sendMessage(to: string, text: string, tenantId?: string) {
-    console.log(`[WhatsApp API] Sending to ${to}: ${text} (Tenant: ${tenantId})`);
+    this.logger.log(`[WhatsApp Hybrid] Sending to ${to} (Tenant: ${tenantId})`);
+
+    if (tenantId) {
+      const baileysAdapter = this.baileysManager.getAdapter(tenantId);
+      if (baileysAdapter && baileysAdapter.getStatus() === 'connected') {
+        this.logger.log(`[Baileys] Routing message via Baileys for tenant ${tenantId}`);
+        await baileysAdapter.sendText(to, text);
+        return;
+      }
+    }
+
+    this.logger.log(`[Meta API] Routing message via Meta Cloud API`);
 
     let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
     let token = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -299,7 +268,7 @@ export class WhatsappService {
     }
 
     if (!token || !phoneNumberId) {
-      console.warn('WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER_ID not found for tenant or global config. Skipping real API call.');
+      console.warn('WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER_ID not found. Skipping fallback.');
       return;
     }
 

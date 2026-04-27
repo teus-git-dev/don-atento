@@ -90,7 +90,7 @@ export class RadarService {
 
       // Merge data
       return rawLeads.slice(0, 5).map(lead => {
-        const extra = enrichments.find(e => e.id === lead.id);
+        const extra = enrichments.find((e: any) => e.id === lead.id);
         return {
           ...lead,
           captureScore: extra?.captureScore || 70,

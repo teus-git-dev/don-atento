@@ -18,8 +18,8 @@ export interface AuthUser {
   tenant?: { id: string; name: string } | null;
 }
 
-const TOKEN_KEY = 'don_atento_token';
-const USER_KEY  = 'don_atento_user';
+const TOKEN_KEY = 'don_atento_token_v1';
+const USER_KEY  = 'don_atento_user_v1';
 
 export const authService = {
   /** Llama a POST /auth/login y guarda el token + usuario en localStorage */
@@ -42,7 +42,7 @@ export const authService = {
       localStorage.setItem(TOKEN_KEY, data.accessToken);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       // Sync to cookie so Next.js middleware can protect routes
-      document.cookie = `don_atento_token=${data.accessToken}; path=/; max-age=86400; SameSite=Strict`;
+      document.cookie = `don_atento_token_v1=${data.accessToken}; path=/; max-age=86400; SameSite=Lax`;
     }
     return data.user;
   },
@@ -73,7 +73,7 @@ export const authService = {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
       // Clear the auth cookie
-      document.cookie = 'don_atento_token=; path=/; max-age=0; SameSite=Strict';
+      document.cookie = 'don_atento_token_v1=; path=/; max-age=0; SameSite=Lax';
       window.location.href = '/login';
     }
   },

@@ -9,7 +9,9 @@ import * as express from 'express';
 
 async function bootstrap() {
   dotenv.config();
+  console.log('[Bootstrap] JWT_SECRET loaded:', process.env.JWT_SECRET ? 'YES' : 'NO');
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api');
 
   // ── Security: Restrict CORS to the known frontend origin ──────────────────
   const allowedOrigins = [

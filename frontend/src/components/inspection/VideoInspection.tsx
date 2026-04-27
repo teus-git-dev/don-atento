@@ -39,7 +39,7 @@ export default function VideoInspection({ videoUrl, visionAnalysis }: { videoUrl
             {videoUrl ? (
                 <video 
                     ref={videoRef}
-                    src={videoUrl.startsWith('http') ? videoUrl : `${API_URL}${videoUrl}`} 
+                    src={videoUrl?.startsWith('http') ? videoUrl : `${API_URL}${videoUrl}`} 
                     className="w-full h-full object-cover" 
                     onTimeUpdate={handleTimeUpdate}
                     onEnded={() => setIsPlaying(false)}

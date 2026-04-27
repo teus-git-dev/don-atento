@@ -30,6 +30,7 @@ import { LegalAiService } from './legal-ai.service';
     EmailService,
     MaintenancePredictorService,
     LegalAiService,
+    AiChatService,
   ],
 })
 export class CognitiveModule {}

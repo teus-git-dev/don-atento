@@ -44,7 +44,12 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
     if (!initialTicket?.id) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/tickets/${initialTicket.id}`);
+      const token = localStorage.getItem('don_atento_token_v1');
+      const res = await fetch(`${API_URL}/tickets/${initialTicket.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setDetailedTicket(data);
@@ -75,8 +80,12 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
     formData.append('file', file);
 
     try {
+      const token = localStorage.getItem('don_atento_token_v1');
       const res = await fetch(`${API_URL}/tickets/upload`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");
@@ -650,11 +659,18 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
 
                         console.log("Prepared payload:", { id: ticket.id, comment: finalComment, slots: finalSlots.length });
 
+                        const token = localStorage.getItem('don_atento_token_v1');
+                        const userRaw = localStorage.getItem('don_atento_user_v1');
+                        const user = userRaw ? JSON.parse(userRaw) : null;
+                        
                         const res = await fetch(`${API_URL}/tickets/${ticket.id}/complete-task`, {
                           method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
+                          headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
                           body: JSON.stringify({ 
-                            userId: 'agent-demo-id', 
+                            userId: user?.id || 'agent-demo-id', 
                             comment: finalComment,
                             attachments: attachments.map(a => ({ name: a.url.split('/').pop(), url: a.url, type: a.type }))
                           })
@@ -745,9 +761,13 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     onClick={async () => {
                       setLoading(true);
                       try {
+                        const token = localStorage.getItem('don_atento_token_v1');
                         const res = await fetch(`${API_URL}/tickets/${ticket.id}/resolve`, {
                           method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
+                          headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
                           body: JSON.stringify({ 
                             closureReason,
                             signature: padRef.current?.isEmpty() ? null : padRef.current?.toDataURL()

@@ -104,6 +104,7 @@ export default function Sidebar() {
               active={pathname === '/ia-config'}
               special
             />
+            {/* 
             <SidebarLink 
               href="/contabilidad" 
               icon={<BookOpen size={20} />} 
@@ -115,7 +116,8 @@ export default function Sidebar() {
               icon={<FileText size={20} className="text-[var(--color-neon-cyan)]" />} 
               label="Facturación Electrónica" 
               active={pathname === '/facturacion'}
-            />
+            /> 
+            */}
             <SidebarLink 
               href="/configuracion" 
               icon={<Settings size={20} />} 

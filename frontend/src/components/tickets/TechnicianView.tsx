@@ -18,14 +18,20 @@ export default function TechnicianView() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/tickets/technician/${technicianId}`);
+      const token = localStorage.getItem('don_atento_token_v1');
+      const userRaw = localStorage.getItem('don_atento_user_v1');
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      const realId = user?.id || technicianId;
+
+      const response = await fetch(`${API_URL}/tickets/technician/${realId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Could not fetch jobs");
       const data = await response.json();
       setJobs(data);
     } catch (err) {
       console.error("Error fetching jobs:", err);
       setError("Error de conexión con el centro de mando");
-      // Fallback for demo if no real technician yet
       setJobs([]);
     } finally {
       setLoading(false);
@@ -33,8 +39,6 @@ export default function TechnicianView() {
   };
 
   const handleFinishJob = async (id: string, workflowStates: any[]) => {
-    // Find the 'Resolved' state in the workflow
-    // For now, we assume states[4] is resolved or we look for it
     const resolvedState = jobs.find(j => j.id === id)?.currentState?.workflow?.states?.find((s: any) => s.name === "Resuelto");
     
     if (!resolvedState) {
@@ -43,14 +47,23 @@ export default function TechnicianView() {
     }
 
     try {
+        const token = localStorage.getItem('don_atento_token_v1');
+        const userRaw = localStorage.getItem('don_atento_user_v1');
+        const user = userRaw ? JSON.parse(userRaw) : null;
+
         const response = await fetch(`${API_URL}/tickets/${id}/status`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: technicianId, newStateId: resolvedState.id })
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId: user?.id || technicianId, newStateId: resolvedState.id })
         });
         if (response.ok) {
-            // Remove from local list or update status
             setJobs(prev => prev.filter(j => j.id !== id));
+        } else {
+            const err = await response.json().catch(() => ({}));
+            alert("Error: " + (err.message || "No autorizado"));
         }
     } catch (err) {
         console.error("Error finishing job:", err);

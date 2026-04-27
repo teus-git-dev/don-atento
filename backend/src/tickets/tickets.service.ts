@@ -216,19 +216,22 @@ export class TicketsService {
     // 0. Update State Logs
     await this.updateTicketStateLogs(id, newStateId, userId);
 
-    // 1. Role-Based Notifications
+    // 1. Role-Based Notifications (Staff)
     await this.notifyRoleAssignment(ticket, newState);
 
-    // 2. Closure Survey Trigger
-    if (isResolved && ticket.reportedByUserPhone) {
+    // 2. Resident Proactive Notification (WhatsApp)
+    const target = ticket.reportedByUser?.whatsappId || ticket.reportedByUserPhone;
+    if (target) {
+      const residentMsg = `Hola ${ticket.reportedByUser.firstName}, Don Atento informa: Tu reporte "${ticket.title}" ha cambiado de estado a *"${newState.name}"*. 🛠️ Seguiremos informándote de los avances.`;
+      await this.whatsappService.sendMessage(target, residentMsg, ticket.tenantId);
+    }
+
+    // 3. Closure Survey Trigger
+    if (isResolved && target) {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey`;
       const surveyMessage = `¡Hola! Don Atento informa: Tu requerimiento "${ticket.title}" ha sido marcado como RESUELTO. \n\nPor favor, califica nuestro servicio aquí: ${surveyLink} \n\no responde con un número del 1 al 5.`;
-
-      await this.whatsappService.sendMessage(
-        ticket.reportedByUserPhone,
-        surveyMessage,
-      );
+      await this.whatsappService.sendMessage(target, surveyMessage, ticket.tenantId);
 
       if (ticket.reportedByUser.email) {
         await this.emailService.sendSurveyRequest(

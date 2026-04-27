@@ -1,20 +1,26 @@
-import { Controller, Get, Post, Body, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, UseGuards, Req } from '@nestjs/common';
 import { WorkflowsService } from './workflows.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 
 @Controller('workflows')
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}
 
   @Get()
-  async findAll(@Query('tenantId') tenantId: string) {
+  async findAll(@Req() req: any) {
+    const tenantId = req.user.tenantId;
     return this.workflowsService.findAllByTenant(tenantId);
   }
 
   @Post()
   async create(
-    @Body() data: { tenantId: string; name: string; description?: string },
+    @Req() req: any,
+    @Body() data: { name: string; description?: string; states?: any[] },
   ) {
-    return this.workflowsService.create(data);
+    const tenantId = req.user.tenantId;
+    return this.workflowsService.create({ ...data, tenantId });
   }
 
   @Post('states')
