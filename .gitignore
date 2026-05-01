@@ -39,3 +39,11 @@ backend/test-cert/
 *.key
 *.pfx
 
+# Databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Baileys Sessions
+/backend/storage/

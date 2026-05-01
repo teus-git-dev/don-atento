@@ -6,12 +6,16 @@ import * as dotenv from 'dotenv';
 
 import { join } from 'path';
 import * as express from 'express';
+import helmet from 'helmet';
 
 async function bootstrap() {
   dotenv.config();
   console.log('[Bootstrap] JWT_SECRET loaded:', process.env.JWT_SECRET ? 'YES' : 'NO');
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" } // For static uploads
+  }));
 
   // ── Security: Restrict CORS to the known frontend origin ──────────────────
   const allowedOrigins = [

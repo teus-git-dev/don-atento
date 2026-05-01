@@ -99,7 +99,10 @@ let PropertiesService = class PropertiesService {
                 ownerLookupConditions.push({ phone: ownerInfo.phone });
             let ownerUser = ownerLookupConditions.length > 0
                 ? await this.prisma.user.findFirst({
-                    where: { OR: ownerLookupConditions },
+                    where: {
+                        tenantId: propertyFields.tenantId,
+                        OR: ownerLookupConditions
+                    },
                 })
                 : null;
             if (!ownerUser) {
@@ -141,7 +144,10 @@ let PropertiesService = class PropertiesService {
                 tenantLookupConditions.push({ governmentId: tenantInfo.governmentId });
             let tenantUser = tenantLookupConditions.length > 0
                 ? await this.prisma.user.findFirst({
-                    where: { OR: tenantLookupConditions },
+                    where: {
+                        tenantId: propertyFields.tenantId,
+                        OR: tenantLookupConditions
+                    },
                 })
                 : null;
             if (!tenantUser) {
@@ -311,6 +317,7 @@ let PropertiesService = class PropertiesService {
         if (ownerInfo && ownerInfo.name) {
             let ownerUser = await this.prisma.user.findFirst({
                 where: {
+                    tenantId: tenantId,
                     OR: [
                         { email: ownerInfo.email || 'pending' },
                         { phone: ownerInfo.phone },

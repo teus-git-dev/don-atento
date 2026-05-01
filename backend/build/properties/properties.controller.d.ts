@@ -8,18 +8,9 @@ export declare class PropertiesController {
     constructor(propertiesService: PropertiesService, bulkImportService: BulkImportService);
     createInmueble(req: any, data: CreatePropertyDto): Promise<{
         id: string;
-        tenantId: string;
-        isActive: boolean;
-        createdAt: Date;
-        status: import(".prisma/client").$Enums.PropertyStatus;
-        description: string | null;
-        title: string;
-        workflowId: string | null;
-        attachments: import("@prisma/client/runtime/client").JsonValue | null;
-        propertyCode: string | null;
-        accessToken: string | null;
-        parentPropertyId: string | null;
         propertyType: import(".prisma/client").$Enums.PropertyType;
+        title: string;
+        description: string | null;
         address: string;
         city: string;
         department: string;
@@ -29,7 +20,10 @@ export declare class PropertiesController {
         areaM2: number | null;
         rooms: number | null;
         bathrooms: number | null;
+        status: import(".prisma/client").$Enums.PropertyStatus;
+        propertyCode: string | null;
         isVip: boolean;
+        isActive: boolean;
         rentAmount: import("@prisma/client-runtime-utils").Decimal | null;
         adminAmount: import("@prisma/client-runtime-utils").Decimal | null;
         taxAmount: import("@prisma/client-runtime-utils").Decimal | null;
@@ -37,6 +31,9 @@ export declare class PropertiesController {
         managementNit: string | null;
         insuranceCompany: string | null;
         splatUrl: string | null;
+        attachments: import("@prisma/client/runtime/client").JsonValue | null;
+        createdAt: Date;
+        accessToken: string | null;
         managementEmail: string | null;
         managementPhone: string | null;
         visionAnalysis: import("@prisma/client/runtime/client").JsonValue | null;
@@ -45,28 +42,51 @@ export declare class PropertiesController {
         admonPhone: string | null;
         admonPorteria: string | null;
         visionVideoUrl: import("@prisma/client/runtime/client").JsonValue | null;
+        tenantId: string;
+        parentPropertyId: string | null;
+        workflowId: string | null;
     }>;
     createPropietario(data: any): Promise<{
         message: string;
         data: any;
     }>;
     findAll(req: any): Promise<({
+        inventoryItems: {
+            comments: string | null;
+            id: string;
+            description: string | null;
+            createdAt: Date;
+            name: string;
+            propertyId: string;
+            zoneId: string | null;
+            category: import(".prisma/client").$Enums.InventoryCategory;
+            condition: import(".prisma/client").$Enums.InventoryCondition;
+            brand: string | null;
+            model: string | null;
+            serialNumber: string | null;
+            material: string | null;
+            isFunctional: boolean;
+            technicalDetails: import("@prisma/client/runtime/client").JsonValue | null;
+            expectedLifespanMonths: number | null;
+            lastInspectionDate: Date | null;
+            quantity: number;
+        }[];
         assignments: ({
             agent: {
-                role: import(".prisma/client").$Enums.UserRole;
                 id: string;
-                email: string;
+                isActive: boolean;
+                createdAt: Date;
                 tenantId: string | null;
+                email: string;
                 passwordHash: string;
                 firstName: string;
                 lastName: string;
                 governmentId: string | null;
+                role: import(".prisma/client").$Enums.UserRole;
                 roleId: string | null;
                 phone: string | null;
                 whatsappId: string | null;
                 photoUrl: string | null;
-                isActive: boolean;
-                createdAt: Date;
                 additionalContacts: string | null;
                 personType: string | null;
                 isTaxDeclarant: boolean;
@@ -87,20 +107,20 @@ export declare class PropertiesController {
         })[];
         relations: ({
             user: {
-                role: import(".prisma/client").$Enums.UserRole;
                 id: string;
-                email: string;
+                isActive: boolean;
+                createdAt: Date;
                 tenantId: string | null;
+                email: string;
                 passwordHash: string;
                 firstName: string;
                 lastName: string;
                 governmentId: string | null;
+                role: import(".prisma/client").$Enums.UserRole;
                 roleId: string | null;
                 phone: string | null;
                 whatsappId: string | null;
                 photoUrl: string | null;
-                isActive: boolean;
-                createdAt: Date;
                 additionalContacts: string | null;
                 personType: string | null;
                 isTaxDeclarant: boolean;
@@ -116,9 +136,9 @@ export declare class PropertiesController {
         } & {
             id: string;
             status: import(".prisma/client").$Enums.RelationStatus;
+            insuranceCompany: string | null;
             propertyId: string;
             userId: string;
-            insuranceCompany: string | null;
             relationType: import(".prisma/client").$Enums.RelationType;
             percentageOwnership: number | null;
             startDate: Date;
@@ -126,40 +146,11 @@ export declare class PropertiesController {
             contractNumber: string | null;
             contractType: string | null;
         })[];
-        inventoryItems: {
-            comments: string | null;
-            id: string;
-            createdAt: Date;
-            name: string;
-            description: string | null;
-            propertyId: string;
-            model: string | null;
-            zoneId: string | null;
-            category: import(".prisma/client").$Enums.InventoryCategory;
-            condition: import(".prisma/client").$Enums.InventoryCondition;
-            brand: string | null;
-            serialNumber: string | null;
-            material: string | null;
-            isFunctional: boolean;
-            technicalDetails: import("@prisma/client/runtime/client").JsonValue | null;
-            expectedLifespanMonths: number | null;
-            lastInspectionDate: Date | null;
-            quantity: number;
-        }[];
     } & {
         id: string;
-        tenantId: string;
-        isActive: boolean;
-        createdAt: Date;
-        status: import(".prisma/client").$Enums.PropertyStatus;
-        description: string | null;
-        title: string;
-        workflowId: string | null;
-        attachments: import("@prisma/client/runtime/client").JsonValue | null;
-        propertyCode: string | null;
-        accessToken: string | null;
-        parentPropertyId: string | null;
         propertyType: import(".prisma/client").$Enums.PropertyType;
+        title: string;
+        description: string | null;
         address: string;
         city: string;
         department: string;
@@ -169,7 +160,10 @@ export declare class PropertiesController {
         areaM2: number | null;
         rooms: number | null;
         bathrooms: number | null;
+        status: import(".prisma/client").$Enums.PropertyStatus;
+        propertyCode: string | null;
         isVip: boolean;
+        isActive: boolean;
         rentAmount: import("@prisma/client-runtime-utils").Decimal | null;
         adminAmount: import("@prisma/client-runtime-utils").Decimal | null;
         taxAmount: import("@prisma/client-runtime-utils").Decimal | null;
@@ -177,6 +171,9 @@ export declare class PropertiesController {
         managementNit: string | null;
         insuranceCompany: string | null;
         splatUrl: string | null;
+        attachments: import("@prisma/client/runtime/client").JsonValue | null;
+        createdAt: Date;
+        accessToken: string | null;
         managementEmail: string | null;
         managementPhone: string | null;
         visionAnalysis: import("@prisma/client/runtime/client").JsonValue | null;
@@ -185,24 +182,27 @@ export declare class PropertiesController {
         admonPhone: string | null;
         admonPorteria: string | null;
         visionVideoUrl: import("@prisma/client/runtime/client").JsonValue | null;
+        tenantId: string;
+        parentPropertyId: string | null;
+        workflowId: string | null;
     })[]>;
     findOne(req: any, id: string): Promise<({
         relations: ({
             user: {
-                role: import(".prisma/client").$Enums.UserRole;
                 id: string;
-                email: string;
+                isActive: boolean;
+                createdAt: Date;
                 tenantId: string | null;
+                email: string;
                 passwordHash: string;
                 firstName: string;
                 lastName: string;
                 governmentId: string | null;
+                role: import(".prisma/client").$Enums.UserRole;
                 roleId: string | null;
                 phone: string | null;
                 whatsappId: string | null;
                 photoUrl: string | null;
-                isActive: boolean;
-                createdAt: Date;
                 additionalContacts: string | null;
                 personType: string | null;
                 isTaxDeclarant: boolean;
@@ -218,9 +218,9 @@ export declare class PropertiesController {
         } & {
             id: string;
             status: import(".prisma/client").$Enums.RelationStatus;
+            insuranceCompany: string | null;
             propertyId: string;
             userId: string;
-            insuranceCompany: string | null;
             relationType: import(".prisma/client").$Enums.RelationType;
             percentageOwnership: number | null;
             startDate: Date;
@@ -230,18 +230,9 @@ export declare class PropertiesController {
         })[];
     } & {
         id: string;
-        tenantId: string;
-        isActive: boolean;
-        createdAt: Date;
-        status: import(".prisma/client").$Enums.PropertyStatus;
-        description: string | null;
-        title: string;
-        workflowId: string | null;
-        attachments: import("@prisma/client/runtime/client").JsonValue | null;
-        propertyCode: string | null;
-        accessToken: string | null;
-        parentPropertyId: string | null;
         propertyType: import(".prisma/client").$Enums.PropertyType;
+        title: string;
+        description: string | null;
         address: string;
         city: string;
         department: string;
@@ -251,7 +242,10 @@ export declare class PropertiesController {
         areaM2: number | null;
         rooms: number | null;
         bathrooms: number | null;
+        status: import(".prisma/client").$Enums.PropertyStatus;
+        propertyCode: string | null;
         isVip: boolean;
+        isActive: boolean;
         rentAmount: import("@prisma/client-runtime-utils").Decimal | null;
         adminAmount: import("@prisma/client-runtime-utils").Decimal | null;
         taxAmount: import("@prisma/client-runtime-utils").Decimal | null;
@@ -259,6 +253,9 @@ export declare class PropertiesController {
         managementNit: string | null;
         insuranceCompany: string | null;
         splatUrl: string | null;
+        attachments: import("@prisma/client/runtime/client").JsonValue | null;
+        createdAt: Date;
+        accessToken: string | null;
         managementEmail: string | null;
         managementPhone: string | null;
         visionAnalysis: import("@prisma/client/runtime/client").JsonValue | null;
@@ -267,24 +264,27 @@ export declare class PropertiesController {
         admonPhone: string | null;
         admonPorteria: string | null;
         visionVideoUrl: import("@prisma/client/runtime/client").JsonValue | null;
+        tenantId: string;
+        parentPropertyId: string | null;
+        workflowId: string | null;
     }) | null>;
     findByCode(req: any, code: string): Promise<({
         relations: ({
             user: {
-                role: import(".prisma/client").$Enums.UserRole;
                 id: string;
-                email: string;
+                isActive: boolean;
+                createdAt: Date;
                 tenantId: string | null;
+                email: string;
                 passwordHash: string;
                 firstName: string;
                 lastName: string;
                 governmentId: string | null;
+                role: import(".prisma/client").$Enums.UserRole;
                 roleId: string | null;
                 phone: string | null;
                 whatsappId: string | null;
                 photoUrl: string | null;
-                isActive: boolean;
-                createdAt: Date;
                 additionalContacts: string | null;
                 personType: string | null;
                 isTaxDeclarant: boolean;
@@ -300,9 +300,9 @@ export declare class PropertiesController {
         } & {
             id: string;
             status: import(".prisma/client").$Enums.RelationStatus;
+            insuranceCompany: string | null;
             propertyId: string;
             userId: string;
-            insuranceCompany: string | null;
             relationType: import(".prisma/client").$Enums.RelationType;
             percentageOwnership: number | null;
             startDate: Date;
@@ -312,18 +312,9 @@ export declare class PropertiesController {
         })[];
     } & {
         id: string;
-        tenantId: string;
-        isActive: boolean;
-        createdAt: Date;
-        status: import(".prisma/client").$Enums.PropertyStatus;
-        description: string | null;
-        title: string;
-        workflowId: string | null;
-        attachments: import("@prisma/client/runtime/client").JsonValue | null;
-        propertyCode: string | null;
-        accessToken: string | null;
-        parentPropertyId: string | null;
         propertyType: import(".prisma/client").$Enums.PropertyType;
+        title: string;
+        description: string | null;
         address: string;
         city: string;
         department: string;
@@ -333,7 +324,10 @@ export declare class PropertiesController {
         areaM2: number | null;
         rooms: number | null;
         bathrooms: number | null;
+        status: import(".prisma/client").$Enums.PropertyStatus;
+        propertyCode: string | null;
         isVip: boolean;
+        isActive: boolean;
         rentAmount: import("@prisma/client-runtime-utils").Decimal | null;
         adminAmount: import("@prisma/client-runtime-utils").Decimal | null;
         taxAmount: import("@prisma/client-runtime-utils").Decimal | null;
@@ -341,6 +335,9 @@ export declare class PropertiesController {
         managementNit: string | null;
         insuranceCompany: string | null;
         splatUrl: string | null;
+        attachments: import("@prisma/client/runtime/client").JsonValue | null;
+        createdAt: Date;
+        accessToken: string | null;
         managementEmail: string | null;
         managementPhone: string | null;
         visionAnalysis: import("@prisma/client/runtime/client").JsonValue | null;
@@ -349,21 +346,15 @@ export declare class PropertiesController {
         admonPhone: string | null;
         admonPorteria: string | null;
         visionVideoUrl: import("@prisma/client/runtime/client").JsonValue | null;
+        tenantId: string;
+        parentPropertyId: string | null;
+        workflowId: string | null;
     }) | null>;
     create(req: any, data: CreatePropertyDto): Promise<{
         id: string;
-        tenantId: string;
-        isActive: boolean;
-        createdAt: Date;
-        status: import(".prisma/client").$Enums.PropertyStatus;
-        description: string | null;
-        title: string;
-        workflowId: string | null;
-        attachments: import("@prisma/client/runtime/client").JsonValue | null;
-        propertyCode: string | null;
-        accessToken: string | null;
-        parentPropertyId: string | null;
         propertyType: import(".prisma/client").$Enums.PropertyType;
+        title: string;
+        description: string | null;
         address: string;
         city: string;
         department: string;
@@ -373,7 +364,10 @@ export declare class PropertiesController {
         areaM2: number | null;
         rooms: number | null;
         bathrooms: number | null;
+        status: import(".prisma/client").$Enums.PropertyStatus;
+        propertyCode: string | null;
         isVip: boolean;
+        isActive: boolean;
         rentAmount: import("@prisma/client-runtime-utils").Decimal | null;
         adminAmount: import("@prisma/client-runtime-utils").Decimal | null;
         taxAmount: import("@prisma/client-runtime-utils").Decimal | null;
@@ -381,6 +375,9 @@ export declare class PropertiesController {
         managementNit: string | null;
         insuranceCompany: string | null;
         splatUrl: string | null;
+        attachments: import("@prisma/client/runtime/client").JsonValue | null;
+        createdAt: Date;
+        accessToken: string | null;
         managementEmail: string | null;
         managementPhone: string | null;
         visionAnalysis: import("@prisma/client/runtime/client").JsonValue | null;
@@ -389,6 +386,9 @@ export declare class PropertiesController {
         admonPhone: string | null;
         admonPorteria: string | null;
         visionVideoUrl: import("@prisma/client/runtime/client").JsonValue | null;
+        tenantId: string;
+        parentPropertyId: string | null;
+        workflowId: string | null;
     }>;
     bulkImport(req: any, data: any[]): Promise<{
         total: number;
@@ -410,9 +410,9 @@ export declare class PropertiesController {
         newOwner: {
             id: string;
             status: import(".prisma/client").$Enums.RelationStatus;
+            insuranceCompany: string | null;
             propertyId: string;
             userId: string;
-            insuranceCompany: string | null;
             relationType: import(".prisma/client").$Enums.RelationType;
             percentageOwnership: number | null;
             startDate: Date;
@@ -423,9 +423,9 @@ export declare class PropertiesController {
         newTenant: {
             id: string;
             status: import(".prisma/client").$Enums.RelationStatus;
+            insuranceCompany: string | null;
             propertyId: string;
             userId: string;
-            insuranceCompany: string | null;
             relationType: import(".prisma/client").$Enums.RelationType;
             percentageOwnership: number | null;
             startDate: Date;

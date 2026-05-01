@@ -42,7 +42,7 @@ export const authService = {
       localStorage.setItem(TOKEN_KEY, data.accessToken);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       // Sync to cookie so Next.js middleware can protect routes
-      document.cookie = `don_atento_token_v1=${data.accessToken}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `don_atento_token_v1=${data.accessToken}; path=/; max-age=86400; SameSite=Lax; Secure`;
     }
     return data.user;
   },
@@ -73,7 +73,7 @@ export const authService = {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
       // Clear the auth cookie
-      document.cookie = 'don_atento_token_v1=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'don_atento_token_v1=; path=/; max-age=0; SameSite=Lax; Secure';
       window.location.href = '/login';
     }
   },
