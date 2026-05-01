@@ -55,8 +55,14 @@ export class PropertiesController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener todos los inmuebles de un tenant' })
-  async findAll(@Req() req: any) {
-    return this.propertiesService.findAllByTenant(req['tenantId']);
+  async findAll(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.propertiesService.findAllByTenant(req['tenantId'], pageNum, limitNum);
   }
 
   @Get(':id')

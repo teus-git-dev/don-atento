@@ -6,6 +6,8 @@ import Link from "next/link";
 import { TENANT_ID } from "@/lib/config";
 import { apiClient } from "@/lib/apiClient";
 import TransferModal from "./TransferModal";
+import { Pagination } from "@/components/ui/Pagination";
+import { TableRowSkeleton } from "@/components/ui/Skeleton";
 
 export default function PropertyMasterTable() {
   const [properties, setProperties] = useState<any[]>([]);
@@ -14,15 +16,22 @@ export default function PropertyMasterTable() {
   const [selectedProperty, setSelectedProperty] = useState<any>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchProperties();
-  }, []);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const limit = 10;
 
-  const fetchProperties = async () => {
+  useEffect(() => {
+    fetchProperties(currentPage);
+  }, [currentPage]);
+
+  const fetchProperties = async (page: number) => {
     setLoading(true);
     try {
-      const data = await apiClient.get<any[]>(`/properties?tenantId=${TENANT_ID}`);
-      setProperties(Array.isArray(data) ? data : []);
+      const res = await apiClient.get<any>(`/properties?page=${page}&limit=${limit}`);
+      setProperties(res.data || []);
+      setTotalPages(res.totalPages || 1);
+      setTotalRecords(res.totalRecords || 0);
     } catch (error) {
       console.error("Error fetching properties:", error);
     } finally {
@@ -73,18 +82,7 @@ export default function PropertyMasterTable() {
 
       {/* Table */}
       <div className="overflow-x-auto w-full min-h-[400px]">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center p-20 gap-4 text-gray-400">
-            <Loader2 className="animate-spin text-[var(--color-neon-blue)]" size={40} />
-            <p className="font-medium animate-pulse">Sincronizando maestro de inmuebles...</p>
-          </div>
-        ) : filteredProperties.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-20 gap-4 text-gray-400">
-                <Building2 size={48} className="opacity-20" />
-                <p>No se encontraron inmuebles registrados.</p>
-            </div>
-        ) : (
-            <table className="w-full text-left text-sm whitespace-nowrap">
+        <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-black/40 text-gray-400 font-medium">
                 <tr>
                 <th className="px-6 py-4 rounded-tl-xl border-b border-white/5">ID Inmueble</th>
@@ -97,7 +95,25 @@ export default function PropertyMasterTable() {
                 </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-                {filteredProperties.map((prop) => (
+                {loading ? (
+                    <>
+                        <TableRowSkeleton columns={7} />
+                        <TableRowSkeleton columns={7} />
+                        <TableRowSkeleton columns={7} />
+                        <TableRowSkeleton columns={7} />
+                        <TableRowSkeleton columns={7} />
+                    </>
+                ) : filteredProperties.length === 0 ? (
+                    <tr>
+                        <td colSpan={7} className="py-20 text-center text-gray-400">
+                            <div className="flex flex-col items-center justify-center gap-4">
+                                <Building2 size={48} className="opacity-20" />
+                                <p>No se encontraron inmuebles registrados.</p>
+                            </div>
+                        </td>
+                    </tr>
+                ) : (
+                    filteredProperties.map((prop) => (
                 <tr key={prop.id} className={`hover:bg-white/5 transition-colors group ${!prop.isActive ? 'opacity-40 grayscale-[0.5]' : ''} ${prop.isVip ? 'bg-blue-500/5' : ''}`}>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
@@ -207,28 +223,27 @@ export default function PropertyMasterTable() {
                     </div>
                     </td>
                 </tr>
-                ))}
+                ))
+                )}
             </tbody>
-            </table>
-        )}
+        </table>
       </div>
 
       <TransferModal 
         isOpen={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
         property={selectedProperty}
-        onSuccess={fetchProperties}
+        onSuccess={() => fetchProperties(currentPage)}
       />
       
       {/* Pagination Footer */}
-      {!loading && filteredProperties.length > 0 && (
-        <div className="p-4 border-t border-white/5 bg-black/20 flex items-center justify-between text-sm text-gray-500">
-            <div>Mostrando {filteredProperties.length} resultados</div>
-            <div className="flex gap-2">
-            <button className="px-3 py-1 rounded-lg border border-white/10 hover:bg-white/5 transition-colors disabled:opacity-50">Anterior</button>
-            <button className="px-3 py-1 rounded-lg border border-white/10 hover:bg-white/5 transition-colors">Siguiente</button>
-            </div>
-        </div>
+      {!loading && (
+        <Pagination 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRecords={totalRecords}
+          onPageChange={setCurrentPage}
+        />
       )}
     </div>
   );

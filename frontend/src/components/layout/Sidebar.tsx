@@ -61,7 +61,10 @@ export default function Sidebar() {
         {/* Dashboard removed per user request */}
         
         {canSeeCRM && (
-          <SidebarLink href="/crm" icon={<BarChart3 size={20} />} label="CRM" active={pathname === '/crm'} />
+          <>
+            <SidebarLink href="/crm" icon={<BarChart3 size={20} />} label="CRM" active={pathname === '/crm'} />
+            <SidebarLink href="/contactos" icon={<Users size={20} />} label="Contactos" active={pathname === '/contactos'} />
+          </>
         )}
 
         {canSeeInmuebles && (

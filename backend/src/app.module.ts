@@ -20,6 +20,7 @@ import { RolesModule } from './roles/roles.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { InvoicingModule } from './invoicing/invoicing.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { DataImportModule } from './data-import/data-import.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { TenantsModule } from './tenants/tenants.module';
     AccountingModule,
     InvoicingModule,
     TenantsModule,
+    DataImportModule,
   ],
   controllers: [AppController],
   providers: [

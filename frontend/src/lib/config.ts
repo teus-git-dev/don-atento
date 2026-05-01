@@ -2,7 +2,7 @@
  * Configuracion global del tenant activo.
  */
 export const TENANT_ID = 'teus-tenant-id';
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+export const API_URL = '/api';
 
 /**
  * ID del usuario admin del tenant activo.

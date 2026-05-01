@@ -220,20 +220,34 @@ export class PropertiesService {
     return property;
   }
 
-  async findAllByTenant(tenantId: string) {
-    return this.prisma.property.findMany({
-      where: { tenantId },
-      include: {
-        assignments: {
-          include: { agent: true },
+  async findAllByTenant(tenantId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [data, totalRecords] = await this.prisma.$transaction([
+      this.prisma.property.findMany({
+        where: { tenantId },
+        include: {
+          assignments: {
+            include: { agent: true },
+          },
+          relations: {
+            include: { user: true },
+          },
+          inventoryItems: true,
         },
-        relations: {
-          include: { user: true },
-        },
-        inventoryItems: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.property.count({ where: { tenantId } })
+    ]);
+
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page
+    };
   }
 
   async findOne(id: string, tenantId: string) {

@@ -39,6 +39,10 @@ model Tenant {
   tickets                Ticket[]
   users                  User[]
   workflows              Workflow[]
+  
+  // Data Imports
+  dataImportTemplates    DataImportTemplate[]
+  dataImportLogs         DataImportLog[]
 }
 
 model DigitalCertificate {
@@ -90,6 +94,11 @@ model User {
   accountNumber          String?
   providerId             String?
   accountType            String?
+
+  // Data Import Tracking
+  sourceTag              String?
+  importedAt             DateTime?
+
   assignments            PropertyAgentAssignment[]
   relations              PropertyRelation[]
   assignedProspects      Prospect[]                @relation("AgentProspects")
@@ -149,6 +158,11 @@ model Property {
   managementPhone  String?
   visionAnalysis   Json?
   visionVideoUrl   String?
+
+  // Data Import Tracking
+  sourceTag        String?
+  importedAt       DateTime?
+
   inventoryItems   InventoryItem[]
   meterReadings    MeterReading[]
   parentProperty   Property?                 @relation("PropertyHierarchy", fields: [parentPropertyId], references: [id])
@@ -174,6 +188,11 @@ model PropertyRelation {
   contractNumber      String?
   insuranceCompany    String?
   contractType        String?
+
+  // Data Import Tracking
+  sourceTag           String?
+  importedAt          DateTime?
+
   property            Property       @relation(fields: [propertyId], references: [id])
   user                User           @relation(fields: [userId], references: [id])
 }
@@ -596,4 +615,35 @@ enum ProviderStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+// ============================================
+// Data Import Models
+// ============================================
+
+model DataImportTemplate {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  categoryId  String   // OWNER, TENANT, PROPERTY, CONTRACT
+  mapping     Json     // The stored column mappings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  logs        DataImportLog[]
+}
+
+model DataImportLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  templateId  String?
+  fileName    String
+  sourceTag   String
+  status      String   // SUCCESS, FAILED, PARTIAL
+  recordsRead Int      @default(0)
+  recordsSaved Int     @default(0)
+  errors      Json?    // Detailed error log
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template    DataImportTemplate? @relation(fields: [templateId], references: [id])
 }

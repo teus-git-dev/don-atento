@@ -22,6 +22,7 @@ async function bootstrap() {
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3002', // Next.js fallback port when 3000 is taken
   ];
 
   app.enableCors({

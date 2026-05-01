@@ -278,6 +278,11 @@ model Property {
   splatUrl                String?
   attachments             Json?
   createdAt               DateTime                  @default(now())
+
+  // Data Import
+  sourceTag               String?
+  importedAt              DateTime?
+
   accessToken             String?                   @unique
   workflowId              String?
   managementEmail         String?
@@ -573,6 +578,11 @@ model User {
   photoUrl                                         String?
   isActive                                         Boolean                   @default(true)
   createdAt                                        DateTime                  @default(now())
+
+  // Data Import
+  sourceTag                                        String?
+  importedAt                                       DateTime?
+
   additionalContacts                               String?
   personType                                       String?
   isTaxDeclarant                                   Boolean                   @default(false)
@@ -843,4 +853,33 @@ enum ZoneType {
   ZONAS_PRIVADAS
   ZONAS_DE_SERVICIO
   EXTERIORES
+}
+
+// ============================================
+// Data Import Models
+// ============================================
+
+model DataImportTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  categoryId  String   // OWNER, TENANT, PROPERTY, CONTRACT
+  mapping     Json     // The stored column mappings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  logs        DataImportLog[]
+}
+
+model DataImportLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  templateId  String?
+  fileName    String
+  sourceTag   String
+  status      String   // SUCCESS, FAILED, PARTIAL
+  recordsRead Int      @default(0)
+  recordsSaved Int     @default(0)
+  errors      Json?    // Detailed error log
+  createdAt   DateTime @default(now())
+  template    DataImportTemplate? @relation(fields: [templateId], references: [id])
 }

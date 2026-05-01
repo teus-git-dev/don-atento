@@ -7,13 +7,25 @@ import * as bcrypt from 'bcrypt';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findByRole(role: UserRole, tenantId: string) {
-    return this.prisma.user.findMany({
-      where: {
-        role,
-        tenantId,
-      },
-    });
+  async findByRole(role: UserRole, tenantId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [data, totalRecords] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where: { role, tenantId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where: { role, tenantId } })
+    ]);
+
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page
+    };
   }
 
   async findAllByTenant(tenantId: string) {

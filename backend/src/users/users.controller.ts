@@ -28,9 +28,26 @@ export class UsersController {
     return this.usersService.findByRole(UserRole.TECHNICIAN, req['tenantId']);
   }
 
+  @Get('tenants')
+  async findTenants(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.usersService.findByRole(UserRole.TENANT_USER, req['tenantId'], pageNum, limitNum);
+  }
+
   @Get('owners')
-  async findOwners(@Req() req: any) {
-    return this.usersService.findByRole(UserRole.OWNER, req['tenantId']);
+  async findOwners(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.usersService.findByRole(UserRole.OWNER, req['tenantId'], pageNum, limitNum);
   }
 
   @Get('admin')
