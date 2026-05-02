@@ -21,9 +21,11 @@ import { AccountingModule } from './accounting/accounting.module';
 import { InvoicingModule } from './invoicing/invoicing.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { DataImportModule } from './data-import/data-import.module';
+import { ContractsModule } from './contracts/contracts.module';
 
 @Module({
   imports: [
+    ContractsModule,
     PrismaModule,
     AuthModule,
     TicketsModule,

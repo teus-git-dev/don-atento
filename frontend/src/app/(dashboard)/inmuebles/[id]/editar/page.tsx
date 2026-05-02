@@ -10,6 +10,8 @@ import {
   Briefcase, Info, Zap
 } from "lucide-react";
 import { TENANT_ID, API_URL } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
+import { authService } from "@/services/authService";
 
 const STEPS = [
   { id: 1, name: "Datos del Inmueble", icon: Building },
@@ -85,6 +87,7 @@ export default function EditarInmueblePage() {
 
   // Multimedia & Docs
   const [uploadedFiles, setUploadedFiles] = useState<{id: string, name: string, type: 'IMAGE' | 'VIDEO' | 'DOC', status: 'SUCCESS' | 'ERROR'}[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
   
   const [coordinates, setCoordinates] = useState({ lat: 4.6097, lng: -74.0817 });
   const [templates, setTemplates] = useState<any[]>([]);
@@ -94,21 +97,36 @@ export default function EditarInmueblePage() {
     fetchInitialData();
   }, [id]);
 
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (address && city) {
+        // Georeferencing simulation (matches backend logic)
+        const seed = address.length + city.length + department.length;
+        setCoordinates({
+          lat: 4.6097 + (seed % 100) / 1000,
+          lng: -74.0817 + (seed % 100) / 1000
+        });
+      }
+    }, 1500);
+    return () => clearTimeout(timeoutId);
+  }, [address, city, department]);
+
   const fetchInitialData = async () => {
     setLoading(true);
     try {
         // Fetch Templates
-        const tempRes = await fetch(`${API_URL}/inventory-templates?tenantId=${TENANT_ID}`);
-        if (tempRes.ok) {
-            const temps = await tempRes.json();
-            setTemplates(temps);
+        try {
+            const temps = await apiClient.get<any[]>('/inventory-templates');
+            setTemplates(temps || []);
+        } catch (e) {
+            console.error("Error loading templates", e);
         }
 
         // Fetch Property
-        const res = await fetch(`${API_URL}/properties/${id}`);
-        if (res.ok) {
-            const data = await res.json();
-            setTitle(data.title || "");
+        try {
+            const data = await apiClient.get<any>(`/properties/${id}`);
+            if (data) {
+                setTitle(data.title || "");
             setPropertyType(data.propertyType || "APARTMENT");
             setAddress(data.address || "");
             setCity(data.city || "");
@@ -162,8 +180,25 @@ export default function EditarInmueblePage() {
                 setContractEnd(tenantRel.endDate ? new Date(tenantRel.endDate).toISOString().split('T')[0] : "");
                 setTenantContractNumber(tenantRel.contractNumber || "");
                 setTenantContractType(tenantRel.contractType || "RESIDENTIAL");
-
             }
+            }
+        } catch (e) {
+            console.error("Error fetching property data", e);
+        }
+
+        // Fetch Contracts
+        try {
+            const fetchedContracts = await apiClient.get<any[]>(`/contracts/property/${id}`);
+            setContracts(fetchedContracts || []);
+            
+            // If there's a processed contract, auto-fill dates
+            const processed = fetchedContracts?.find(c => c.status === 'PROCESSED');
+            if (processed && processed.extractedData) {
+                if (processed.extractedData.contractStart) setContractStart(processed.extractedData.contractStart);
+                if (processed.extractedData.contractEnd) setContractEnd(processed.extractedData.contractEnd);
+            }
+        } catch (e) {
+            console.error("Error fetching contracts", e);
         }
     } catch (e) {
         console.error("Error loading property data", e);
@@ -172,28 +207,67 @@ export default function EditarInmueblePage() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'IMAGE' | 'VIDEO' | 'DOC') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'IMAGE' | 'VIDEO' | 'DOC') => {
     const file = e.target.files?.[0];
     if (file) {
-        const fileId = Math.random().toString(36).substr(2, 9);
-        const newFile = {
-            id: fileId,
-            name: file.name,
-            type,
-            status: 'SUCCESS' as const
-        };
-        setUploadedFiles(prev => [...prev, newFile]);
+        setIsSaving(true);
+        try {
+            // 1. Upload file
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Use native fetch since apiClient doesn't support FormData directly
+            const token = authService.getToken();
+            const uploadRes = await fetch(`${API_URL}/tickets/upload`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            
+            if (!uploadRes.ok) throw new Error('Error al subir archivo');
+            const fileData = await uploadRes.json();
+            
+            // 2. Add to local state (for images)
+            const fileId = Math.random().toString(36).substr(2, 9);
+            const newFile = {
+                id: fileId,
+                name: file.name,
+                type,
+                status: 'SUCCESS' as const
+            };
+            setUploadedFiles(prev => [...prev, newFile]);
 
-        // AI Extraction Simulation for Contracts
-        if (type === 'DOC' && currentStep === 5) {
-            setIsSaving(true);
-            setTimeout(() => {
-                setContractStart("2026-03-01");
-                setContractEnd("2027-02-28");
-                setTenantContractNumber(`CONTRATO-${Math.floor(Math.random() * 9000) + 1000}`);
-                setIsSaving(false);
-                alert("✨ AI: He extraído automáticamente las fechas y número de contrato del documento.");
-            }, 2500);
+            // 3. If it's a contract, send to AI Processor
+            if (type === 'DOC') {
+                const contractRes = await apiClient.post<any>('/contracts/upload', {
+                    propertyId: id,
+                    fileUrl: fileData.url
+                });
+                
+                // Add to local contracts state as PENDING_AI
+                setContracts(prev => [contractRes, ...prev]);
+                
+                alert("Documento subido. La IA Don Atento está analizando el contrato...");
+                
+                // Poll for completion after 6 seconds (since our mock takes 5s)
+                setTimeout(async () => {
+                    const fetchedContracts = await apiClient.get<any[]>(`/contracts/property/${id}`);
+                    setContracts(fetchedContracts || []);
+                    
+                    const processed = fetchedContracts?.find(c => c.id === contractRes.id && c.status === 'PROCESSED');
+                    if (processed && processed.extractedData) {
+                        if (processed.extractedData.contractStart) setContractStart(processed.extractedData.contractStart);
+                        if (processed.extractedData.contractEnd) setContractEnd(processed.extractedData.contractEnd);
+                        setTenantContractNumber(`CONTRATO-${Math.floor(Math.random() * 9000) + 1000}`);
+                        alert("✨ IA Don Atento: He extraído automáticamente las fechas de inicio y fin del documento. Se han configurado las alarmas inteligentes de vencimiento y el veredicto legal está disponible.");
+                    }
+                }, 6000);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error al procesar el documento.");
+        } finally {
+            setIsSaving(false);
         }
     }
   };
@@ -353,15 +427,15 @@ export default function EditarInmueblePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-3 col-span-1 md:col-span-2">
                 <label className="text-xs font-bold text-[var(--color-neon-cyan)] uppercase tracking-widest">ID de Inmueble / Referencia *</label>
-                <input type="text" value={propertyCode} onChange={(e) => setPropertyCode(e.target.value)} className="w-full bg-black/40 border-2 border-[var(--color-neon-blue)]/30 rounded-xl px-4 py-3 text-lg font-bold text-white focus:border-[var(--color-neon-blue)] outline-none" />
+                <input type="text" value={propertyCode} readOnly className="w-full bg-black/40 border-2 border-white/10 rounded-xl px-4 py-3 text-lg font-bold text-gray-400 cursor-not-allowed outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">Nombre / Título *</label>
-                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none" />
+                <input type="text" value={title} readOnly className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-400 cursor-not-allowed outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">Tipo</label>
-                <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none">
+                <select value={propertyType} disabled className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-400 cursor-not-allowed outline-none opacity-70">
                   <option value="APARTMENT">Apartamento</option>
                   <option value="HOUSE">Casa</option>
                   <option value="BUILDING">Edificio</option>
@@ -370,11 +444,100 @@ export default function EditarInmueblePage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-400">Estado</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none">
+                <select value={status} disabled className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-400 cursor-not-allowed outline-none opacity-70">
                   <option value="AVAILABLE">Disponible</option>
                   <option value="RENTED">Arrendado</option>
                   <option value="UNDER_MAINTENANCE">En Mantenimiento</option>
                 </select>
+              </div>
+
+              {/* Nueva sección: Gestión Documental */}
+              <div className="col-span-1 md:col-span-2 mt-4 pt-8 border-t border-white/5">
+                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                  <FileText className="text-[var(--color-neon-blue)]" size={20} /> Gestión Documental
+                </h3>
+                <p className="text-sm text-gray-400 mb-6">Sube los contratos de arrendamiento o escrituras. La IA analizará el documento y extraerá la información.</p>
+                
+                {contracts.length > 0 && (
+                    <div className="space-y-4 mb-6">
+                        {contracts.map((contract) => (
+                            <div key={contract.id} className="p-4 rounded-xl border border-white/10 bg-black/20">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <FileText className={contract.status === 'PROCESSED' ? 'text-[var(--color-neon-cyan)]' : 'text-gray-400'} size={20} />
+                                        <div>
+                                            <p className="text-sm font-bold text-white">Contrato Cargado</p>
+                                            <p className="text-[10px] text-gray-500 font-mono">{new Date(contract.createdAt).toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        {contract.status === 'PENDING_AI' && (
+                                            <span className="flex items-center gap-2 text-[10px] text-[var(--color-neon-blue)] font-bold uppercase tracking-widest animate-pulse bg-[var(--color-neon-blue)]/10 px-3 py-1.5 rounded-lg">
+                                                <Loader2 size={12} className="animate-spin" /> IA Analizando
+                                            </span>
+                                        )}
+                                        {contract.status === 'PROCESSED' && (
+                                            <span className="flex items-center gap-2 text-[10px] text-green-400 font-bold uppercase tracking-widest bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20">
+                                                <CheckCircle2 size={12} /> Analizado
+                                            </span>
+                                        )}
+                                        <a href={`${API_URL.replace('/api', '')}${contract.fileUrl}`} target="_blank" rel="noreferrer" className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center gap-2">
+                                            Ver Documento
+                                        </a>
+                                    </div>
+                                </div>
+
+                                {contract.status === 'PROCESSED' && contract.legalVerdict && (
+                                    <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Veredicto Legal (Ley 820)</p>
+                                            <div className="flex items-center gap-2">
+                                                {contract.legalVerdict.status === 'COMPLIANT' ? (
+                                                    <CheckCircle2 className="text-green-400" size={16} />
+                                                ) : (
+                                                    <Info className="text-yellow-400" size={16} />
+                                                )}
+                                                <p className="text-sm text-white font-medium">{contract.legalVerdict.summary}</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold mb-1">Fechas Extraídas</p>
+                                            <div className="flex items-center gap-4 text-sm text-white font-mono">
+                                                <div>
+                                                    <span className="text-gray-500 text-[10px]">Inicio: </span>
+                                                    {contract.extractedData?.contractStart}
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-500 text-[10px]">Fin: </span>
+                                                    {contract.extractedData?.contractEnd}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div 
+                    onClick={() => legalRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer group ${isSaving ? 'border-[var(--color-neon-blue)]/50 bg-[var(--color-neon-blue)]/5' : 'border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+                >
+                    {isSaving ? (
+                        <>
+                            <Loader2 className="animate-spin text-[var(--color-neon-blue)] mb-3" size={36} />
+                            <span className="text-sm text-[var(--color-neon-blue)] font-bold animate-pulse">Procesando y analizando...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Upload className="text-gray-400 group-hover:text-white mb-3 transition-colors" size={32} />
+                            <span className="text-sm font-medium text-white mb-1">Subir Nuevo Contrato (PDF/Imagen)</span>
+                            <span className="text-xs text-gray-500">Haz clic aquí o arrastra tu archivo para análisis IA</span>
+                            <input type="file" ref={legalRef} className="hidden" accept=".pdf,image/*" onChange={(e) => handleFileUpload(e, 'DOC')} />
+                        </>
+                    )}
+                </div>
               </div>
             </div>
           </div>
@@ -469,30 +632,6 @@ export default function EditarInmueblePage() {
                 </div>
                 <div className="space-y-1"><label className="text-[10px] uppercase text-gray-500">Inicio</label><input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg px-4 py-2 text-white [color-scheme:dark]" /></div>
               </div>
-
-            {/* AI DOC UPLOAD INDICATOR */}
-            <div className="mt-8 pt-8 border-t border-white/5 space-y-4">
-                <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
-                    <Zap size={14} className="text-[var(--color-neon-cyan)]" /> Analizar Nuevo Contrato (IA)
-                </label>
-                <div 
-                    onClick={() => legalRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group ${isSaving ? 'border-blue-500/50 bg-blue-500/5' : 'border-white/10 hover:bg-white/5'}`}
-                >
-                    {isSaving ? (
-                        <>
-                            <Loader2 className="animate-spin text-[var(--color-neon-blue)] mb-2" size={32} />
-                            <span className="text-xs text-blue-400 font-bold animate-pulse">DON ATENTO IA: Extrayendo datos...</span>
-                        </>
-                    ) : (
-                        <>
-                            <Upload className="text-gray-500 mb-2" size={24} />
-                            <span className="text-xs text-gray-400">Subir PDF para autocompletar</span>
-                            <input type="file" ref={legalRef} className="hidden" accept=".pdf" onChange={(e) => handleFileUpload(e, 'DOC')} />
-                        </>
-                    )}
-                </div>
-            </div>
           </div>
         )}
 

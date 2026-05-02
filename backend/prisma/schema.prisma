@@ -294,6 +294,7 @@ model Property {
   admonPorteria           String?
   visionVideoUrl          Json?
   ContractRequest         ContractRequest[]
+  ContractDocument        ContractDocument[]
   inventoryItems InventoryItem[]
   meterReadings MeterReading[]
   property                Property?                 @relation("PropertyToProperty", fields: [parentPropertyId], references: [id])
@@ -342,6 +343,7 @@ model PropertyRelation {
   contractType        String?
   property Property @relation(fields: [propertyId], references: [id])
   user User @relation(fields: [userId], references: [id])
+  ContractDocument ContractDocument[]
 }
 
 model Prospect {
@@ -468,6 +470,7 @@ model Tenant {
   AccountingThirdParty   AccountingThirdParty[]
   BillingItem            BillingItem[]
   BrandBrain             BrandBrain?
+  ContractDocument       ContractDocument[]
   DianResolution         DianResolution[]
   DigitalCertificate     DigitalCertificate?
   InventoryTemplate      InventoryTemplate[]
@@ -883,3 +886,25 @@ model DataImportLog {
   createdAt   DateTime @default(now())
   template    DataImportTemplate? @relation(fields: [templateId], references: [id])
 }
+  
+enum DocumentStatus {  
+  PENDING_AI  
+  PROCESSED  
+  FAILED  
+}  
+  
+model ContractDocument {  
+  id                 String @id @default(cuid())  
+  tenantId           String  
+  propertyId         String  
+  propertyRelationId String?  
+  fileUrl            String  
+  status             DocumentStatus @default(PENDING_AI)  
+  extractedData      Json?  
+  legalVerdict       Json?  
+  createdAt          DateTime @default(now())  
+  updatedAt          DateTime @updatedAt  
+  property         Property @relation(fields: [propertyId], references: [id])  
+  propertyRelation PropertyRelation? @relation(fields: [propertyRelationId], references: [id])  
+  tenant           Tenant @relation(fields: [tenantId], references: [id])  
+} 

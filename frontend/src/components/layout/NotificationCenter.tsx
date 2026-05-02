@@ -25,7 +25,7 @@ export default function NotificationCenter() {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const data = await apiClient.get<typeof tasks>(`/tickets?tenantId=${TENANT_ID}`);
+      const data = await apiClient.get<typeof tasks>(`/tickets`);
       if (!Array.isArray(data)) { setTasks([]); return; }
       setTasks(data.filter(t => t.currentState?.assignedRole === userRole || !t.resolvedAt).slice(0, 5));
     } catch (error) {
