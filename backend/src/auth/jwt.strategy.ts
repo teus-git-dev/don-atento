@@ -13,17 +13,17 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly prisma: PrismaService) {
+    if (!process.env.JWT_SECRET) {
+      throw new Error('FATAL: JWT_SECRET environment variable is required. Server cannot start without it.');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET ||
-        'donatento_local_dev_secret_1234567890_donatento_local_dev_secret_1234567890',
+      secretOrKey: process.env.JWT_SECRET,
     });
   }
 
   async validate(payload: JwtPayload) {
-    console.log('[JwtStrategy] Validating payload:', JSON.stringify(payload));
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
@@ -36,11 +36,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user || !user.isActive) {
-      console.warn('[JwtStrategy] User not found or inactive:', payload.sub);
       throw new UnauthorizedException('Usuario inactivo o no encontrado.');
     }
 
-    console.log('[JwtStrategy] User validated successfully:', user.email);
     return user; // Este objeto se monta en req.user
   }
 }

@@ -245,7 +245,10 @@ export class TicketsService {
     // 3. Closure Survey Trigger
     if (isResolved && target) {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey`;
+      const crypto = require('crypto');
+      const secret = process.env.JWT_SECRET || 'MISSING';
+      const token = crypto.createHmac('sha256', secret).update(ticket.id).digest('hex').substring(0, 16);
+      const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey?token=${token}`;
       const surveyMessage = `¡Hola! Don Atento informa: Tu requerimiento "${ticket.title}" ha sido marcado como RESUELTO. \n\nPor favor, califica nuestro servicio aquí: ${surveyLink} \n\no responde con un número del 1 al 5.`;
       await this.whatsappService.sendMessage(
         target,

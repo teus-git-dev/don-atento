@@ -145,10 +145,6 @@ export class UsersService {
         associatedTickets,
       };
     } catch (error: any) {
-      require('fs').writeFileSync(
-        'prisma_error.log',
-        error.message + '\n' + error.stack,
-      );
       console.error('[getUserDetails] Error:', error.message);
       throw error;
     }

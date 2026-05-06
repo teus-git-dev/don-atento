@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Star, CheckCircle2, Send, Loader2 } from "lucide-react";
 import { API_URL, TENANT_ID } from "@/lib/config";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 export default function TicketSurveyPage() {
   const { id } = useParams();
@@ -14,13 +14,16 @@ export default function TicketSurveyPage() {
   const [loading, setLoading] = useState(false);
   const [ticket, setTicket] = useState<any>(null);
 
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
   useEffect(() => {
     // Fetch basic ticket info to show what they are rating (Public endpoint)
-    fetch(`${API_URL}/tickets/${id}/survey-info`)
+    fetch(`${API_URL}/tickets/${id}/survey-info${token ? `?token=${token}` : ''}`)
       .then(res => res.json())
       .then(data => setTicket(data))
       .catch(err => console.error(err));
-  }, [id]);
+  }, [id, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +31,7 @@ export default function TicketSurveyPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/tickets/${id}/satisfaction`, {
+      const res = await fetch(`${API_URL}/tickets/${id}/satisfaction${token ? `?token=${token}` : ''}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stars, comment }),

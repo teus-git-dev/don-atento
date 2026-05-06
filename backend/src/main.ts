@@ -10,10 +10,6 @@ import helmet from 'helmet';
 
 async function bootstrap() {
   dotenv.config();
-  console.log(
-    '[Bootstrap] JWT_SECRET loaded:',
-    process.env.JWT_SECRET ? 'YES' : 'NO',
-  );
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.use(
@@ -59,19 +55,22 @@ async function bootstrap() {
   // Serve static files from public/uploads
   app.use('/uploads', express.static(join(process.cwd(), 'public/uploads')));
 
-  const config = new DocumentBuilder()
-    .setTitle('Don Atento Connect API')
-    .setDescription(
-      'Plataforma Plug & Play para inmobiliarias. Automatización de mantenimiento, IA de marca y gestión de ANS.',
-    )
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Autenticación y JWT')
-    .addTag('properties', 'Gestión de inmuebles y propietarios')
-    .addTag('tickets', 'Gestión de mantenimiento y ANS')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Swagger docs only available in development
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Don Atento Connect API')
+      .setDescription(
+        'Plataforma Plug & Play para inmobiliarias. Automatización de mantenimiento, IA de marca y gestión de ANS.',
+      )
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Autenticación y JWT')
+      .addTag('properties', 'Gestión de inmuebles y propietarios')
+      .addTag('tickets', 'Gestión de mantenimiento y ANS')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
