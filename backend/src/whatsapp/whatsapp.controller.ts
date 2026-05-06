@@ -52,7 +52,8 @@ export class WhatsappController {
         body.entry[0].changes[0].value.messages &&
         body.entry[0].changes[0].value.messages[0]
       ) {
-        const phoneNumberId = body.entry[0].changes[0].value.metadata?.phone_number_id;
+        const phoneNumberId =
+          body.entry[0].changes[0].value.metadata?.phone_number_id;
         const message = body.entry[0].changes[0].value.messages[0];
         const from = message.from; // Número del remitente
         const text = message.text?.body; // Contenido del mensaje

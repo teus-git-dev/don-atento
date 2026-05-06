@@ -55,6 +55,7 @@ async function main() {
 
   // 4. Create Workflow
   const wfId = 'wf-demo-001';
+  await prisma.workflowState.deleteMany({ where: { workflowId: wfId } }).catch(() => {});
   await prisma.workflow.upsert({
     where: { id: wfId },
     update: {},

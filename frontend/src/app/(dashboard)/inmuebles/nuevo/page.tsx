@@ -11,6 +11,7 @@ import {
   ShieldCheck, AlertCircle
 } from "lucide-react";
 import { TENANT_ID, API_URL } from "@/lib/config";
+import { apiClient } from "@/lib/apiClient";
 
 const STEPS = [
   { id: 1, name: "Carga de Contrato (IA)", icon: FileText },
@@ -162,11 +163,8 @@ export default function NuevoInmueblePage() {
 
   const fetchTemplates = async () => {
     try {
-        const response = await fetch(`${API_URL}/inventory-templates?tenantId=${TENANT_ID}`);
-        if (response.ok) {
-            const data = await response.json();
-            setTemplates(data);
-        }
+        const data = await apiClient.get<any[]>('/inventory-templates');
+        setTemplates(Array.isArray(data) ? data : []);
     } catch (e) {
         console.error("Error fetching templates", e);
     }
@@ -174,11 +172,8 @@ export default function NuevoInmueblePage() {
 
   const fetchWorkflows = async () => {
     try {
-        const response = await fetch(`${API_URL}/workflows?tenantId=${TENANT_ID}`);
-        if (response.ok) {
-            const data = await response.json();
-            setWorkflows(data);
-        }
+        const data = await apiClient.get<any[]>('/workflows');
+        setWorkflows(Array.isArray(data) ? data : []);
     } catch (e) {
         console.error("Error fetching workflows", e);
     }
@@ -335,75 +330,67 @@ export default function NuevoInmueblePage() {
 
     setIsSaving(true);
     try {
-        const response = await fetch(`${API_URL}/properties`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                tenantId: TENANT_ID,
-                title,
-                propertyType,
-                address,
-                city: city || "Bogotá",
-                department: department || "Cundinamarca",
-                country: "Colombia",
-                areaM2: Number(areaM2),
-                rooms: Number(rooms),
-                bathrooms: Number(bathrooms),
-                status,
-                propertyCode,
-                inventoryTemplateId: selectedTemplateId || null,
-                workflowId: selectedWorkflowId || null,
-                rentAmount: Number(rentAmount),
-                adminAmount: Number(adminAmount),
-                taxAmount: Number(taxAmount),
-                managementName,
-                managementNit,
-                managementEmail,
-                managementPhone,
+        const payload = {
+            title,
+            propertyType,
+            address,
+            city: city || "Bogotá",
+            department: department || "Cundinamarca",
+            country: "Colombia",
+            areaM2: Number(areaM2) || 0,
+            rooms: Number(rooms) || 0,
+            bathrooms: Number(bathrooms) || 0,
+            status,
+            propertyCode,
+            inventoryTemplateId: selectedTemplateId || null,
+            workflowId: selectedWorkflowId || null,
+            // Strip currency formatting (35.000.000 -> 35000000)
+            rentAmount: parseCurrency(String(rentAmount)),
+            adminAmount: parseCurrency(String(adminAmount)),
+            taxAmount: parseCurrency(String(taxAmount)),
+            managementName,
+            managementNit,
+            managementEmail,
+            managementPhone,
+            splatUrl,
+            visionVideoUrl,
+            visionAnalysis,
+            ownerInfo: {
+                name: ownerName,
+                id: ownerId,
+                email: ownerEmail,
+                phone: ownerPhone,
+                additionalContacts,
+                personType: ownerPersonType,
+                isTaxDeclarant,
+                regimeType,
+                applyReteIva,
+                applyReteFuente,
+                applyReteIca,
+            },
+            latitude: coordinates.lat,
+            longitude: coordinates.lng,
+            attachments: uploadedFiles,
+            tenantInfo: status === "RENTED" ? {
+                firstName: tenantName,
+                lastName: tenantLastName,
+                governmentId: tenantId,
+                email: tenantEmail,
+                phone: tenantPhone,
+                contractStart,
+                contractEnd,
+                contractNumber: tenantContractNumber,
+                contractType: tenantContractType,
+            } : null
+        };
 
-                splatUrl,
-                visionVideoUrl,
-                visionAnalysis,
-                ownerInfo: {
-                    name: ownerName,
-                    id: ownerId,
-                    email: ownerEmail,
-                    phone: ownerPhone,
-                    additionalContacts,
-                    personType: ownerPersonType,
-                    isTaxDeclarant,
-                    regimeType,
-                    applyReteIva,
-                    applyReteFuente,
-                    applyReteIca,
-
-                },
-                latitude: coordinates.lat,
-                longitude: coordinates.lng,
-                attachments: uploadedFiles,
-                tenantInfo: status === "RENTED" ? {
-                    firstName: tenantName,
-                    lastName: tenantLastName,
-                    governmentId: tenantId,
-                    email: tenantEmail,
-                    phone: tenantPhone,
-
-                    contractStart,
-                    contractEnd,
-                    contractNumber: tenantContractNumber,
-                    contractType: tenantContractType,
-
-                } : null
-            })
-        });
-
-        if (response.ok) {
-            router.push("/inmuebles");
-        } else {
-            alert("Error al guardar el inmueble");
-        }
-    } catch (e) {
-        alert("Error de conexión al servidor");
+        await apiClient.post('/properties', payload);
+        router.push("/inmuebles");
+    } catch (e: any) {
+        // Show the actual server error message for easier debugging
+        const msg = e?.message || "Error de conexión al servidor";
+        alert(`Error al guardar el inmueble:\n${msg}`);
+        console.error("Save property error:", e);
     } finally {
         setIsSaving(false);
     }

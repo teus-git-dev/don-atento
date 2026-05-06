@@ -129,13 +129,23 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error("Failed to create prospect");
+      if (!response.ok) {
+        // Read the actual error message from the server response
+        let serverMessage = `Error del servidor (${response.status})`;
+        try {
+          const errorBody = await response.json();
+          serverMessage = errorBody.message || JSON.stringify(errorBody);
+        } catch {
+          serverMessage = await response.text().catch(() => serverMessage);
+        }
+        throw new Error(serverMessage);
+      }
       
       onSuccess();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating prospect:", err);
-      alert("Error al crear el prospecto");
+      alert(`Error al crear el prospecto:\n${err.message ?? err}`);
     } finally {
       setLoading(false);
     }
@@ -223,8 +233,10 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 >
                   <option value="WHATSAPP">WhatsApp</option>
                   <option value="INSTAGRAM">Instagram</option>
+                  <option value="FACEBOOK">Facebook</option>
                   <option value="WEB">Sitio Web</option>
-                  <option value="REFERRAL">Referido</option>
+                  <option value="MANUAL">Referido / Manual</option>
+                  <option value="RADAR_IA">Radar IA</option>
                 </select>
               </div>
             </div>

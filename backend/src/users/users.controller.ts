@@ -36,7 +36,12 @@ export class UsersController {
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
-    return this.usersService.findByRole(UserRole.TENANT_USER, req['tenantId'], pageNum, limitNum);
+    return this.usersService.findByRole(
+      UserRole.TENANT_USER,
+      req['tenantId'],
+      pageNum,
+      limitNum,
+    );
   }
 
   @Get('owners')
@@ -47,7 +52,12 @@ export class UsersController {
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
-    return this.usersService.findByRole(UserRole.OWNER, req['tenantId'], pageNum, limitNum);
+    return this.usersService.findByRole(
+      UserRole.OWNER,
+      req['tenantId'],
+      pageNum,
+      limitNum,
+    );
   }
 
   @Get('admin')
@@ -69,5 +79,10 @@ export class UsersController {
   @Delete(':id')
   async delete(@Req() req: any, @Param('id') id: string) {
     return this.usersService.delete(id, req['tenantId']);
+  }
+
+  @Get(':id/details')
+  async getUserDetails(@Req() req: any, @Param('id') id: string) {
+    return this.usersService.getUserDetails(id, req['tenantId']);
   }
 }

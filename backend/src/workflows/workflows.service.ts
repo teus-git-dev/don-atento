@@ -17,9 +17,9 @@ export class WorkflowsService {
     });
   }
 
-  async create(data: { 
-    tenantId: string; 
-    name: string; 
+  async create(data: {
+    tenantId: string;
+    name: string;
     description?: string;
     states?: any[]; // Added support for complete flow creation
   }) {
@@ -28,21 +28,23 @@ export class WorkflowsService {
     return this.prisma.workflow.create({
       data: {
         ...workflowData,
-        states: states ? {
-          create: states.map((state, index) => ({
-            name: state.name,
-            order: state.order || index + 1,
-            slaHours: state.slaHours ? Number(state.slaHours) : null,
-            assignedRole: state.assignedRole,
-            assignedUserId: state.assignedUserId,
-            aiInstructions: state.aiInstructions,
-            color: state.color
-          }))
-        } : undefined
+        states: states
+          ? {
+              create: states.map((state, index) => ({
+                name: state.name,
+                order: state.order || index + 1,
+                slaHours: state.slaHours ? Number(state.slaHours) : null,
+                assignedRole: state.assignedRole,
+                assignedUserId: state.assignedUserId,
+                aiInstructions: state.aiInstructions,
+                color: state.color,
+              })),
+            }
+          : undefined,
       },
       include: {
-        states: true
-      }
+        states: true,
+      },
     });
   }
 
@@ -86,6 +88,11 @@ export class WorkflowsService {
   }
 
   async delete(id: string) {
+    // Delete associated states first to prevent foreign key constraint errors
+    await this.prisma.workflowState.deleteMany({
+      where: { workflowId: id },
+    });
+    
     return this.prisma.workflow.delete({
       where: { id },
     });

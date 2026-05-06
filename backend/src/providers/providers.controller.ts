@@ -70,7 +70,11 @@ export class ProvidersController {
   }
 
   @Post(':id/assign-technician/:userId')
-  assignTechnician(@Req() req: any, @Param('id') id: string, @Param('userId') userId: string) {
+  assignTechnician(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
     return this.providersService.assignTechnician(id, userId, req['tenantId']);
   }
 }

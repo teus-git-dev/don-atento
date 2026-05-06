@@ -1,78 +1,144 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 @import "tailwindcss";
 
+/* ─── Design Tokens: Minimalist-Maximalist (doniq.co inspired) ─────────── */
 @theme {
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-montserrat);
-  
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  
-  --color-neon-cyan: #00ffff;
-  --color-neon-blue: #0070f3;
-  --color-neon-purple: #8a2be2;
-  
-  --color-glass-base: rgba(10, 15, 30, 0.88);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --font-sans:    "Inter", system-ui, sans-serif;
+  --font-heading: "Inter", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", "Fira Code", monospace;
+
+  /* Core Palette — Pure High Contrast */
+  --color-ink:        #0a0a0a;
+  --color-ink-soft:   #1a1a1a;
+  --color-ink-muted:  #2a2a2a;
+  --color-surface:    #0f0f0f;
+  --color-surface-2:  #141414;
+  --color-surface-3:  #1c1c1c;
+  --color-border:     #262626;
+  --color-border-soft:#1e1e1e;
+
+  --color-white:     #ffffff;
+  --color-white-90:  rgba(255,255,255,0.90);
+  --color-white-60:  rgba(255,255,255,0.60);
+  --color-white-30:  rgba(255,255,255,0.30);
+  --color-white-10:  rgba(255,255,255,0.10);
+  --color-white-05:  rgba(255,255,255,0.05);
+
+  /* Status */
+  --color-success:  #22c55e;
+  --color-warning:  #f59e0b;
+  --color-error:    #ef4444;
+  --color-info:     #3b82f6;
+
+  /* Legacy aliases — keeps existing components compiling without 500s */
+  --color-neon-cyan:    rgba(255,255,255,0.9);
+  --color-neon-blue:    rgba(255,255,255,0.9);
+  --color-neon-purple:  rgba(160,160,160,0.9);
+  --color-glass-base:   #141414;
+  --color-glass-border: #262626;
 }
 
 :root {
-  /* Tech-Noir Dark Theme is default */
-  --background: #060b13;
-  --foreground: #e5e7eb;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
 }
 
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  background-image: 
-    radial-gradient(circle at 15% 50%, rgba(0, 112, 243, 0.08), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(0, 255, 255, 0.05), transparent 25%);
-  background-attachment: fixed;
-  font-family: var(--font-sans), sans-serif;
+  background-color: #0a0a0a;
+  color: #fafafa;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* No background gradients — pure black, like doniq.co */
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading), sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
+/* ─── Surface Utilities ──────────────────────────────────────────────────── */
 @utility glass {
-  background: rgba(10, 15, 30, 0.92);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  background: #141414;
+  border: 1px solid #262626;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 @utility glass-strong {
-  background: rgba(6, 11, 19, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+  background: #0f0f0f;
+  border: 1px solid #1e1e1e;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
+/* ─── Typography Utilities ───────────────────────────────────────────────── */
+@utility label-caps {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.40);
+}
+
+/* Legacy glow aliases — neutralized, no neon */
 @utility text-glow-cyan {
-  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.3);
+  color: rgba(255,255,255,0.90);
 }
 
 @utility text-glow-blue {
-  text-shadow: 0 0 10px rgba(0, 112, 243, 0.5), 0 0 20px rgba(0, 112, 243, 0.3);
+  color: rgba(255,255,255,0.80);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0a0a0a; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 0px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #2a2a2a; }
+
+/* ─── Focus & Selection ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 1px solid rgba(255,255,255,0.5);
+  outline-offset: 2px;
 }
-::-webkit-scrollbar-track {
-  background: #03060a; 
+::selection {
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
 }
-::-webkit-scrollbar-thumb {
-  background: #1f2937; 
-  border-radius: 4px;
+
+/* ─── Micro-Animations ───────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #374151; 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
+.animate-fade-up { animation: fadeUp 0.25s cubic-bezier(0.16,1,0.3,1) forwards; }
+.animate-fade-in { animation: fadeIn 0.2s ease forwards; }
+
+/* ─── Animate-In Compat (used by existing components) ───────────────────── */
+.animate-in { animation: fadeUp 0.25s cubic-bezier(0.16,1,0.3,1) forwards; }
+.fade-in    { opacity: 1; }
+.zoom-in-95 { transform: scale(1); }
+.slide-in-from-top-2    { transform: translateY(0); }
+.slide-in-from-right-10 { transform: translateX(0); }
+.duration-300 { animation-duration: 0.3s; }
+.duration-500 { animation-duration: 0.5s; }

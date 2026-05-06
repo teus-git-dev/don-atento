@@ -1,10 +1,10 @@
 /**
  * WhatsApp Provider Interface — Adapter Pattern
- * 
+ *
  * Abstracción que permite a cada tenant elegir entre:
  * - Meta Cloud API (oficial, con costo)
  * - Baileys (gratuito, protocolo WA Web)
- * 
+ *
  * El WhatsappService consume esta interfaz sin conocer el proveedor concreto.
  */
 export interface WhatsappProvider {

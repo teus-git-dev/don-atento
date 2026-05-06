@@ -15,8 +15,8 @@ export default function TicketSurveyPage() {
   const [ticket, setTicket] = useState<any>(null);
 
   useEffect(() => {
-    // Fetch basic ticket info to show what they are rating
-    fetch(`${API_URL}/tickets/${id}?tenantId=${TENANT_ID}`)
+    // Fetch basic ticket info to show what they are rating (Public endpoint)
+    fetch(`${API_URL}/tickets/${id}/survey-info`)
       .then(res => res.json())
       .then(data => setTicket(data))
       .catch(err => console.error(err));

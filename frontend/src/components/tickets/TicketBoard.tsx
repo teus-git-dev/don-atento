@@ -6,6 +6,7 @@ import TicketDetailModal from "./TicketDetailModal";
 
 interface ITicket {
   id: string;
+  shortId?: string;
   title: string;
   priority: string;
   severity: string;
@@ -231,7 +232,7 @@ function TicketCard({ ticket }: { ticket: ITicket }) {
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-mono text-[var(--color-neon-cyan)] uppercase bg-cyan-500/10 px-1.5 py-0.5 rounded">
-                TKT-{ticket.id.split('-')[0].toUpperCase()}
+                {ticket.shortId ? ticket.shortId : `TKT-${ticket.id.split('-')[0].toUpperCase()}`}
             </span>
             <SentimentBadge interactions={ticket.interactions} />
           </div>

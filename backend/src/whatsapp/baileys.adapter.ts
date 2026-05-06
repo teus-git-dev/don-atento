@@ -64,7 +64,10 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
       version,
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }) as any),
+        keys: makeCacheableSignalKeyStore(
+          state.keys,
+          pino({ level: 'silent' }) as any,
+        ),
       },
       printQRInTerminal: false, // Lo manejamos nosotros
       logger: pino({ level: 'silent' }) as any,
@@ -94,12 +97,16 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        this.logger.warn(`Connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`);
+        this.logger.warn(
+          `Connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`,
+        );
 
         if (shouldReconnect && this.reconnectAttempts < this.MAX_RECONNECT) {
           this.reconnectAttempts++;
           const delay = this.antiBan.gaussianDelay(5000, 2000);
-          this.logger.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT})...`);
+          this.logger.log(
+            `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT})...`,
+          );
           setTimeout(() => this.connect(), delay);
         } else {
           this.status = 'disconnected';
@@ -132,7 +139,10 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
         if (!jid) continue;
 
         // Normalizar JID (maneja @lid y @s.whatsapp.net)
-        const normalizedJid = jid.includes(':') ? jid.split(':')[0] + (jid.includes('@lid') ? '@lid' : '@s.whatsapp.net') : jid;
+        const normalizedJid = jid.includes(':')
+          ? jid.split(':')[0] +
+            (jid.includes('@lid') ? '@lid' : '@s.whatsapp.net')
+          : jid;
 
         const text =
           msg.message?.conversation ||
@@ -197,7 +207,11 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
   /**
    * Envía una imagen con caption opcional.
    */
-  async sendImage(to: string, imageUrl: string, caption?: string): Promise<void> {
+  async sendImage(
+    to: string,
+    imageUrl: string,
+    caption?: string,
+  ): Promise<void> {
     if (!this.sock || this.status !== 'connected') return;
 
     const jid = this.normalizeJid(to);
@@ -254,15 +268,15 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
 
   private normalizeJid(to: string): string {
     if (to.includes('@')) return to; // Ya está normalizado
-    
-    // Si el ID parece un LID (generalmente muy largo o con formato específico) 
+
+    // Si el ID parece un LID (generalmente muy largo o con formato específico)
     // o si el sistema lo detectó previamente como LID.
     // Como regla general: Si tiene más de 15 dígitos y no empieza por un código de país conocido de forma estándar,
     // o si simplemente queremos ser robustos, dejamos que Baileys lo maneje.
     if (to.length > 15) {
       return `${to}@lid`;
     }
-    
+
     const cleaned = to.replace(/[^0-9]/g, '');
     return `${cleaned}@s.whatsapp.net`;
   }

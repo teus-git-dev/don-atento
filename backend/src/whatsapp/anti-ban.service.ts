@@ -17,21 +17,24 @@ export class AntiBanService {
   private readonly logger = new Logger(AntiBanService.name);
 
   // Contadores por tenant
-  private counters = new Map<string, {
-    messagesLastHour: number;
-    messagesLast24h: number;
-    uniqueContactsToday: Set<string>;
-    hourReset: number;
-    dayReset: number;
-  }>();
+  private counters = new Map<
+    string,
+    {
+      messagesLastHour: number;
+      messagesLast24h: number;
+      uniqueContactsToday: Set<string>;
+      hourReset: number;
+      dayReset: number;
+    }
+  >();
 
   // Configuración de límites seguros
   private readonly LIMITS = {
     MAX_MESSAGES_PER_HOUR: 25,
     MAX_MESSAGES_PER_DAY: 250,
     MAX_NEW_CONTACTS_PER_DAY: 15,
-    ACTIVE_HOUR_START: 7,   // 7 AM
-    ACTIVE_HOUR_END: 22,    // 10 PM
+    ACTIVE_HOUR_START: 7, // 7 AM
+    ACTIVE_HOUR_END: 22, // 10 PM
     COOLDOWN_MULTIPLIER: 2, // Si se acerca al límite, duplicar delays
   };
 
@@ -55,16 +58,22 @@ export class AntiBanService {
     let baseMean = 4000; // 4 segundos base
 
     // Fuera de horario pico → más lento
-    if (hour < this.LIMITS.ACTIVE_HOUR_START || hour >= this.LIMITS.ACTIVE_HOUR_END) {
+    if (
+      hour < this.LIMITS.ACTIVE_HOUR_START ||
+      hour >= this.LIMITS.ACTIVE_HOUR_END
+    ) {
       baseMean = 8000; // 8 segundos fuera de horario
     }
 
     // Si estamos cerca del límite → cooldown
     const counter = this.getCounter(tenantId);
-    const hourUsage = counter.messagesLastHour / this.LIMITS.MAX_MESSAGES_PER_HOUR;
+    const hourUsage =
+      counter.messagesLastHour / this.LIMITS.MAX_MESSAGES_PER_HOUR;
     if (hourUsage > 0.7) {
       baseMean *= this.LIMITS.COOLDOWN_MULTIPLIER;
-      this.logger.warn(`[${tenantId}] Approaching hourly limit (${Math.round(hourUsage * 100)}%). Slowing down.`);
+      this.logger.warn(
+        `[${tenantId}] Approaching hourly limit (${Math.round(hourUsage * 100)}%). Slowing down.`,
+      );
     }
 
     const delay = this.gaussianDelay(baseMean, baseMean * 0.4);
@@ -76,25 +85,39 @@ export class AntiBanService {
    * Verifica si es seguro enviar un mensaje.
    * Retorna true si se puede enviar, false si hay que pausar.
    */
-  canSend(tenantId: string, contactId: string): { allowed: boolean; reason?: string } {
+  canSend(
+    tenantId: string,
+    contactId: string,
+  ): { allowed: boolean; reason?: string } {
     const counter = this.getCounter(tenantId);
     this.refreshCounters(counter);
 
     // Check horario
     const hour = new Date().getHours();
-    if (hour < this.LIMITS.ACTIVE_HOUR_START || hour >= this.LIMITS.ACTIVE_HOUR_END) {
+    if (
+      hour < this.LIMITS.ACTIVE_HOUR_START ||
+      hour >= this.LIMITS.ACTIVE_HOUR_END
+    ) {
       // Fuera de horario solo permitimos respuestas a mensajes entrantes
       // El caller debe indicar si es inbound o outbound
-      this.logger.debug(`[${tenantId}] Outside active hours (${hour}h). Outbound paused.`);
+      this.logger.debug(
+        `[${tenantId}] Outside active hours (${hour}h). Outbound paused.`,
+      );
     }
 
     // Check rate limits
     if (counter.messagesLastHour >= this.LIMITS.MAX_MESSAGES_PER_HOUR) {
-      return { allowed: false, reason: `Hourly limit reached (${this.LIMITS.MAX_MESSAGES_PER_HOUR}/h)` };
+      return {
+        allowed: false,
+        reason: `Hourly limit reached (${this.LIMITS.MAX_MESSAGES_PER_HOUR}/h)`,
+      };
     }
 
     if (counter.messagesLast24h >= this.LIMITS.MAX_MESSAGES_PER_DAY) {
-      return { allowed: false, reason: `Daily limit reached (${this.LIMITS.MAX_MESSAGES_PER_DAY}/day)` };
+      return {
+        allowed: false,
+        reason: `Daily limit reached (${this.LIMITS.MAX_MESSAGES_PER_DAY}/day)`,
+      };
     }
 
     // Check new contacts
@@ -102,7 +125,10 @@ export class AntiBanService {
       !counter.uniqueContactsToday.has(contactId) &&
       counter.uniqueContactsToday.size >= this.LIMITS.MAX_NEW_CONTACTS_PER_DAY
     ) {
-      return { allowed: false, reason: `New contact limit reached (${this.LIMITS.MAX_NEW_CONTACTS_PER_DAY}/day)` };
+      return {
+        allowed: false,
+        reason: `New contact limit reached (${this.LIMITS.MAX_NEW_CONTACTS_PER_DAY}/day)`,
+      };
     }
 
     return { allowed: true };
@@ -126,7 +152,8 @@ export class AntiBanService {
     const counter = this.getCounter(tenantId);
     this.refreshCounters(counter);
 
-    const hourUsage = counter.messagesLastHour / this.LIMITS.MAX_MESSAGES_PER_HOUR;
+    const hourUsage =
+      counter.messagesLastHour / this.LIMITS.MAX_MESSAGES_PER_HOUR;
     const dayUsage = counter.messagesLast24h / this.LIMITS.MAX_MESSAGES_PER_DAY;
 
     let warningLevel: 'GREEN' | 'YELLOW' | 'RED' = 'GREEN';
@@ -173,6 +200,6 @@ export class AntiBanService {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

@@ -54,10 +54,17 @@ export class TicketsService {
         }
       }
 
+      // Generate Short ID
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: data.tenantId } });
+      const prefix = tenant && tenant.name ? tenant.name.substring(0, 3).toUpperCase() : 'TKT';
+      const randomNum = Math.floor(10000 + Math.random() * 90000);
+      const generatedShortId = `${prefix}-${randomNum}`;
+
       // 2. Map DTO to Prisma data
       const ticket = await this.prisma.ticket.create({
         data: {
           tenantId: data.tenantId,
+          shortId: generatedShortId,
           propertyId: data.propertyId,
           reportedByUserId: data.reportedByUserId,
           workflowId: data.workflowId,
@@ -177,7 +184,11 @@ export class TicketsService {
     });
   }
 
-  async updateStatus(id: string, tenantId: string, statusId: string): Promise<Ticket> {
+  async updateStatus(
+    id: string,
+    tenantId: string,
+    statusId: string,
+  ): Promise<Ticket> {
     return this.prisma.ticket.update({
       where: { id, tenantId },
       data: { currentStateId: statusId },
@@ -220,10 +231,15 @@ export class TicketsService {
     await this.notifyRoleAssignment(ticket, newState);
 
     // 2. Resident Proactive Notification (WhatsApp)
-    const target = ticket.reportedByUser?.whatsappId || ticket.reportedByUserPhone;
+    const target =
+      ticket.reportedByUser?.whatsappId || ticket.reportedByUserPhone;
     if (target) {
-      const residentMsg = `Hola ${ticket.reportedByUser.firstName}, Don Atento informa: Tu reporte "${ticket.title}" ha cambiado de estado a *"${newState.name}"*. 🛠️ Seguiremos informándote de los avances.`;
-      await this.whatsappService.sendMessage(target, residentMsg, ticket.tenantId);
+      const residentMsg = `Hola ${ticket.reportedByUser?.firstName || 'Cliente'}, Don Atento informa: Tu reporte "${ticket.title}" ha cambiado de estado a *"${newState.name}"*. 🛠️ Seguiremos informándote de los avances.`;
+      await this.whatsappService.sendMessage(
+        target,
+        residentMsg,
+        ticket.tenantId,
+      );
     }
 
     // 3. Closure Survey Trigger
@@ -231,7 +247,11 @@ export class TicketsService {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey`;
       const surveyMessage = `¡Hola! Don Atento informa: Tu requerimiento "${ticket.title}" ha sido marcado como RESUELTO. \n\nPor favor, califica nuestro servicio aquí: ${surveyLink} \n\no responde con un número del 1 al 5.`;
-      await this.whatsappService.sendMessage(target, surveyMessage, ticket.tenantId);
+      await this.whatsappService.sendMessage(
+        target,
+        surveyMessage,
+        ticket.tenantId,
+      );
 
       if (ticket.reportedByUser.email) {
         await this.emailService.sendSurveyRequest(
@@ -256,7 +276,7 @@ export class TicketsService {
       },
     });
 
-    const message = `Don Atento Tareas: Tienes un nuevo ticket en estado "${state.name}" para la propiedad ${ticket.property.title}. Título: ${ticket.title}`;
+    const message = `Don Atento Tareas: Tienes un nuevo ticket en estado "${state.name}" para la propiedad ${ticket.property?.title || 'sin asignar'}. Título: ${ticket.title}`;
 
     for (const user of relevantUsers) {
       if (user.phone) {
@@ -277,15 +297,36 @@ export class TicketsService {
     closureReason: string,
     signature?: string,
   ): Promise<Ticket> {
-    const ticket = await this.prisma.ticket.findUnique({
+    let ticket: any = await this.prisma.ticket.findUnique({
       where: { id, tenantId },
       include: { workflow: { include: { states: true } } },
     });
 
-    if (!ticket || !ticket.workflow)
-      throw new Error('Ticket or Workflow not found');
+    if (!ticket) throw new Error('Ticket not found');
 
-    let resolvedState = ticket.workflow.states.find((s) =>
+    if (!ticket.workflow) {
+      console.log(`[TicketsService] Ticket ${id} has no workflow. Auto-assigning default.`);
+      const defaultWf = await this.prisma.workflow.findFirst({
+         include: { states: { orderBy: { order: 'asc' } } }
+      });
+      if (defaultWf) {
+         await this.prisma.ticket.update({ 
+            where: { id: ticket.id }, 
+            data: { 
+               workflowId: defaultWf.id, 
+               currentStateId: defaultWf.states[0]?.id 
+            } 
+         });
+         ticket = await this.prisma.ticket.findUnique({
+            where: { id, tenantId },
+            include: { workflow: { include: { states: true } } }
+         }) as any;
+      } else {
+         throw new Error('Ticket or Workflow not found and no default available');
+      }
+    }
+
+    let resolvedState = ticket.workflow.states.find((s: any) =>
       s.name.toLowerCase().includes('resuelto'),
     );
 
@@ -321,7 +362,7 @@ export class TicketsService {
     let finalComment = comment;
 
     // 0. Fetch Ticket to check state
-    const ticket = await this.prisma.ticket.findUnique({
+    let ticket: any = await this.prisma.ticket.findUnique({
       where: { id: ticketId, tenantId },
       include: {
         currentState: true,
@@ -330,6 +371,26 @@ export class TicketsService {
       },
     });
     if (!ticket) throw new Error('Ticket not found');
+
+    if (!ticket.workflow) {
+      console.log(`[TicketsService] Ticket ${ticketId} has no workflow. Auto-assigning default.`);
+      const defaultWf = await this.prisma.workflow.findFirst({
+         include: { states: { orderBy: { order: 'asc' } } }
+      });
+      if (defaultWf) {
+         await this.prisma.ticket.update({ 
+            where: { id: ticket.id }, 
+            data: { 
+               workflowId: defaultWf.id, 
+               currentStateId: defaultWf.states[0]?.id 
+            } 
+         });
+         ticket = await this.prisma.ticket.findUnique({
+            where: { id: ticketId, tenantId },
+            include: { currentState: true, reportedByUser: true, workflow: { include: { states: { orderBy: { order: 'asc' } } } } }
+         });
+      }
+    }
 
     // SPECIAL AI POLISH: Executive Quotation
     if (ticket.currentState?.name?.toLowerCase().includes('cotización')) {
@@ -434,8 +495,10 @@ export class TicketsService {
       },
     });
 
-    if (!ticket || !ticket.workflow)
-      throw new Error('Ticket or Workflow not found');
+    if (!ticket || !ticket.workflow) {
+      console.warn('Ticket or Workflow not found even after fallback. Aborting state transition but saving comment.');
+      return ticket;
+    }
 
     // SPECIAL TRIGGER: Smart Scheduling (Agendamiento)
     if (
@@ -474,7 +537,7 @@ export class TicketsService {
 
     const currentOrder = ticket.currentState?.order ?? 0;
     const nextState = ticket.workflow.states.find(
-      (s) => s.order > currentOrder,
+      (s: any) => s.order > currentOrder,
     );
 
     if (!nextState) {
@@ -538,8 +601,14 @@ export class TicketsService {
     });
   }
 
-  async addAttachment(id: string, tenantId: string, attachmentUrl: string): Promise<Ticket> {
-    const ticket = await this.prisma.ticket.findUnique({ where: { id, tenantId } });
+  async addAttachment(
+    id: string,
+    tenantId: string,
+    attachmentUrl: string,
+  ): Promise<Ticket> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id, tenantId },
+    });
     if (!ticket) throw new Error('Ticket not found');
 
     const currentAttachments = (ticket.attachments as string[]) || [];

@@ -37,6 +37,42 @@ export class CognitiveService {
     return this.aiChatService.processChat(tenantId, userId, message);
   }
 
+  async processWhatsappWithAi(tenantId: string, message: string, context?: { name?: string; address?: string; systemAction?: string }) {
+    return this.aiChatService.processWhatsappMessage(tenantId, message, context);
+  }
+
+  async getFinOpsAnalytics() {
+    const subscriptions = await this.prisma.tenantSubscription.findMany({
+      include: { tenant: true },
+    });
+
+    const analytics = subscriptions.map((sub) => {
+      const revenue = sub.planType === 'PRO' ? 202 : 137;
+      
+      // Calculate real cost directly from DB aggregation of TokenUsageLogs
+      // Though we could theoretically sum currentTokensInput/Output, reading the raw logs gives financial accuracy.
+      // But to be fast, we'll just calculate based on the currentTokens since they represent the billing cycle.
+      const costIn = (sub.currentTokensInput / 1000000) * 0.150;
+      const costOut = (sub.currentTokensOutput / 1000000) * 0.600;
+      const totalCostUsd = costIn + costOut;
+
+      const margin = revenue - totalCostUsd;
+
+      return {
+        tenantId: sub.tenantId,
+        name: sub.tenant?.name || 'Agencia Desconocida',
+        planType: sub.planType,
+        tokenQuota: sub.monthlyTokenQuota,
+        totalUsed: sub.currentTokensInput + sub.currentTokensOutput,
+        totalCostUsd: Number(totalCostUsd.toFixed(4)),
+        revenue,
+        margin: Number(margin.toFixed(4)),
+      };
+    });
+
+    return analytics;
+  }
+
   async generateResponse(
     ticketId: string,
     message: string,

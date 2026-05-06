@@ -25,7 +25,15 @@ export default function DataImportWizard() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      
+      // Auto-detect category from filename
+      const name = selectedFile.name.toUpperCase();
+      if (name.includes('ARRENDATARIO')) setCategoryId('TENANT');
+      else if (name.includes('PROPIETARIO')) setCategoryId('OWNER');
+      else if (name.includes('INMUEBLE')) setCategoryId('PROPERTY');
+      else if (name.includes('CONTRATO')) setCategoryId('CONTRACT');
     }
   };
 
@@ -47,16 +55,42 @@ export default function DataImportWizard() {
       
       // Auto-mapping logic (basic)
       const autoMap: Record<string, string> = {};
+      const mappedTargets = new Set<string>();
+      
+      // Pass 1: High priority exact matches
+      cleanHeaders.forEach((h: string) => {
+        const lowerH = h.toLowerCase().trim();
+        if (lowerH.includes('celular 1')) {
+          autoMap[h] = 'phones';
+          mappedTargets.add('phones');
+        }
+      });
+
+      // Pass 2: General mapping
       cleanHeaders.forEach((h: string) => {
         const lowerH = h.toLowerCase();
-        if (lowerH.includes('cedula') || lowerH.includes('nit') || lowerH.includes('identificacion')) autoMap[h] = 'contact_id';
-        if (lowerH.includes('email') || lowerH.includes('correo')) autoMap[h] = 'emails';
-        if (lowerH.includes('canon') || lowerH.includes('arriendo')) autoMap[h] = 'financials.canon';
-        if (lowerH.includes('inmueble') || lowerH.includes('codigo') || lowerH.includes('codigo')) autoMap[h] = 'property_id';
-        if (lowerH.includes('nombre') || lowerH.includes('arrendatario') || lowerH.includes('propietario')) autoMap[h] = 'full_name';
-        if (lowerH.includes('celular') || lowerH.includes('telefono')) autoMap[h] = 'phones';
-        if (lowerH.includes('ciudad') || lowerH.includes('city')) autoMap[h] = 'city';
-        if (lowerH.includes('direccion') || lowerH.includes('address')) autoMap[h] = 'address';
+        
+        const tryMap = (target: string, condition: boolean) => {
+          if (condition && !mappedTargets.has(target)) {
+            autoMap[h] = target;
+            mappedTargets.add(target);
+          }
+        };
+
+        tryMap('contact_id', lowerH.includes('cedula') || lowerH.includes('nit') || lowerH.includes('identificacion') || lowerH.includes('documento'));
+        tryMap('emails', lowerH.includes('email') || lowerH.includes('correo'));
+        
+        const isBadName = lowerH.includes('retencion') || lowerH.includes('porcentaje') || lowerH.includes('rete') || lowerH.includes('iva') || lowerH.includes('seguro') || lowerH.includes('promotor') || lowerH.includes('tipo');
+        tryMap('full_name', !isBadName && (lowerH.includes('nombre') || lowerH.includes('arrendatario') || lowerH.includes('propietario') || lowerH.includes('cliente')));
+        
+        tryMap('financials.canon', lowerH.includes('canon') || lowerH.includes('arriendo'));
+        tryMap('property_id', lowerH.includes('inmueble') || lowerH.includes('codigo') || lowerH.includes('código'));
+        
+        const isBadPhone = lowerH.includes('oficina') || lowerH.includes('correpon') || lowerH.includes('referencia');
+        tryMap('phones', !isBadPhone && (lowerH.includes('celular') || lowerH.includes('telefono') || lowerH.includes('teléfono')));
+        
+        tryMap('city', lowerH.includes('ciudad') || lowerH.includes('city'));
+        tryMap('address', !lowerH.includes('correpondencia') && (lowerH.includes('direccion') || lowerH.includes('dirección') || lowerH.includes('address')));
       });
       setMapping(autoMap);
       

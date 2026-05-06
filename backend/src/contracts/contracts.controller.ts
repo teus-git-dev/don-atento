@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { ContractsService } from './contracts.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -15,7 +23,11 @@ export class ContractsController {
     @Body('fileUrl') fileUrl: string,
   ) {
     const tenantId = req.user.tenantId;
-    return this.contractsService.createDocumentRecord(tenantId, propertyId, fileUrl);
+    return this.contractsService.createDocumentRecord(
+      tenantId,
+      propertyId,
+      fileUrl,
+    );
   }
 
   @Get('property/:propertyId')

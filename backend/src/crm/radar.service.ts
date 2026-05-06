@@ -24,12 +24,14 @@ export class RadarService {
   async scanPortals(tenantId: string, userId: string): Promise<RadarLead[]> {
     try {
       // 1. Fetch from Finca Raiz (Direct Owners)
-      const url = 'https://www.fincaraiz.com.co/venta/apartamentos/bogota/usado?ad-type=1';
+      const url =
+        'https://www.fincaraiz.com.co/venta/apartamentos/bogota/usado?ad-type=1';
       const response = await axios.get(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
-        timeout: 15000
+        timeout: 15000,
       });
 
       const $ = cheerio.load(response.data);
@@ -41,7 +43,8 @@ export class RadarService {
         const title = $(el).find('.lc-title').text().trim();
         const price = $(el).find('.main-price').text().trim();
         const location = $(el).find('.lc-location').first().text().trim();
-        const owner = $(el).find('.lc-owner-name').text().trim() || 'Particular';
+        const owner =
+          $(el).find('.lc-owner-name').text().trim() || 'Particular';
         const img = $(el).find('img').first().attr('src');
         const link = $(el).find('a').first().attr('href');
 
@@ -54,8 +57,10 @@ export class RadarService {
             portal: 'Finca Raíz',
             price,
             location,
-            imageUrl: img || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400',
-            url: link ? `https://www.fincaraiz.com.co${link}` : url
+            imageUrl:
+              img ||
+              'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400',
+            url: link ? `https://www.fincaraiz.com.co${link}` : url,
           });
         }
       });
@@ -75,8 +80,12 @@ export class RadarService {
         Responde estrictamente en formato JSON: [{ id, captureScore, aiScript }]
       `;
 
-      const aiResponse = await this.aiChat.processChat(tenantId, userId, prompt);
-      
+      const aiResponse = await this.aiChat.processChat(
+        tenantId,
+        userId,
+        prompt,
+      );
+
       let enrichments = [];
       try {
         // Find JSON in the reply
@@ -89,15 +98,16 @@ export class RadarService {
       }
 
       // Merge data
-      return rawLeads.slice(0, 5).map(lead => {
+      return rawLeads.slice(0, 5).map((lead) => {
         const extra = enrichments.find((e: any) => e.id === lead.id);
         return {
           ...lead,
           captureScore: extra?.captureScore || 70,
-          aiScript: extra?.aiScript || 'Hola, vi tu propiedad y me interesa ayudarte a venderla rápido.'
+          aiScript:
+            extra?.aiScript ||
+            'Hola, vi tu propiedad y me interesa ayudarte a venderla rápido.',
         };
       });
-
     } catch (error) {
       console.error('[RadarService] Error scanning:', error.message);
       return [];

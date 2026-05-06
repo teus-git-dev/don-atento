@@ -14,22 +14,29 @@ export default function NotificationCenter() {
   const [loading, setLoading] = useState(false);
   const [showLoginReminder, setShowLoginReminder] = useState(false);
 
-  const userRole = authService.getUser()?.role ?? "ADMIN_TENANT";
+  const currentUser = authService.getUser();
+  const userRole = currentUser?.role ?? "ADMIN_TENANT";
+  const tenantId = currentUser?.tenantId;
 
   useEffect(() => {
-    if (authService.isAuthenticated()) {
+    // Only fetch if authenticated AND the user has a tenant (SUPERADMIN without a
+    // selected tenant cannot fetch tickets — they have no tenantId context).
+    if (authService.isAuthenticated() && tenantId) {
       fetchTasks();
     }
-  }, []);
+  }, [tenantId]);
 
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const data = await apiClient.get<typeof tasks>(`/tickets`);
+      // Pass tenantId explicitly so the backend TenantGuard can resolve it
+      // even for SUPERADMIN accounts whose JWT has tenantId = null.
+      const query = tenantId ? `?tenantId=${tenantId}` : "";
+      const data = await apiClient.get<typeof tasks>(`/tickets${query}`);
       if (!Array.isArray(data)) { setTasks([]); return; }
       setTasks(data.filter(t => t.currentState?.assignedRole === userRole || !t.resolvedAt).slice(0, 5));
     } catch (error) {
-      console.error("Error fetching tasks:", error);
+      console.error("[NotificationCenter] Error fetching tasks:", error);
     } finally {
       setLoading(false);
     }

@@ -148,7 +148,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-[10px] font-mono text-[var(--color-neon-cyan)] uppercase bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20">
-                  TKT-{ticket.id.toString().split('-')[0].toUpperCase()}
+                  {ticket.shortId ? ticket.shortId : `TKT-${ticket.id.toString().split('-')[0].toUpperCase()}`}
                 </span>
                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${
                   isUrgent ? 'bg-red-500/20 text-red-500 border border-red-500/30' : 'bg-blue-500/20 text-blue-500 border border-blue-500/30'

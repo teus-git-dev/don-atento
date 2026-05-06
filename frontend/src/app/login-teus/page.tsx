@@ -7,17 +7,23 @@ import { authService } from "@/services/authService";
 
 export default function LoginTeus() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Hardcoded Teus validation
-    if (username === "teus" && password === "teus2024") {
-      authService.getUser() // Legacy: use /login instead;
-    } else {
-      setError("Credenciales incorrectas. Acceso restringido.");
+    setError("");
+    setLoading(true);
+
+    try {
+      await authService.login(email, password);
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Credenciales incorrectas. Acceso restringido.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -38,11 +44,12 @@ export default function LoginTeus() {
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Usuario Administrativo</label>
             <input 
-              type="text" 
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
               className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors"
-              placeholder="teus"
+              placeholder="john.carvajal@teus-ai.com"
             />
           </div>
           <div>
@@ -52,6 +59,7 @@ export default function LoginTeus() {
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
                 className="w-full bg-black/40 border border-white/10 rounded-xl pl-4 pr-10 py-3 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors"
                 placeholder="••••••••"
               />
@@ -67,9 +75,10 @@ export default function LoginTeus() {
 
           <button 
             type="submit"
-            className="w-full bg-purple-600 text-white rounded-xl py-3 font-bold text-sm tracking-wide hover:bg-purple-500 transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] mt-2"
+            disabled={loading}
+            className="w-full bg-purple-600 text-white rounded-xl py-3 font-bold text-sm tracking-wide hover:bg-purple-500 transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] mt-2 disabled:opacity-50"
           >
-            ENTRAR COMO TEUS
+            {loading ? "VERIFICANDO ACCESO..." : "ENTRAR COMO TEUS"}
           </button>
         </form>
       </div>

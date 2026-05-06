@@ -5,17 +5,19 @@ import { Users, Target, Search, Plus, UserPlus, FileText, CheckCircle2 } from "l
 import { apiClient } from "@/lib/apiClient";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
+import { ContactProfilePanel } from "@/components/crm/ContactProfilePanel";
 
 export default function ContactosDashboard() {
   const [activeTab, setActiveTab] = useState<'TENANT_USER' | 'OWNER'>('TENANT_USER');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
-  const limit = 10;
+  const limit = 500;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -29,7 +31,7 @@ export default function ContactosDashboard() {
     setLoading(true);
     try {
       const endpoint = activeTab === 'TENANT_USER' ? '/users/tenants' : '/users/owners';
-      const res = await apiClient.get<any>(`${endpoint}?page=${page}&limit=${limit}`);
+      const res = await apiClient.get<any>(`${endpoint}?page=${page}&limit=${limit}&_t=${Date.now()}`);
       setUsers(res.data || []);
       setTotalPages(res.totalPages || 1);
       setTotalRecords(res.totalRecords || 0);
@@ -127,7 +129,7 @@ export default function ContactosDashboard() {
                       </td>
                     </tr>
                   ) : filteredUsers.map((user, i) => (
-                      <tr key={i} className="group hover:bg-white/5 transition-all text-sm cursor-pointer">
+                      <tr key={i} className="group hover:bg-white/5 transition-all text-sm cursor-pointer" onClick={() => setSelectedUser(user)}>
                           <td className="py-4 pl-4 font-medium flex flex-col">
                               <span className="text-white">{user.firstName} {user.lastName}</span>
                               <span className="text-[10px] text-gray-500 font-mono">{user.email}</span>
@@ -160,6 +162,13 @@ export default function ContactosDashboard() {
           )}
         </div>
       </div>
+      
+      <ContactProfilePanel 
+        user={selectedUser} 
+        isOpen={!!selectedUser} 
+        onClose={() => setSelectedUser(null)} 
+        role={activeTab} 
+      />
     </div>
   );
 }

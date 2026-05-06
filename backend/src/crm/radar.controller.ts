@@ -17,7 +17,7 @@ export class RadarController {
       success: true,
       timestamp: new Date().toISOString(),
       count: leads.length,
-      leads
+      leads,
     };
   }
 }

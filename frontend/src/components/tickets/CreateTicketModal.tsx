@@ -49,11 +49,15 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
     setLoading(true);
     setBackendError(null);
     try {
-      const [props, wfs, techs] = await Promise.all([
-        apiClient.get<any[]>(`/properties?tenantId=${TENANT_ID}`).catch(() => []),
-        apiClient.get<any[]>(`/workflows?tenantId=${TENANT_ID}`).catch(() => []),
-        apiClient.get<any[]>(`/users/technicians?tenantId=${TENANT_ID}`).catch(() => []),
+      const [propsRes, wfsRes, techsRes] = await Promise.all([
+        apiClient.get<any>(`/properties?tenantId=${TENANT_ID}&limit=1000`).catch(() => []),
+        apiClient.get<any>(`/workflows?tenantId=${TENANT_ID}&limit=1000`).catch(() => []),
+        apiClient.get<any>(`/users/technicians?tenantId=${TENANT_ID}&limit=1000`).catch(() => []),
       ]);
+
+      const props = Array.isArray(propsRes) ? propsRes : (propsRes?.data || []);
+      const wfs = Array.isArray(wfsRes) ? wfsRes : (wfsRes?.data || []);
+      const techs = Array.isArray(techsRes) ? techsRes : (techsRes?.data || []);
 
       if (!Array.isArray(props) || !Array.isArray(wfs) || !Array.isArray(techs)) {
         setBackendError('Error del servidor: datos inválidos');

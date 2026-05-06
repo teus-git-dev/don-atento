@@ -20,6 +20,7 @@ import { CreateTicketDto } from './dto/create-ticket.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { Public } from '../auth/public.decorator';
 
 @ApiTags('tickets')
 @ApiBearerAuth()
@@ -39,10 +40,7 @@ export class TicketsController {
   @ApiOperation({
     summary: 'Listar todos los tickets por tenant o propietario',
   })
-  async findAll(
-    @Req() req: any,
-    @Query('ownerId') ownerId?: string,
-  ) {
+  async findAll(@Req() req: any, @Query('ownerId') ownerId?: string) {
     if (ownerId) {
       return this.ticketsService.findAllByOwner(ownerId);
     }
@@ -83,12 +81,17 @@ export class TicketsController {
     @Param('id') id: string,
     @Body() data: { closureReason: string; signature?: string },
   ) {
-    return this.ticketsService.resolveTicket(
-      id,
-      req['tenantId'],
-      data.closureReason,
-      data.signature,
-    );
+    try {
+      return await this.ticketsService.resolveTicket(
+        id,
+        req['tenantId'],
+        data.closureReason,
+        data.signature,
+      );
+    } catch (e) {
+      require('fs').appendFileSync('error_trace.log', '\n[resolve ERROR]\n' + e.stack + '\n');
+      throw e;
+    }
   }
 
   @Patch(':id/complete-task')
@@ -98,13 +101,18 @@ export class TicketsController {
     @Param('id') id: string,
     @Body() data: { userId: string; comment: string; attachments?: any[] },
   ) {
-    return this.ticketsService.completeStateTask(
-      id,
-      req['tenantId'],
-      data.userId,
-      data.comment,
-      data.attachments,
-    );
+    try {
+      return await this.ticketsService.completeStateTask(
+        id,
+        req['tenantId'],
+        data.userId,
+        data.comment,
+        data.attachments,
+      );
+    } catch (e) {
+      require('fs').appendFileSync('error_trace.log', '\n[completeTask ERROR]\n' + e.stack + '\n');
+      throw e;
+    }
   }
 
   @Post('upload')
@@ -137,13 +145,27 @@ export class TicketsController {
     };
   }
 
+  @Public()
+  @Get(':id/survey-info')
+  @ApiOperation({ summary: 'Obtener info pública del ticket para la encuesta' })
+  async getSurveyInfo(@Param('id') id: string) {
+    const ticket = await this.ticketsService.findOne(id, undefined as any).catch(() => null);
+    if (!ticket) return { title: 'Ticket no encontrado' };
+    return { title: ticket.title };
+  }
+
+  @Public()
   @Patch(':id/satisfaction')
   @ApiOperation({ summary: 'Actualizar satisfacción del cliente' })
   async updateSatisfaction(
-    @Req() req: any,
     @Param('id') id: string,
     @Body() data: { stars: number; comment?: string },
   ) {
-    return this.ticketsService.updateSatisfaction(id, req['tenantId'], data.stars, data.comment);
+    return this.ticketsService.updateSatisfaction(
+      id,
+      undefined as any,
+      data.stars,
+      data.comment,
+    );
   }
 }

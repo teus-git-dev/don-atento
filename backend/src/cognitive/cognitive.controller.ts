@@ -34,4 +34,9 @@ export class CognitiveController {
   async classifyPriority(@Body() body: { title: string; description: string }) {
     return this.cognitiveService.classifyPriority(body.title, body.description);
   }
+
+  @Get('finops/analytics')
+  async getFinOpsAnalytics() {
+    return this.cognitiveService.getFinOpsAnalytics();
+  }
 }

@@ -7,6 +7,7 @@ import { TENANT_ID, API_URL } from "@/lib/config";
 import RolesManager from "@/components/configuracion/RolesManager";
 import WhatsAppConfigCard from "@/components/configuracion/WhatsAppConfigCard";
 import { authService } from "@/services/authService";
+import { apiClient } from "@/lib/apiClient";
 
 export default function ConfiguracionPage() {
   const router = useRouter();
@@ -39,11 +40,8 @@ export default function ConfiguracionPage() {
 
   const fetchWorkflows = async () => {
     try {
-        const response = await fetch(`${API_URL}/workflows?tenantId=${TENANT_ID}`);
-        if (response.ok) {
-            const data = await response.json();
-            setWorkflows(data);
-        }
+        const data = await apiClient.get<any[]>('/workflows');
+        setWorkflows(data);
     } catch (e) {
         console.error("Fetch workflows error", e);
     }
@@ -51,11 +49,8 @@ export default function ConfiguracionPage() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_URL}/users?tenantId=${TENANT_ID}`);
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      }
+      const data = await apiClient.get<any[]>('/users');
+      setUsers(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("Fetch users error", e);
     }
@@ -74,64 +69,35 @@ export default function ConfiguracionPage() {
 
       if (editingFlowId) {
         // Update Workflow
-        const flowRes = await fetch(`${API_URL}/workflows/${editingFlowId}/update`, {
-          method: "POST", // Backend uses @Post for update currently
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: newFlow.name,
-            description: newFlow.description
-          })
+        await apiClient.post(`/workflows/${editingFlowId}/update`, {
+          name: newFlow.name,
+          description: newFlow.description
         });
 
-        if (!flowRes.ok) {
-          setFlowError("Error al actualizar el flujo.");
-          setIsSavingFlow(false);
-          return;
-        }
-
-        // Delete old states to recreate them (simpler approach)
-        await fetch(`${API_URL}/workflows/${editingFlowId}/delete-states`, {
-          method: "POST"
-        });
+        // Delete old states to recreate them
+        await apiClient.post(`/workflows/${editingFlowId}/delete-states`, {});
       } else {
-        // Create Workflow
-        const flowRes = await fetch(`${API_URL}/workflows`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenantId: TENANT_ID,
-            name: newFlow.name,
-            description: newFlow.description
-          })
+        // Create Workflow — tenantId is injected by the server from JWT
+        const flow = await apiClient.post<any>('/workflows', {
+          name: newFlow.name,
+          description: newFlow.description
         });
-
-        if (flowRes.ok) {
-          const flow = await flowRes.json();
-          flowId = flow.id;
-        } else {
-          setFlowError("Error al crear el flujo. Verifica que el tenant sea válido.");
-          setIsSavingFlow(false);
-          return;
-        }
+        flowId = flow.id;
       }
 
       if (flowId) {
-        // Create States (same for both flows)
+        // Create States
         for (let i = 0; i < flowStates.length; i++) {
           const s = flowStates[i];
-          await fetch(`${API_URL}/workflows/states`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              workflowId: flowId,
-              name: s.name,
-              order: i + 1,
-              assignedRole: s.assignedRole,
-              assignedUserId: s.assignedUserId || null,
-              aiInstructions: s.aiInstructions || "",
-              slaHours: s.slaHours,
-              color: s.color
-            })
+          await apiClient.post('/workflows/states', {
+            workflowId: flowId,
+            name: s.name,
+            order: i + 1,
+            assignedRole: s.assignedRole,
+            assignedUserId: s.assignedUserId || null,
+            aiInstructions: s.aiInstructions || "",
+            slaHours: s.slaHours,
+            color: s.color
           });
         }
 
@@ -143,7 +109,7 @@ export default function ConfiguracionPage() {
       }
     } catch (e) {
       console.error("Workflow saving error", e);
-      setFlowError("Error de conexión con el servidor.");
+      setFlowError(e instanceof Error ? e.message : "Error de conexión con el servidor.");
     } finally {
       setIsSavingFlow(false);
     }
@@ -152,12 +118,8 @@ export default function ConfiguracionPage() {
   const handleDeleteFlow = async (id: string) => {
     if (!confirm("¿Está seguro de eliminar este flujo y todos sus estados?")) return;
     try {
-      const response = await fetch(`${API_URL}/workflows/${id}/delete`, {
-        method: "POST"
-      });
-      if (response.ok) {
-        fetchWorkflows();
-      }
+      await apiClient.post(`/workflows/${id}/delete`, {});
+      fetchWorkflows();
     } catch (e) {
       console.error("Delete flow error", e);
     }

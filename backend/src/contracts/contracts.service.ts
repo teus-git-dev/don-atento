@@ -7,7 +7,11 @@ export class ContractsService {
 
   constructor(private prisma: PrismaService) {}
 
-  async createDocumentRecord(tenantId: string, propertyId: string, fileUrl: string) {
+  async createDocumentRecord(
+    tenantId: string,
+    propertyId: string,
+    fileUrl: string,
+  ) {
     const document = await this.prisma.contractDocument.create({
       data: {
         tenantId,
@@ -19,14 +23,18 @@ export class ContractsService {
 
     // Fire-and-forget async AI processing (no Redis needed in dev)
     this.processContractAsync(document.id).catch((err) =>
-      this.logger.error(`AI processing failed for doc ${document.id}: ${err.message}`)
+      this.logger.error(
+        `AI processing failed for doc ${document.id}: ${err.message}`,
+      ),
     );
 
     return document;
   }
 
   private async processContractAsync(documentId: string) {
-    this.logger.log(`[ContractProcessor] Starting AI analysis for doc: ${documentId}`);
+    this.logger.log(
+      `[ContractProcessor] Starting AI analysis for doc: ${documentId}`,
+    );
 
     // Simulate OCR + LLM delay
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -56,7 +64,9 @@ export class ContractsService {
       },
     });
 
-    this.logger.log(`[ContractProcessor] Finished processing doc: ${documentId}`);
+    this.logger.log(
+      `[ContractProcessor] Finished processing doc: ${documentId}`,
+    );
   }
 
   async getDocumentsByProperty(tenantId: string, propertyId: string) {

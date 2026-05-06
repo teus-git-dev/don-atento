@@ -33,9 +33,23 @@ async function request<T>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { message?: string }).message ?? `Error ${res.status}`
-    );
+    
+    // Attempt to extract the most descriptive error message possible
+    let errorMessage = `Error ${res.status}`;
+    
+    if (err && typeof err === 'object') {
+      if (Array.isArray(err.message)) {
+        errorMessage = err.message.join(', ');
+      } else if (typeof err.message === 'string') {
+        errorMessage = err.message;
+      } else if (typeof err.error === 'string') {
+        errorMessage = err.error;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+    }
+    
+    throw new Error(errorMessage);
   }
 
   // Respuesta vacía (DELETE, etc.)

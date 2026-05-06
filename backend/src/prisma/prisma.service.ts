@@ -8,6 +8,8 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
+    const dbPath = require('path').resolve('./dev.db');
+    console.log(`[PrismaService] Connecting to SQLite at: ${dbPath}`);
     const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' });
     super({ adapter });
   }

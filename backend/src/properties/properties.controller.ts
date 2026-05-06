@@ -62,7 +62,11 @@ export class PropertiesController {
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
-    return this.propertiesService.findAllByTenant(req['tenantId'], pageNum, limitNum);
+    return this.propertiesService.findAllByTenant(
+      req['tenantId'],
+      pageNum,
+      limitNum,
+    );
   }
 
   @Get(':id')
@@ -78,10 +82,7 @@ export class PropertiesController {
     name: 'code',
     description: 'Código externo del inmueble (ej: INC-99)',
   })
-  async findByCode(
-    @Req() req: any,
-    @Param('code') code: string,
-  ) {
+  async findByCode(@Req() req: any, @Param('code') code: string) {
     return this.propertiesService.findByPropertyCode(req['tenantId'], code);
   }
 
@@ -114,7 +115,11 @@ export class PropertiesController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar datos de un inmueble' })
-  async update(@Req() req: any, @Param('id') id: string, @Body() data: UpdatePropertyDto) {
+  async update(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() data: UpdatePropertyDto,
+  ) {
     return this.propertiesService.update(id, req['tenantId'], data);
   }
 

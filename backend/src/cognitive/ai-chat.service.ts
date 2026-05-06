@@ -149,4 +149,133 @@ Instrucciones Críticas:
 
     return { reply, contextUsed: metrics };
   }
+
+  async processWhatsappMessage(tenantId: string, message: string, context?: { name?: string; address?: string; systemAction?: string }) {
+    const systemPrompt = `
+Role: You are Daniel, the AI Assistant for Incasa. Your primary goal is to provide excellent customer service to tenants and owners. You must monitor the user's emotional state in every interaction.
+
+1. Sentiment Classification & Panel Integration:
+For every user message, you must categorize the sentiment into one of the following levels:
+[SENTIMENT_LEVEL: 1 - VERY_SATISFIED]
+[SENTIMENT_LEVEL: 2 - NEUTRAL]
+[SENTIMENT_LEVEL: 3 - FRUSTRATED]
+[SENTIMENT_LEVEL: 4 - ANGRY]
+[SENTIMENT_LEVEL: 5 - CRITICAL/HOSTILE]
+
+2. De-escalation Protocol & Routing (Mandatory):
+You have full authority to decide if a ticket should be created.
+- If the user is HOSTILE or ANGRY (Levels 4 or 5) and has NOT clearly specified the technical damage, set Action to DE_ESCALATE. Acknowledge their frustration, calm them down, and ask them to specify the problem. DO NOT create a ticket yet.
+- If the user is reporting a concrete technical issue and is calm enough, set Action to CREATE_TICKET.
+- If it's just a general question or greeting, set Action to GENERAL_REPLY.
+
+3. System Action:
+The backend system might provide context: "${context?.systemAction || 'No system action provided'}". You can use this context if applicable, but prioritize your routing logic.
+
+4. Output Format (Mandatory):
+Your response must exactly follow this structure:
+[METADATA]
+Sentiment: {Level Name}
+Intensity Score: {1-5}
+Action: {CREATE_TICKET | DE_ESCALATE | GENERAL_REPLY}
+[/METADATA]
+{Your empathetic and helpful response in Spanish to the user here}
+
+Context: The user is ${context?.name || 'a client'}. Property: ${context?.address || 'Unknown'}.
+`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message },
+    ];
+
+    try {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey || apiKey === 'FILL_ME')
+        throw new Error('OpenAI API key missing or invalid');
+
+      // 1. Pre-flight Check: Has the tenant exceeded their quota?
+      if (tenantId) {
+        const subscription = await this.prisma.tenantSubscription.findUnique({ where: { tenantId } });
+        if (subscription) {
+           const totalUsed = subscription.currentTokensInput + subscription.currentTokensOutput;
+           if (totalUsed >= subscription.monthlyTokenQuota) {
+               console.warn(`[FinOps] Tenant ${tenantId} exceeded quota.`);
+               // We could throw an error to trigger the fallback, blocking the AI response.
+               // throw new Error('QUOTA_EXCEEDED');
+           }
+        }
+      }
+
+      const response = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: 'gpt-4o-mini',
+          messages,
+          temperature: 0.7,
+          max_tokens: 500,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        },
+      );
+
+      // 2. Token Metering & FinOps Logic
+      const usage = response.data.usage;
+      if (usage && tenantId) {
+         const costIn = (usage.prompt_tokens / 1000000) * 0.150;
+         const costOut = (usage.completion_tokens / 1000000) * 0.600;
+         const totalCostUsd = costIn + costOut;
+
+         // Async fire-and-forget to avoid blocking the user response
+         this.logTokenUsageAsync(tenantId, usage.prompt_tokens, usage.completion_tokens, totalCostUsd).catch(e => console.error('[FinOps] Error logging tokens:', e));
+      }
+
+      return response.data.choices[0].message.content;
+    } catch (error) {
+      console.warn('[AiChatService] Error connecting to LLM for WA message:', error.message);
+      // Fallback response since LLM is unavailable
+      return `[METADATA]
+Sentiment: 2 - NEUTRAL
+Intensity Score: 2
+Action: OFFLINE_FALLBACK
+[/METADATA]
+Comprendo la situación. En este momento estoy revisando la información, pero he procedido a registrar tu solicitud para darle trámite de inmediato.`;
+    }
+  }
+
+  private async logTokenUsageAsync(tenantId: string, input: number, output: number, cost: number) {
+     await this.prisma.$transaction([
+        this.prisma.tokenUsageLog.create({
+           data: {
+             tenantId,
+             feature: 'WHATSAPP_BOT',
+             tokensInput: input,
+             tokensOutput: output,
+             modelUsed: 'gpt-4o-mini',
+             costUsd: cost
+           }
+        }),
+        // Update subscription counters. We use an upsert to create a default plan if they don't have one
+        this.prisma.tenantSubscription.upsert({
+           where: { tenantId },
+           update: {
+              currentTokensInput: { increment: input },
+              currentTokensOutput: { increment: output }
+           },
+           create: {
+              tenantId,
+              planType: 'BASIC',
+              monthlyTokenQuota: 500000,
+              billingCycleStart: new Date(),
+              billingCycleEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)),
+              currentTokensInput: input,
+              currentTokensOutput: output
+           }
+        })
+     ]);
+  }
 }

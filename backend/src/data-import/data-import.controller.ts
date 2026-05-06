@@ -1,4 +1,13 @@
-import { Controller, Post, UseInterceptors, UploadedFile, Body, Get, Param, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UseInterceptors,
+  UploadedFile,
+  Body,
+  Get,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DataImportService } from './data-import.service';
 import { Public } from '../auth/public.decorator';
@@ -21,14 +30,24 @@ export class DataImportController {
     if (!tenantId) {
       throw new BadRequestException('tenantId is required');
     }
-    return this.dataImportService.parseFileAndPreview(file.buffer, file.originalname, tenantId, categoryId);
+    return this.dataImportService.parseFileAndPreview(
+      file.buffer,
+      file.originalname,
+      tenantId,
+      categoryId,
+    );
   }
 
   @Public()
   @Post('templates')
   async saveTemplate(@Body() body: any) {
     const { tenantId, name, categoryId, mapping } = body;
-    return this.dataImportService.saveTemplate(tenantId, name, categoryId, mapping);
+    return this.dataImportService.saveTemplate(
+      tenantId,
+      name,
+      categoryId,
+      mapping,
+    );
   }
 
   @Public()
@@ -51,6 +70,13 @@ export class DataImportController {
     if (!tenantId) throw new BadRequestException('tenantId is required');
     // mapping arrives as a JSON string from FormData
     const mapping = mappingRaw ? JSON.parse(mappingRaw) : undefined;
-    return this.dataImportService.executeImport(file.buffer, file.originalname, tenantId, templateId, categoryId, mapping);
+    return this.dataImportService.executeImport(
+      file.buffer,
+      file.originalname,
+      tenantId,
+      templateId,
+      categoryId,
+      mapping,
+    );
   }
 }

@@ -4,31 +4,30 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  
 }
 
 model AccountingAccount {
-  id                      String @id @default(cuid())
-  tenantId                String
-  code                    String
-  name                    String
-  level                   AccountLevel
-  nature                  AccountNature
-  isActive                Boolean             @default(true)
-  parentId                String?
-  createdAt               DateTime            @default(now())
-  updatedAt DateTime @updatedAt
-  account       AccountingAccount?  @relation("AccountingAccountToAccountingAccount", fields: [parentId], references: [id])
-  children AccountingAccount[] @relation("AccountingAccountToAccountingAccount")
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  BillingItem             BillingItem[]
-  lines TransactionLine[]
+  id          String              @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  level       AccountLevel
+  nature      AccountNature
+  isActive    Boolean             @default(true)
+  parentId    String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  account     AccountingAccount?  @relation("AccountingAccountToAccountingAccount", fields: [parentId], references: [id])
+  children    AccountingAccount[] @relation("AccountingAccountToAccountingAccount")
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  BillingItem BillingItem[]
+  lines       TransactionLine[]
 
   @@unique([tenantId, code])
 }
 
 model AccountingThirdParty {
-  id               String @id @default(cuid())
+  id               String            @id @default(cuid())
   tenantId         String
   documentType     String
   documentNumber   String
@@ -43,42 +42,42 @@ model AccountingThirdParty {
   postalCode       String?
   createdAt        DateTime          @default(now())
   provider         Provider?         @relation(fields: [providerId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user             User?             @relation(fields: [userId], references: [id])
   Invoice          Invoice[]
-  lines TransactionLine[]
+  lines            TransactionLine[]
 
   @@unique([tenantId, documentType, documentNumber])
 }
 
 model BillingItem {
-  id                String @id @default(cuid())
-  tenantId          String
-  code              String            @unique
-  name              String
-  basePrice         Decimal?          
-  taxRate           Decimal           @default(0) 
-  accountId         String
-  isActive          Boolean           @default(true)
-  createdAt         DateTime          @default(now())
-  account AccountingAccount @relation(fields: [accountId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  InvoiceLine       InvoiceLine[]
+  id          String            @id @default(cuid())
+  tenantId    String
+  code        String            @unique
+  name        String
+  basePrice   Decimal?
+  taxRate     Decimal           @default(0)
+  accountId   String
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  account     AccountingAccount @relation(fields: [accountId], references: [id])
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  InvoiceLine InvoiceLine[]
 }
 
 model BrandBrain {
-  id            String @id @default(cuid())
+  id            String   @id @default(cuid())
   tenantId      String   @unique
   tone          String   @default("PROFESSIONAL")
   policies      String?
   faq           Json?
   responseRules String?
-  updatedAt DateTime @updatedAt
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model ContractRequest {
-  id               String @id @default(cuid())
+  id               String         @id @default(cuid())
   tenantId         String
   prospectId       String
   propertyId       String
@@ -88,14 +87,14 @@ model ContractRequest {
   approvedByUserId String?
   rejectionReason  String?
   createdAt        DateTime       @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt        DateTime       @updatedAt
   user             User?          @relation(fields: [approvedByUserId], references: [id])
-  property Property @relation(fields: [propertyId], references: [id])
-  prospect Prospect @relation(fields: [prospectId], references: [id])
+  property         Property       @relation(fields: [propertyId], references: [id])
+  prospect         Prospect       @relation(fields: [prospectId], references: [id])
 }
 
 model DianResolution {
-  id               String @id @default(cuid())
+  id               String   @id @default(cuid())
   tenantId         String
   prefix           String
   resolutionNumber String
@@ -109,23 +108,23 @@ model DianResolution {
   softwarePin      String?
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model DigitalCertificate {
-  id           String @id @default(cuid())
+  id           String    @id @default(cuid())
   tenantId     String    @unique
   filePath     String    @default("")
   fileBuffer   Bytes?
   passwordHash String
   validUntil   DateTime?
   createdAt    DateTime  @default(now())
-  updatedAt DateTime @updatedAt
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime  @updatedAt
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model InventoryEvidence {
-  id                 String @id @default(cuid())
+  id                 String              @id @default(cuid())
   inventoryItemId    String
   evidenceType       EvidenceType
   url                String
@@ -136,7 +135,7 @@ model InventoryEvidence {
 }
 
 model InventoryItem {
-  id                     String @id @default(cuid())
+  id                     String              @id @default(cuid())
   propertyId             String
   zoneId                 String?
   category               InventoryCategory
@@ -154,26 +153,26 @@ model InventoryItem {
   createdAt              DateTime            @default(now())
   comments               String?
   quantity               Int                 @default(1)
-  evidences InventoryEvidence[]
-  property Property @relation(fields: [propertyId], references: [id])
+  evidences              InventoryEvidence[]
+  property               Property            @relation(fields: [propertyId], references: [id])
   Zone                   Zone?               @relation(fields: [zoneId], references: [id])
-  tickets Ticket[]
+  tickets                Ticket[]
 }
 
 model InventoryTemplate {
-  id                    String @id @default(cuid())
-  tenantId              String
-  name                  String
-  description           String?
-  status                TemplateStatus          @default(ACTIVE)
-  createdAt             DateTime                @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  items InventoryTemplateItem[]
-  zones Zone[]
+  id          String                  @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  status      TemplateStatus          @default(ACTIVE)
+  createdAt   DateTime                @default(now())
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items       InventoryTemplateItem[]
+  zones       Zone[]
 }
 
 model InventoryTemplateItem {
-  id                String @id @default(cuid())
+  id                String             @id @default(cuid())
   templateId        String?
   zoneId            String?
   name              String
@@ -185,43 +184,43 @@ model InventoryTemplateItem {
 }
 
 model Invoice {
-  id                   String @id @default(cuid())
-  tenantId             String
-  type                 InvoiceType          @default(SALES_INVOICE)
-  sequence             String               @unique
-  issueDate            DateTime             @default(now())
-  dueDate              DateTime?
-  subtotal             Decimal              @default(0) 
-  taxAmount            Decimal              @default(0) 
-  total                Decimal              @default(0) 
-  thirdPartyId         String
-  journalEntryId       String?
-  dianStatus           DianStatus           @default(DRAFT)
-  cufe                 String?
-  qrCodeUrl            String?
-  xmlResponse          String?
-  createdAt            DateTime             @default(now())
-  dianZipKey           String?
-  journalEntry         JournalEntry?        @relation(fields: [journalEntryId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  thirdParty AccountingThirdParty @relation(fields: [thirdPartyId], references: [id])
-  InvoiceLine          InvoiceLine[]
+  id             String               @id @default(cuid())
+  tenantId       String
+  type           InvoiceType          @default(SALES_INVOICE)
+  sequence       String               @unique
+  issueDate      DateTime             @default(now())
+  dueDate        DateTime?
+  subtotal       Decimal              @default(0)
+  taxAmount      Decimal              @default(0)
+  total          Decimal              @default(0)
+  thirdPartyId   String
+  journalEntryId String?
+  dianStatus     DianStatus           @default(DRAFT)
+  cufe           String?
+  qrCodeUrl      String?
+  xmlResponse    String?
+  createdAt      DateTime             @default(now())
+  dianZipKey     String?
+  journalEntry   JournalEntry?        @relation(fields: [journalEntryId], references: [id])
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  thirdParty     AccountingThirdParty @relation(fields: [thirdPartyId], references: [id])
+  InvoiceLine    InvoiceLine[]
 }
 
 model InvoiceLine {
-  id            String @id @default(cuid())
+  id            String      @id @default(cuid())
   invoiceId     String
   billingItemId String
-  quantity      Decimal     @default(1) 
-  unitPrice     Decimal     
-  taxAmount     Decimal     @default(0) 
-  total         Decimal     
+  quantity      Decimal     @default(1)
+  unitPrice     Decimal
+  taxAmount     Decimal     @default(0)
+  total         Decimal
   BillingItem   BillingItem @relation(fields: [billingItemId], references: [id])
   Invoice       Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
 model JournalEntry {
-  id              String @id @default(cuid())
+  id              String            @id @default(cuid())
   tenantId        String
   date            DateTime
   documentType    String
@@ -230,198 +229,198 @@ model JournalEntry {
   status          EntryStatus       @default(DRAFT)
   createdByUserId String
   createdAt       DateTime          @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt       DateTime          @updatedAt
   Invoice         Invoice[]
-  createdBy User @relation(fields: [createdByUserId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  lines TransactionLine[]
+  createdBy       User              @relation(fields: [createdByUserId], references: [id])
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines           TransactionLine[]
 
   @@index([tenantId, date])
 }
 
 model MeterReading {
-  id          String @id @default(cuid())
+  id          String    @id @default(cuid())
   propertyId  String
   type        MeterType
   value       String
   photoUrl    String?
   readingDate DateTime  @default(now())
-  property Property @relation(fields: [propertyId], references: [id])
+  property    Property  @relation(fields: [propertyId], references: [id])
 }
 
 model Property {
-  id                      String @id @default(cuid())
-  tenantId                String
-  parentPropertyId        String?
-  propertyType            PropertyType
-  title                   String
-  description             String?
-  address                 String
-  city                    String
-  department              String
-  country                 String
-  latitude                Float?
-  longitude               Float?
-  areaM2                  Float?
-  rooms                   Int?
-  bathrooms               Int?
-  status                  PropertyStatus            @default(AVAILABLE)
-  propertyCode            String?                   @unique
-  isVip                   Boolean                   @default(false)
-  isActive                Boolean                   @default(true)
-  rentAmount              Decimal?
-  adminAmount             Decimal?
-  taxAmount               Decimal?
-  managementName          String?
-  managementNit           String?
-  insuranceCompany        String?
-  splatUrl                String?
-  attachments             Json?
-  createdAt               DateTime                  @default(now())
+  id               String         @id @default(cuid())
+  tenantId         String
+  parentPropertyId String?
+  propertyType     PropertyType
+  title            String
+  description      String?
+  address          String
+  city             String
+  department       String
+  country          String
+  latitude         Float?
+  longitude        Float?
+  areaM2           Float?
+  rooms            Int?
+  bathrooms        Int?
+  status           PropertyStatus @default(AVAILABLE)
+  propertyCode     String?        @unique
+  isVip            Boolean        @default(false)
+  isActive         Boolean        @default(true)
+  rentAmount       Decimal?
+  adminAmount      Decimal?
+  taxAmount        Decimal?
+  managementName   String?
+  managementNit    String?
+  insuranceCompany String?
+  splatUrl         String?
+  attachments      Json?
+  createdAt        DateTime       @default(now())
 
   // Data Import
-  sourceTag               String?
-  importedAt              DateTime?
+  sourceTag  String?
+  importedAt DateTime?
 
-  accessToken             String?                   @unique
-  workflowId              String?
-  managementEmail         String?
-  managementPhone         String?
-  visionAnalysis          Json?
-  admonEmail              String?
-  admonName               String?
-  admonPhone              String?
-  admonPorteria           String?
-  visionVideoUrl          Json?
-  ContractRequest         ContractRequest[]
-  ContractDocument        ContractDocument[]
-  inventoryItems InventoryItem[]
-  meterReadings MeterReading[]
-  property                Property?                 @relation("PropertyToProperty", fields: [parentPropertyId], references: [id])
+  accessToken                String?                   @unique
+  workflowId                 String?
+  managementEmail            String?
+  managementPhone            String?
+  visionAnalysis             Json?
+  admonEmail                 String?
+  admonName                  String?
+  admonPhone                 String?
+  admonPorteria              String?
+  visionVideoUrl             Json?
+  ContractRequest            ContractRequest[]
+  ContractDocument           ContractDocument[]
+  inventoryItems             InventoryItem[]
+  meterReadings              MeterReading[]
+  property                   Property?                 @relation("PropertyToProperty", fields: [parentPropertyId], references: [id])
   other_interestedProperties Property[]                @relation("PropertyToProperty")
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  workflow                Workflow?                 @relation(fields: [workflowId], references: [id])
-  accessItems      PropertyAccessItem[]
-  assignments PropertyAgentAssignment[]
-  relations PropertyRelation[]
-  tickets Ticket[]
-  lines TransactionLine[]
-  zones Zone[]
-  Prospect                Prospect[]                @relation("PropertyInterests")
+  tenant                     Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow                   Workflow?                 @relation(fields: [workflowId], references: [id])
+  accessItems                PropertyAccessItem[]
+  assignments                PropertyAgentAssignment[]
+  relations                  PropertyRelation[]
+  tickets                    Ticket[]
+  lines                      TransactionLine[]
+  zones                      Zone[]
+  Prospect                   Prospect[]                @relation("PropertyInterests")
 }
 
 model PropertyAccessItem {
-  id          String @id @default(cuid())
+  id          String     @id @default(cuid())
   propertyId  String
   type        AccessType
   description String
   quantity    Int        @default(1)
   photoUrl    String?
-  property Property @relation(fields: [propertyId], references: [id])
+  property    Property   @relation(fields: [propertyId], references: [id])
 }
 
 model PropertyAgentAssignment {
-  id         String @id @default(cuid())
+  id         String   @id @default(cuid())
   propertyId String
   agentId    String
   assignedAt DateTime @default(now())
-  agent User @relation(fields: [agentId], references: [id])
-  property Property @relation(fields: [propertyId], references: [id])
+  agent      User     @relation(fields: [agentId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id])
 }
 
 model PropertyRelation {
-  id                  String @id @default(cuid())
+  id                  String             @id @default(cuid())
   propertyId          String
   userId              String
   relationType        RelationType
   percentageOwnership Float?
   startDate           DateTime
   endDate             DateTime?
-  status              RelationStatus @default(ACTIVE)
+  status              RelationStatus     @default(ACTIVE)
   contractNumber      String?
   insuranceCompany    String?
   contractType        String?
-  property Property @relation(fields: [propertyId], references: [id])
-  user User @relation(fields: [userId], references: [id])
-  ContractDocument ContractDocument[]
+  property            Property           @relation(fields: [propertyId], references: [id])
+  user                User               @relation(fields: [userId], references: [id])
+  ContractDocument    ContractDocument[]
 }
 
 model Prospect {
-  id                  String @id @default(cuid())
-  tenantId            String
-  firstName           String
-  lastName            String?
-  email               String?
-  phone               String?
-  whatsappId          String?               @unique
-  status              ProspectStatus        @default(NEW)
-  source              ProspectSource        @default(MANUAL)
-  sentiment           SentimentAnalysis     @default(NEUTRAL)
-  assignedAgentId     String?
-  createdAt           DateTime              @default(now())
-  updatedAt DateTime @updatedAt
-  ContractRequest     ContractRequest[]
-  assignedAgent                User? @relation(fields: [assignedAgentId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  interactions ProspectInteraction[]
-  tasks ProspectTask[]
+  id                   String                @id @default(cuid())
+  tenantId             String
+  firstName            String
+  lastName             String?
+  email                String?
+  phone                String?
+  whatsappId           String?               @unique
+  status               ProspectStatus        @default(NEW)
+  source               ProspectSource        @default(MANUAL)
+  sentiment            SentimentAnalysis     @default(NEUTRAL)
+  assignedAgentId      String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  ContractRequest      ContractRequest[]
+  assignedAgent        User?                 @relation(fields: [assignedAgentId], references: [id])
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  interactions         ProspectInteraction[]
+  tasks                ProspectTask[]
   interestedProperties Property[]            @relation("PropertyInterests")
 }
 
 model ProspectInteraction {
-  id         String @id @default(cuid())
+  id         String             @id @default(cuid())
   prospectId String
   userId     String?
   channel    InteractionChannel
   message    String
   sentiment  SentimentAnalysis?
   createdAt  DateTime           @default(now())
-  prospect Prospect @relation(fields: [prospectId], references: [id])
+  prospect   Prospect           @relation(fields: [prospectId], references: [id])
   user       User?              @relation(fields: [userId], references: [id])
 }
 
 model ProspectTask {
-  id          String @id @default(cuid())
+  id          String    @id @default(cuid())
   prospectId  String
   title       String
   description String?
   dueDate     DateTime?
   isCompleted Boolean   @default(false)
   createdAt   DateTime  @default(now())
-  updatedAt DateTime @updatedAt
-  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime  @updatedAt
+  prospect    Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
 }
 
 model Provider {
-  id                        String @id @default(cuid())
-  tenantId                  String
-  name                      String
-  nit                       String?
-  email                     String?
-  phone                     String?
-  address                   String?
-  specialty                 ProviderSpecialty           @default(GENERAL)
-  status                    ProviderStatus              @default(ACTIVE)
-  rating                    Float?                      @default(5.0)
-  contactName               String?
-  contactLastName           String?
-  contactId                 String?
-  contactPhone              String?
-  photoUrl                  String?
-  legalArl                  String?
-  legalSst                  Boolean                     @default(false)
-  legalPolicyNumber         String?
-  createdAt                 DateTime                    @default(now())
-  updatedAt DateTime @updatedAt
-  thirdParty      AccountingThirdParty?
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  id                 String                      @id @default(cuid())
+  tenantId           String
+  name               String
+  nit                String?
+  email              String?
+  phone              String?
+  address            String?
+  specialty          ProviderSpecialty           @default(GENERAL)
+  status             ProviderStatus              @default(ACTIVE)
+  rating             Float?                      @default(5.0)
+  contactName        String?
+  contactLastName    String?
+  contactId          String?
+  contactPhone       String?
+  photoUrl           String?
+  legalArl           String?
+  legalSst           Boolean                     @default(false)
+  legalPolicyNumber  String?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+  thirdParty         AccountingThirdParty?
+  tenant             Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   additionalContacts ProviderAdditionalContact[]
-  tickets Ticket[]
-  technicians User[]
+  tickets            Ticket[]
+  technicians        User[]
 }
 
 model ProviderAdditionalContact {
-  id           String @id @default(cuid())
+  id           String   @id @default(cuid())
   providerId   String
   firstName    String
   lastName     String
@@ -433,18 +432,18 @@ model ProviderAdditionalContact {
 }
 
 model Role {
-  id          String @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
   name        String
   description String?
   permissions Json?
   createdAt   DateTime @default(now())
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  users User[]
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users       User[]
 }
 
 model SubscriptionPlan {
-  id            String @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
   priceMonthly  Decimal
   maxProperties Int
@@ -454,7 +453,7 @@ model SubscriptionPlan {
 }
 
 model Tenant {
-  id                     String @id @default(cuid())
+  id                     String                 @id @default(cuid())
   name                   String
   nit                    String
   status                 TenantStatus           @default(ACTIVE)
@@ -464,7 +463,7 @@ model Tenant {
   brandManualUrl         String?
   whatsappPhoneNumberId  String?
   whatsappAccessToken    String?
-  whatsappProvider       String?              @default("meta")
+  whatsappProvider       String?                @default("meta")
   communicationTemplates Json?
   AccountingAccount      AccountingAccount[]
   AccountingThirdParty   AccountingThirdParty[]
@@ -476,69 +475,72 @@ model Tenant {
   InventoryTemplate      InventoryTemplate[]
   Invoice                Invoice[]
   JournalEntry           JournalEntry[]
-  interestedProperties Property[]
+  interestedProperties   Property[]
   Prospect               Prospect[]
   Provider               Provider[]
   Role                   Role[]
   subscriptionPlan       SubscriptionPlan       @relation(fields: [subscriptionPlanId], references: [id])
-  tickets Ticket[]
-  technicians User[]
+  tickets                Ticket[]
+  technicians            User[]
   Workflow               Workflow[]
+  tenantSubscription     TenantSubscription?
+  tokenUsageLogs         TokenUsageLog[]
 }
 
 model Ticket {
-  id                                     String @id @default(cuid())
-  tenantId                               String
-  propertyId                             String
-  reportedByUserId                       String
-  workflowId                             String?
-  currentStateId                         String?
-  reportedByUserPhone                    String?
-  assignedTechnicianId                   String?
-  priority                               TicketPriority      @default(MEDIUM)
-  severity                               TicketSeverity      @default(MEDIUM)
-  title                                  String
-  description                            String
-  aiDiagnosisSummary                     String?
-  estimatedCost                          Decimal?
-  ownerApproved                          Boolean             @default(false)
-  coordinates3d                          Json?
-  payerResponsible                       PayerResponsible?   @default(AGENCY)
-  createdAt                              DateTime            @default(now())
-  resolvedAt                             DateTime?
-  satisfactionStars                      Int?
-  satisfactionComment                    String?
-  assignedProviderId                     String?
-  closureReason                          String?
-  attachments                            Json?
-  clientSignature                        String?
-  inventoryItemId                        String?
-  provider                               Provider?           @relation(fields: [assignedProviderId], references: [id])
-  assignedTechnician User? @relation("Ticket_assignedTechnicianIdToUser", fields: [assignedTechnicianId], references: [id])
-  currentState WorkflowState?      @relation(fields: [currentStateId], references: [id])
-  InventoryItem                          InventoryItem?      @relation(fields: [inventoryItemId], references: [id])
-  property Property @relation(fields: [propertyId], references: [id])
-  reportedByUser User @relation("Ticket_reportedByUserIdToUser", fields: [reportedByUserId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  workflow                               Workflow?           @relation(fields: [workflowId], references: [id])
-  interactions TicketInteraction[]
-  stateLogs TicketStateLog[]
+  id                   String              @id @default(cuid())
+  shortId              String?
+  tenantId             String
+  propertyId           String
+  reportedByUserId     String
+  workflowId           String?
+  currentStateId       String?
+  reportedByUserPhone  String?
+  assignedTechnicianId String?
+  priority             TicketPriority      @default(MEDIUM)
+  severity             TicketSeverity      @default(MEDIUM)
+  title                String
+  description          String
+  aiDiagnosisSummary   String?
+  estimatedCost        Decimal?
+  ownerApproved        Boolean             @default(false)
+  coordinates3d        Json?
+  payerResponsible     PayerResponsible?   @default(AGENCY)
+  createdAt            DateTime            @default(now())
+  resolvedAt           DateTime?
+  satisfactionStars    Int?
+  satisfactionComment  String?
+  assignedProviderId   String?
+  closureReason        String?
+  attachments          Json?
+  clientSignature      String?
+  inventoryItemId      String?
+  provider             Provider?           @relation(fields: [assignedProviderId], references: [id])
+  assignedTechnician   User?               @relation("Ticket_assignedTechnicianIdToUser", fields: [assignedTechnicianId], references: [id])
+  currentState         WorkflowState?      @relation(fields: [currentStateId], references: [id])
+  InventoryItem        InventoryItem?      @relation(fields: [inventoryItemId], references: [id])
+  property             Property            @relation(fields: [propertyId], references: [id])
+  reportedByUser       User                @relation("Ticket_reportedByUserIdToUser", fields: [reportedByUserId], references: [id])
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow             Workflow?           @relation(fields: [workflowId], references: [id])
+  interactions         TicketInteraction[]
+  stateLogs            TicketStateLog[]
 }
 
 model TicketInteraction {
-  id                String @id @default(cuid())
+  id                String             @id @default(cuid())
   ticketId          String
   userId            String?
   channel           InteractionChannel
   message           String
   sentimentAnalysis SentimentAnalysis?
   sentAt            DateTime           @default(now())
-  ticket Ticket @relation(fields: [ticketId], references: [id])
+  ticket            Ticket             @relation(fields: [ticketId], references: [id])
   user              User?              @relation(fields: [userId], references: [id])
 }
 
 model TicketStateLog {
-  id                String @id @default(cuid())
+  id                String        @id @default(cuid())
   ticketId          String
   stateId           String
   startedAt         DateTime      @default(now())
@@ -546,45 +548,47 @@ model TicketStateLog {
   comment           String?
   completedByUserId String?
   attachments       Json?
-  completedByUser              User? @relation(fields: [completedByUserId], references: [id])
-  state WorkflowState @relation(fields: [stateId], references: [id])
-  ticket Ticket @relation(fields: [ticketId], references: [id])
+  completedByUser   User?         @relation(fields: [completedByUserId], references: [id])
+  state             WorkflowState @relation(fields: [stateId], references: [id])
+  ticket            Ticket        @relation(fields: [ticketId], references: [id])
 }
 
 model TransactionLine {
-  id                   String @id @default(cuid())
-  journalEntryId       String
-  accountId            String
-  debit                Decimal               @default(0) 
-  credit               Decimal               @default(0) 
-  thirdPartyId         String?
-  propertyId           String?
-  description          String?
-  account AccountingAccount @relation(fields: [accountId], references: [id])
-  JournalEntry         JournalEntry          @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  property             Property?             @relation(fields: [propertyId], references: [id])
-  thirdParty AccountingThirdParty? @relation(fields: [thirdPartyId], references: [id])
+  id             String                @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  debit          Decimal               @default(0)
+  credit         Decimal               @default(0)
+  thirdPartyId   String?
+  propertyId     String?
+  description    String?
+  account        AccountingAccount     @relation(fields: [accountId], references: [id])
+  JournalEntry   JournalEntry          @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  property       Property?             @relation(fields: [propertyId], references: [id])
+  thirdParty     AccountingThirdParty? @relation(fields: [thirdPartyId], references: [id])
 }
 
 model User {
-  id                                               String @id @default(cuid())
-  tenantId                                         String?
-  email                                            String                    @unique
-  passwordHash                                     String
-  firstName                                        String
-  lastName                                         String
-  governmentId                                     String?
-  role                                             UserRole                  @default(TENANT_USER)
-  roleId                                           String?
-  phone                                            String?
-  whatsappId                                       String?
-  photoUrl                                         String?
-  isActive                                         Boolean                   @default(true)
-  createdAt                                        DateTime                  @default(now())
+  id                 String    @id @default(cuid())
+  tenantId           String?
+  email              String    @unique
+  passwordHash       String
+  firstName          String
+  lastName           String
+  governmentId       String?
+  role               UserRole  @default(TENANT_USER)
+  roleId             String?
+  phone              String?
+  whatsappId         String?
+  photoUrl           String?
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  passwordChangedAt  DateTime?
+  createdAt          DateTime  @default(now())
 
   // Data Import
-  sourceTag                                        String?
-  importedAt                                       DateTime?
+  sourceTag  String?
+  importedAt DateTime?
 
   additionalContacts                               String?
   personType                                       String?
@@ -597,63 +601,63 @@ model User {
   accountNumber                                    String?
   providerId                                       String?
   accountType                                      String?
-  thirdParty                             AccountingThirdParty?
+  thirdParty                                       AccountingThirdParty?
   ContractRequest                                  ContractRequest[]
   JournalEntry                                     JournalEntry[]
-  assignments PropertyAgentAssignment[]
-  relations PropertyRelation[]
+  assignments                                      PropertyAgentAssignment[]
+  relations                                        PropertyRelation[]
   Prospect                                         Prospect[]
-  interactions ProspectInteraction[]
+  interactions                                     ProspectInteraction[]
   Ticket_Ticket_assignedTechnicianIdToUser         Ticket[]                  @relation("Ticket_assignedTechnicianIdToUser")
   Ticket_Ticket_reportedByUserIdToUser             Ticket[]                  @relation("Ticket_reportedByUserIdToUser")
-  ticketInteractions TicketInteraction[]
-  stateLogs TicketStateLog[]
+  ticketInteractions                               TicketInteraction[]
+  stateLogs                                        TicketStateLog[]
   provider                                         Provider?                 @relation(fields: [providerId], references: [id])
-  roleRef Role? @relation(fields: [roleId], references: [id])
+  roleRef                                          Role?                     @relation(fields: [roleId], references: [id])
   tenant                                           Tenant?                   @relation(fields: [tenantId], references: [id])
   WorkflowState_WorkflowState_assignedUserIdToUser WorkflowState[]           @relation("WorkflowState_assignedUserIdToUser")
   WorkflowState_RoleAssignments                    WorkflowState[]           @relation("RoleAssignments")
 }
 
 model Workflow {
-  id            String @id @default(cuid())
-  tenantId      String
-  name          String
-  description   String?
-  createdAt     DateTime        @default(now())
+  id                   String          @id @default(cuid())
+  tenantId             String
+  name                 String
+  description          String?
+  createdAt            DateTime        @default(now())
   interestedProperties Property[]
-  tickets Ticket[]
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  states WorkflowState[]
+  tickets              Ticket[]
+  tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  states               WorkflowState[]
 }
 
 model WorkflowState {
-  id                                      String @id @default(cuid())
-  workflowId                              String
-  name                                    String
-  order                                   Int
-  assignedRole                            UserRole?
-  slaHours                                Int?
-  color                                   String?
-  aiInstructions                          String?
-  assignedUserId                          String?
-  tickets Ticket[]
-  stateLogs TicketStateLog[]
-  responsible User?            @relation("WorkflowState_assignedUserIdToUser", fields: [assignedUserId], references: [id])
-  Workflow                                Workflow         @relation(fields: [workflowId], references: [id])
-  User_RoleAssignments                    User[]           @relation("RoleAssignments")
+  id                   String           @id @default(cuid())
+  workflowId           String
+  name                 String
+  order                Int
+  assignedRole         UserRole?
+  slaHours             Int?
+  color                String?
+  aiInstructions       String?
+  assignedUserId       String?
+  tickets              Ticket[]
+  stateLogs            TicketStateLog[]
+  responsible          User?            @relation("WorkflowState_assignedUserIdToUser", fields: [assignedUserId], references: [id])
+  Workflow             Workflow         @relation(fields: [workflowId], references: [id])
+  User_RoleAssignments User[]           @relation("RoleAssignments")
 }
 
 model Zone {
-  id                    String @id @default(cuid())
-  propertyId            String?
-  templateId            String?
-  name                  String
-  type                  ZoneType                @default(ZONAS_COMUNES)
-  items InventoryItem[]
-  templateItems InventoryTemplateItem[]
-  property              Property?               @relation(fields: [propertyId], references: [id])
-  InventoryTemplate     InventoryTemplate?      @relation(fields: [templateId], references: [id])
+  id                String                  @id @default(cuid())
+  propertyId        String?
+  templateId        String?
+  name              String
+  type              ZoneType                @default(ZONAS_COMUNES)
+  items             InventoryItem[]
+  templateItems     InventoryTemplateItem[]
+  property          Property?               @relation(fields: [propertyId], references: [id])
+  InventoryTemplate InventoryTemplate?      @relation(fields: [templateId], references: [id])
 }
 
 enum AIAnalysisStatus {
@@ -863,48 +867,75 @@ enum ZoneType {
 // ============================================
 
 model DataImportTemplate {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String
-  categoryId  String   // OWNER, TENANT, PROPERTY, CONTRACT
-  mapping     Json     // The stored column mappings
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  logs        DataImportLog[]
+  id         String          @id @default(cuid())
+  tenantId   String
+  name       String
+  categoryId String // OWNER, TENANT, PROPERTY, CONTRACT
+  mapping    Json // The stored column mappings
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  logs       DataImportLog[]
 }
 
 model DataImportLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  templateId  String?
-  fileName    String
-  sourceTag   String
-  status      String   // SUCCESS, FAILED, PARTIAL
-  recordsRead Int      @default(0)
-  recordsSaved Int     @default(0)
-  errors      Json?    // Detailed error log
-  createdAt   DateTime @default(now())
-  template    DataImportTemplate? @relation(fields: [templateId], references: [id])
+  id           String              @id @default(cuid())
+  tenantId     String
+  templateId   String?
+  fileName     String
+  sourceTag    String
+  status       String // SUCCESS, FAILED, PARTIAL
+  recordsRead  Int                 @default(0)
+  recordsSaved Int                 @default(0)
+  errors       Json? // Detailed error log
+  createdAt    DateTime            @default(now())
+  template     DataImportTemplate? @relation(fields: [templateId], references: [id])
 }
-  
-enum DocumentStatus {  
-  PENDING_AI  
-  PROCESSED  
-  FAILED  
-}  
-  
-model ContractDocument {  
-  id                 String @id @default(cuid())  
-  tenantId           String  
-  propertyId         String  
-  propertyRelationId String?  
-  fileUrl            String  
-  status             DocumentStatus @default(PENDING_AI)  
-  extractedData      Json?  
-  legalVerdict       Json?  
-  createdAt          DateTime @default(now())  
-  updatedAt          DateTime @updatedAt  
-  property         Property @relation(fields: [propertyId], references: [id])  
-  propertyRelation PropertyRelation? @relation(fields: [propertyRelationId], references: [id])  
-  tenant           Tenant @relation(fields: [tenantId], references: [id])  
-} 
+
+enum DocumentStatus {
+  PENDING_AI
+  PROCESSED
+  FAILED
+}
+
+model ContractDocument {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  propertyId         String
+  propertyRelationId String?
+  fileUrl            String
+  status             DocumentStatus    @default(PENDING_AI)
+  extractedData      Json?
+  legalVerdict       Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  property           Property          @relation(fields: [propertyId], references: [id])
+  propertyRelation   PropertyRelation? @relation(fields: [propertyRelationId], references: [id])
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+}
+
+model TenantSubscription {
+  id                  String   @id @default(cuid())
+  tenantId            String   @unique
+  planType            String   @default("BASIC")
+  monthlyTokenQuota   Int      @default(500000)
+  billingCycleStart   DateTime @default(now())
+  billingCycleEnd     DateTime
+  softLimitThreshold  Float    @default(0.8)
+  hardLimitEnabled    Boolean  @default(true)
+  currentTokensInput  Int      @default(0)
+  currentTokensOutput Int      @default(0)
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model TokenUsageLog {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String?
+  feature      String
+  tokensInput  Int
+  tokensOutput Int
+  modelUsed    String   @default("gpt-4o-mini")
+  costUsd      Float
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+}

@@ -1,20 +1,35 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { BYPASS_TENANT_GUARD_KEY } from './tenant-bypass.decorator';
 
 /**
  * TenantGuard — Enforces multi-tenant data isolation.
- * 
+ *
  * Ensures that the tenantId used in service calls comes from the JWT token
  * (req.user.tenantId), NOT from query parameters or request body.
- * 
+ *
  * For SUPERADMIN users, allows cross-tenant access if a tenantId is explicitly
  * provided in the query string.
- * 
+ *
  * Usage: Apply globally or per-controller. Controllers should then use
  * req['tenantId'] instead of @Query('tenantId').
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
   canActivate(context: ExecutionContext): boolean {
+    const isBypassed = this.reflector.getAllAndOverride<boolean>(
+      BYPASS_TENANT_GUARD_KEY,
+      [context.getHandler(), context.getClass()]
+    );
+    if (isBypassed) return true;
+
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
@@ -23,24 +38,37 @@ export class TenantGuard implements CanActivate {
 
     // SUPERADMIN can operate across tenants
     if (user.role === 'SUPERADMIN') {
-      // Allow explicit tenantId from query for cross-tenant operations
-      const resolvedTenant = request.query?.tenantId || user.tenantId;
+      // Allow explicit tenantId from query or params for cross-tenant operations
+      const resolvedTenant = request.query?.tenantId || request.params?.id || request.params?.tenantId || user.tenantId;
+
+      // If there's still no tenantId (SUPERADMIN with no tenant context),
+      // we must stop here to prevent downstream Prisma calls from receiving undefined.
+      if (!resolvedTenant) {
+        throw new ForbiddenException(
+          'SUPERADMIN: proporciona un ?tenantId= válido para esta operación.',
+        );
+      }
+
       request['tenantId'] = resolvedTenant;
       if (request.query) request.query.tenantId = resolvedTenant;
-      if (request.body && typeof request.body === 'object') request.body.tenantId = resolvedTenant;
+      if (request.body && typeof request.body === 'object')
+        request.body.tenantId = resolvedTenant;
       return true;
     }
 
     // For all other roles, enforce tenant from JWT
     if (!user.tenantId) {
-      throw new ForbiddenException('Acceso denegado: usuario sin tenant asignado.');
+      throw new ForbiddenException(
+        'Acceso denegado: usuario sin tenant asignado.',
+      );
     }
 
     // Override any client-supplied tenantId with the JWT's tenantId
     request['tenantId'] = user.tenantId;
     if (request.query) request.query.tenantId = user.tenantId;
-    if (request.body && typeof request.body === 'object') request.body.tenantId = user.tenantId;
-    
+    if (request.body && typeof request.body === 'object')
+      request.body.tenantId = user.tenantId;
+
     return true;
   }
 }

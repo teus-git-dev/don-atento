@@ -13,8 +13,10 @@ import { RolesGuard } from './roles.guard';
     PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'donatento_local_dev_secret_1234567890_donatento_local_dev_secret_1234567890',
-      signOptions: { expiresIn: '24h' },
+      secret:
+        process.env.JWT_SECRET ||
+        'donatento_local_dev_secret_1234567890_donatento_local_dev_secret_1234567890',
+      signOptions: { expiresIn: '1h' },
     }),
   ],
   controllers: [AuthController],
