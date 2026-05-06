@@ -74,20 +74,36 @@ describe('WhatsappService', () => {
     });
 
     it('should detect MAINTENANCE_REQUEST intent', () => {
-      expect(service.detectIntent('El calentador está roto')).toBe(Intent.MAINTENANCE_REQUEST);
-      expect(service.detectIntent('hay un daño en el baño')).toBe(Intent.MAINTENANCE_REQUEST);
-      expect(service.detectIntent('necesito reparar la llave')).toBe(Intent.MAINTENANCE_REQUEST);
+      expect(service.detectIntent('El calentador está roto')).toBe(
+        Intent.MAINTENANCE_REQUEST,
+      );
+      expect(service.detectIntent('hay un daño en el baño')).toBe(
+        Intent.MAINTENANCE_REQUEST,
+      );
+      expect(service.detectIntent('necesito reparar la llave')).toBe(
+        Intent.MAINTENANCE_REQUEST,
+      );
     });
 
     it('should detect PHOTO_SUBMISSION intent', () => {
-      expect(service.detectIntent('aqui esta la foto')).toBe(Intent.PHOTO_SUBMISSION);
-      expect(service.detectIntent('te mando el video')).toBe(Intent.PHOTO_SUBMISSION);
-      expect(service.detectIntent('aqui esta la evidencia del caso')).toBe(Intent.PHOTO_SUBMISSION);
+      expect(service.detectIntent('aqui esta la foto')).toBe(
+        Intent.PHOTO_SUBMISSION,
+      );
+      expect(service.detectIntent('te mando el video')).toBe(
+        Intent.PHOTO_SUBMISSION,
+      );
+      expect(service.detectIntent('aqui esta la evidencia del caso')).toBe(
+        Intent.PHOTO_SUBMISSION,
+      );
     });
 
     it('should detect STATUS_QUERY intent', () => {
-      expect(service.detectIntent('como va mi ticket?')).toBe(Intent.STATUS_QUERY);
-      expect(service.detectIntent('cual es el estado de mi solicitud')).toBe(Intent.STATUS_QUERY);
+      expect(service.detectIntent('como va mi ticket?')).toBe(
+        Intent.STATUS_QUERY,
+      );
+      expect(service.detectIntent('cual es el estado de mi solicitud')).toBe(
+        Intent.STATUS_QUERY,
+      );
     });
 
     it('should detect SURVEY_RESPONSE intent for ratings 1-5', () => {
@@ -101,7 +117,9 @@ describe('WhatsappService', () => {
     });
 
     it('should return UNKNOWN for unrecognized messages', () => {
-      expect(service.detectIntent('quiero saber el precio del arriendo')).toBe(Intent.UNKNOWN);
+      expect(service.detectIntent('quiero saber el precio del arriendo')).toBe(
+        Intent.UNKNOWN,
+      );
     });
   });
 });

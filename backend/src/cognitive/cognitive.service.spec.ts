@@ -12,9 +12,11 @@ describe('CognitiveService', () => {
     ticketInteraction: { create: jest.fn() },
     user: { findUnique: jest.fn() },
     tenant: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({ id: 'tenant-1', name: 'InCasa', brandBrain: null }),
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'tenant-1',
+        name: 'InCasa',
+        brandBrain: null,
+      }),
     },
   };
 
@@ -22,7 +24,9 @@ describe('CognitiveService', () => {
     getBrandContext: jest
       .fn()
       .mockResolvedValue('Don Atento es tu asistente de gestión de inmuebles.'),
-    generateBrandResponse: jest.fn().mockResolvedValue('Respuesta de marca generada.'),
+    generateBrandResponse: jest
+      .fn()
+      .mockResolvedValue('Respuesta de marca generada.'),
   };
 
   const mockAiChatService = {
@@ -78,8 +82,14 @@ describe('CognitiveService', () => {
     });
 
     it('should handle both accented and non-accented inundacion consistently', async () => {
-      const withAccent = await service.classifyPriority('Inundación', 'descripcion con acento');
-      const withoutAccent = await service.classifyPriority('Inundacion', 'descripcion sin acento');
+      const withAccent = await service.classifyPriority(
+        'Inundación',
+        'descripcion con acento',
+      );
+      const withoutAccent = await service.classifyPriority(
+        'Inundacion',
+        'descripcion sin acento',
+      );
       expect(withAccent.priority).toBe(withoutAccent.priority);
     });
 
