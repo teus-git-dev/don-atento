@@ -91,7 +91,7 @@ export default function FinOpsDashboard() {
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="name" axisLine={false} tickLine={false} />
             <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
-            <Tooltip cursor={{ fill: 'transparent' }} formatter={(value: number) => `$${value.toFixed(2)}`} />
+            <Tooltip cursor={{ fill: 'transparent' }} formatter={(value) => `$${Number(value).toFixed(2)}`} />
             <Legend iconType="circle" />
             <Bar dataKey="revenue" name="Ingreso (USD)" fill="#10B981" radius={[4, 4, 0, 0]} barSize={40} />
             <Bar dataKey="totalCostUsd" name="Costo LLM (USD)" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={40} />
