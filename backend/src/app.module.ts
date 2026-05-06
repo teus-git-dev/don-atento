@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { FilesController } from './files/files.controller';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { TicketsModule } from './tickets/tickets.module';
@@ -50,7 +51,7 @@ import { ContractsModule } from './contracts/contracts.module';
     TenantsModule,
     DataImportModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, FilesController],
   providers: [
     AppService,
     // Global JWT guard — all routes protected unless decorated with @Public()

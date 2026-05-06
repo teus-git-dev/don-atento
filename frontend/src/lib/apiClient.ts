@@ -12,23 +12,54 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const token = authService.getToken();
-
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
+    credentials: 'include', // Important for sending httpOnly cookies cross-origin
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // Si el servidor rechaza el token, cerramos sesión
-  if (res.status === 401) {
+  // Si el servidor rechaza el token (y no es el endpoint de refresh/login)
+  if (res.status === 401 && !path.startsWith('/auth/')) {
+    try {
+      // Intentar refrescar el token automáticamente
+      const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (refreshRes.ok) {
+        // Reintentar el request original
+        const retryRes = await fetch(`${API_URL}${path}`, {
+          method,
+          headers,
+          credentials: 'include',
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        
+        if (retryRes.ok) {
+          const text = await retryRes.text();
+          if (!text) return undefined as T;
+          return JSON.parse(text) as T;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to refresh token', e);
+    }
+    
+    // Si falla el refresh o el retry también dio 401
     authService.logout();
     throw new Error('Sesión expirada. Por favor ingresa nuevamente.');
+  }
+
+  // Si da 401 en /auth/refresh o /auth/login, no reintentamos
+  if (res.status === 401) {
+    authService.logout();
+    throw new Error('Sesión expirada o credenciales inválidas.');
   }
 
   if (!res.ok) {

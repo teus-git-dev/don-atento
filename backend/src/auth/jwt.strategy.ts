@@ -17,7 +17,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new Error('FATAL: JWT_SECRET environment variable is required. Server cannot start without it.');
     }
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (request: any) => {
+          let token = null;
+          if (request && request.cookies) {
+            token = request.cookies['don_atento_token_v1'];
+          }
+          return token;
+        },
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_SECRET,
     });

@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, PropertyType, PropertyStatus } from '@prisma/client';
-import * as xlsx from 'xlsx';
+import { parse as parseXlsx } from 'node-xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -16,13 +16,12 @@ export class DataImportService {
     categoryId: string,
   ) {
     try {
-      const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-
-      const rawData: any[][] = xlsx.utils.sheet_to_json(worksheet, {
-        header: 1,
-      });
+      const workSheets = parseXlsx(fileBuffer);
+      if (!workSheets || workSheets.length === 0) {
+        throw new BadRequestException('The file is empty or invalid.');
+      }
+      
+      const rawData = workSheets[0].data as any[][];
 
       if (!rawData || rawData.length === 0) {
         throw new BadRequestException('The file is empty.');
@@ -114,12 +113,9 @@ export class DataImportService {
       }
       mapping = template.mapping as Record<string, string>;
     }
-    const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-
-    const rawArray: any[][] = xlsx.utils.sheet_to_json(worksheet, {
-      header: 1,
-    });
+    const workSheets = parseXlsx(fileBuffer);
+    if (!workSheets || workSheets.length === 0) return null;
+    const rawArray = workSheets[0].data as any[][];
     if (!rawArray || rawArray.length === 0) return null;
 
     const headerRowIndex = 0;

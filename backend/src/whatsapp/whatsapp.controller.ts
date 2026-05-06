@@ -6,11 +6,14 @@ import {
   Query,
   HttpCode,
   HttpStatus,
-  Res,
+  Headers,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
-import { Response } from 'express';
+import { Request } from 'express';
 import { Public } from '../auth/public.decorator';
+import * as crypto from 'crypto';
 
 @Public() // WhatsApp webhook is called by Meta — no JWT available
 @Controller('whatsapp')
@@ -23,15 +26,25 @@ export class WhatsappController {
     @Query('hub.verify_token') token: string,
     @Query('hub.challenge') challenge: string,
   ) {
-    // Para simplificar, usamos un token fijo o guardado en .env
     const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
-    if (!verifyToken) {
-      console.error('WHATSAPP_VERIFY_TOKEN not set in environment.');
+    if (!verifyToken || !token) {
+      console.error('WHATSAPP_VERIFY_TOKEN not set or token missing.');
       return 'Configuration Error';
     }
 
-    if (mode === 'subscribe' && token === verifyToken) {
+    let isValid = false;
+    try {
+      const tokenBuffer = Buffer.from(token);
+      const verifyTokenBuffer = Buffer.from(verifyToken);
+      if (tokenBuffer.length === verifyTokenBuffer.length) {
+        isValid = crypto.timingSafeEqual(tokenBuffer, verifyTokenBuffer);
+      }
+    } catch(e) {
+       isValid = false;
+    }
+
+    if (mode === 'subscribe' && isValid) {
       console.log('WEBHOOK_VERIFIED');
       return challenge;
     }
@@ -41,9 +54,31 @@ export class WhatsappController {
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleIncomingMessage(@Body() body: any) {
-    // Registro de auditoría cognitiva: entrada de Meta
-    console.log('Incoming WhatsApp Body:', JSON.stringify(body, null, 2));
+  async handleIncomingMessage(
+    @Body() body: any,
+    @Headers('x-hub-signature-256') signature: string,
+    @Req() req: any, // RawBodyRequest
+  ) {
+    // Validate Meta Webhook Signature
+    const appSecret = process.env.WHATSAPP_APP_SECRET;
+    if (appSecret && signature && req.rawBody) {
+      const expectedSignature = 'sha256=' + crypto
+        .createHmac('sha256', appSecret)
+        .update(req.rawBody)
+        .digest('hex');
+      
+      try {
+        const expectedBuffer = Buffer.from(expectedSignature);
+        const signatureBuffer = Buffer.from(signature);
+        if (expectedBuffer.length !== signatureBuffer.length || !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) {
+          throw new UnauthorizedException('Invalid signature');
+        }
+      } catch (e) {
+        throw new UnauthorizedException('Invalid signature format');
+      }
+    }
+
+    // Registro de auditoría cognitiva: entrada de Meta (Sanitized to avoid logging full payload in prod if needed, but keeping for now per requirements or we can drop it. Let's remove the console.log of the full body to comply with the audit.)
 
     if (body.object) {
       if (

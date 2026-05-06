@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { JwtPayload } from './jwt.strategy';
 
 @Injectable()
@@ -45,9 +46,20 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload);
+    
+    // Generate and save Refresh Token
+    const refreshToken = crypto.randomBytes(40).toString('hex');
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      },
+    });
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -69,5 +81,61 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Token inválido o expirado.');
     }
+  }
+
+  async refreshToken(refreshTokenString: string) {
+    const tokenRecord = await this.prisma.refreshToken.findUnique({
+      where: { token: refreshTokenString },
+      include: { user: { include: { tenant: true } } },
+    });
+
+    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
+      if (tokenRecord) {
+        await this.prisma.refreshToken.delete({ where: { id: tokenRecord.id } });
+      }
+      throw new UnauthorizedException('Refresh token inválido o expirado');
+    }
+
+    const { user } = tokenRecord;
+    if (!user.isActive) {
+      throw new UnauthorizedException('Usuario inactivo');
+    }
+
+    // Generate new Access Token
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      tenantId: user.tenantId,
+      role: user.role,
+    };
+    const newAccessToken = this.jwtService.sign(payload);
+
+    // Generate new Refresh Token and invalidate old one (Rotation)
+    const newRefreshToken = crypto.randomBytes(40).toString('hex');
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.delete({ where: { id: tokenRecord.id } }),
+      this.prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          token: newRefreshToken,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        },
+      }),
+    ]);
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        tenantId: user.tenantId,
+        mustChangePassword: user.mustChangePassword,
+        tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name } : null,
+      },
+    };
   }
 }

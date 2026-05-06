@@ -18,15 +18,15 @@ export interface AuthUser {
   tenant?: { id: string; name: string } | null;
 }
 
-const TOKEN_KEY = 'don_atento_token_v1';
 const USER_KEY  = 'don_atento_user_v1';
 
 export const authService = {
-  /** Llama a POST /auth/login y guarda el token + usuario en localStorage */
+  /** Llama a POST /auth/login y guarda solo el usuario en localStorage. El token se guarda en cookie httpOnly */
   async login(email: string, password: string): Promise<AuthUser> {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Needed to receive and set the httpOnly cookie
       body: JSON.stringify({ email, password }),
     });
 
@@ -37,12 +37,9 @@ export const authService = {
       );
     }
 
-    const data = (await res.json()) as { accessToken: string; user: AuthUser & { mustChangePassword?: boolean } };
+    const data = (await res.json()) as { user: AuthUser & { mustChangePassword?: boolean } };
     if (typeof window !== 'undefined') {
-      localStorage.setItem(TOKEN_KEY, data.accessToken);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-      // Sync to cookie so Next.js middleware can protect routes
-      document.cookie = `don_atento_token_v1=${data.accessToken}; path=/; max-age=3600; SameSite=Strict; Secure`;
 
       // ── Force-reset guard: redirect before returning ──────────────────
       if (data.user.mustChangePassword) {
@@ -54,10 +51,9 @@ export const authService = {
     return data.user;
   },
 
-  /** Devuelve el JWT almacenado, o null si no hay sesión */
+  /** No longer used because token is in httpOnly cookie */
   getToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(TOKEN_KEY);
+    return null;
   },
 
   /** Devuelve el usuario autenticado, o null si no hay sesión */
@@ -69,17 +65,26 @@ export const authService = {
     catch { return null; }
   },
 
-  /** Retorna true si hay un token almacenado */
+  /** Retorna true si hay un usuario almacenado localmente */
   isAuthenticated(): boolean {
-    return !!authService.getToken();
+    return !!authService.getUser();
   },
 
-  /** Cierra sesión: limpia localStorage, cookie y redirige al login */
-  logout(): void {
+  /** Cierra sesión: limpia localStorage y hace logout (la cookie httpOnly debe limpiarse desde el backend) */
+  async logout(): Promise<void> {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
-      // Clear the auth cookie
+      
+      try {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+      } catch (e) {
+        console.error('Error on logout:', e);
+      }
+      
+      // Intentar limpiar cualquier cookie local (por si acaso quedó algo legacy)
       document.cookie = 'don_atento_token_v1=; path=/; max-age=0; SameSite=Strict; Secure';
       window.location.href = '/login';
     }

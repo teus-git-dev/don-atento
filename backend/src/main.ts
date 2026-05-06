@@ -10,7 +10,11 @@ import helmet from 'helmet';
 
 async function bootstrap() {
   dotenv.config();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  
+  const cookieParser = require('cookie-parser');
+  app.use(cookieParser());
+  
   app.setGlobalPrefix('api');
   app.use(
     helmet({
@@ -52,8 +56,7 @@ async function bootstrap() {
     }),
   );
 
-  // Serve static files from public/uploads
-  app.use('/uploads', express.static(join(process.cwd(), 'public/uploads')));
+  // Static files from public/uploads are now served securely via FilesController
 
   // Swagger docs only available in development
   if (process.env.NODE_ENV !== 'production') {

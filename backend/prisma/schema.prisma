@@ -617,6 +617,7 @@ model User {
   tenant                                           Tenant?                   @relation(fields: [tenantId], references: [id])
   WorkflowState_WorkflowState_assignedUserIdToUser WorkflowState[]           @relation("WorkflowState_assignedUserIdToUser")
   WorkflowState_RoleAssignments                    WorkflowState[]           @relation("RoleAssignments")
+  RefreshTokens                                    RefreshToken[]
 }
 
 model Workflow {
@@ -938,4 +939,13 @@ model TokenUsageLog {
   costUsd      Float
   createdAt    DateTime @default(now())
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
