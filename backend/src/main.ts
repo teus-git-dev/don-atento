@@ -1,15 +1,16 @@
 import { NestFactory } from '@nestjs/core';
+import * as dotenv from 'dotenv';
+dotenv.config(); // MUST BE BEFORE IMPORTING APP.MODULE TO SET JWT_SECRET!
+
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-import * as dotenv from 'dotenv';
 
 import { join } from 'path';
 import * as express from 'express';
 import helmet from 'helmet';
 
 async function bootstrap() {
-  dotenv.config();
   const app = await NestFactory.create(AppModule, { rawBody: true });
   
   const cookieParser = require('cookie-parser');

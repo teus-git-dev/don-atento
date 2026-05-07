@@ -24,7 +24,7 @@ export class AuthController {
     res.cookie('don_atento_token_v1', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 3600 * 1000, // 1 hour
       path: '/',
     });
@@ -32,7 +32,7 @@ export class AuthController {
     res.cookie('don_atento_refresh_v1', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 7 * 24 * 3600 * 1000, // 7 days
       path: '/api/auth/refresh', // only sent to refresh endpoint
     });
@@ -48,13 +48,13 @@ export class AuthController {
     res.clearCookie('don_atento_token_v1', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
     });
     res.clearCookie('don_atento_refresh_v1', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/api/auth/refresh',
     });
     return { success: true };
@@ -80,7 +80,7 @@ export class AuthController {
     res.cookie('don_atento_token_v1', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 3600 * 1000, // 1 hour
       path: '/',
     });
@@ -88,7 +88,7 @@ export class AuthController {
     res.cookie('don_atento_refresh_v1', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 7 * 24 * 3600 * 1000, // 7 days
       path: '/api/auth/refresh',
     });
