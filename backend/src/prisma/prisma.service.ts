@@ -8,8 +8,17 @@ export class PrismaService
 {
   constructor() {
     if (process.env.NODE_ENV === 'production') {
-      console.log(`[PrismaService] Connecting to Production Database`);
-      super();
+      const { Pool } = require('pg');
+      const { PrismaPg } = require('@prisma/adapter-pg');
+      
+      console.log(`[PrismaService] Connecting to Production Database (Supabase) via PrismaPg adapter`);
+      
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+      });
+      const adapter = new PrismaPg(pool);
+      
+      super({ adapter });
     } else {
       const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
       const dbPath = require('path').resolve('./dev.db');
