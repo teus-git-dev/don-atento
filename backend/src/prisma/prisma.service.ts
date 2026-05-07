@@ -8,8 +8,10 @@ export class PrismaService
 {
   constructor() {
     if (process.env.NODE_ENV === 'production') {
-      console.log(`[PrismaService] Connecting to Production Database (Supabase)`);
-      super(); // Usa conexión nativa de Prisma con DATABASE_URL
+      console.log(`[PrismaService] Connecting to Production Database`);
+      super({
+        datasourceUrl: process.env.DATABASE_URL,
+      });
     } else {
       const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
       const dbPath = require('path').resolve('./dev.db');
