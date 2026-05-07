@@ -16,7 +16,6 @@ async function bootstrap() {
   const cookieParser = require('cookie-parser');
   app.use(cookieParser());
   
-  app.setGlobalPrefix('api');
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // For static uploads
