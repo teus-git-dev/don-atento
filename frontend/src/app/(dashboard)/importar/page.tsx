@@ -1,5 +1,11 @@
 'use client';
 
+// TODO(security): migrate to apiClient — axios.post calls below do NOT set
+// withCredentials, so the httpOnly auth cookie does not travel. After the
+// data-import backend now requires JWT + ADMIN_TENANT/SUPERADMIN role
+// (commit fb95c7f), every call here will return 401 until migrated.
+// Tracked in AUDIT_REPORT.md.
+
 import React, { useState } from 'react';
 import { UploadCloud, CheckCircle, AlertTriangle, ArrowRight, Save, Play } from 'lucide-react';
 import axios from 'axios';
