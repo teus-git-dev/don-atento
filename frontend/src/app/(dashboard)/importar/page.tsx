@@ -1,15 +1,9 @@
 'use client';
 
-// TODO(security): migrate to apiClient — axios.post calls below do NOT set
-// withCredentials, so the httpOnly auth cookie does not travel. After the
-// data-import backend now requires JWT + ADMIN_TENANT/SUPERADMIN role
-// (commit fb95c7f), every call here will return 401 until migrated.
-// Tracked in AUDIT_REPORT.md.
-
 import React, { useState } from 'react';
 import { UploadCloud, CheckCircle, AlertTriangle, ArrowRight, Save, Play } from 'lucide-react';
 import axios from 'axios';
-import { TENANT_ID, API_URL } from '@/lib/config';
+import { API_URL } from '@/lib/config';
 
 export default function DataImportWizard() {
   const [step, setStep] = useState(1);
@@ -53,7 +47,7 @@ export default function DataImportWizard() {
       formData.append('tenantId', '11111111-1111-1111-1111-111111111111');
       formData.append('categoryId', categoryId);
 
-      const response = await axios.post(`${API_URL}/data-import/upload`, formData);
+      const response = await axios.post(`${API_URL}/data-import/upload`, formData, { withCredentials: true });
       // Filter out null/empty headers from Excel (e.g. merged cells)
       const cleanHeaders = (response.data.headers as (string | null)[]).filter((h): h is string => !!h);
       setHeaders(cleanHeaders);
@@ -115,21 +109,19 @@ export default function DataImportWizard() {
     try {
       // Step 1: Save the mapping as a reusable template
       const templateRes = await axios.post(`${API_URL}/data-import/templates`, {
-        tenantId: TENANT_ID,
         name: `Plantilla ${categoryId} - ${new Date().toLocaleDateString('es-CO')}`,
         categoryId,
         mapping,
-      });
+      }, { withCredentials: true });
 
       // Step 2: Send file as multipart/form-data — NO Base64, NO 413 error
       const formData = new FormData();
       formData.append('file', file!);
-      formData.append('tenantId', TENANT_ID);
       formData.append('templateId', templateRes.data.id);
       formData.append('categoryId', categoryId);
       formData.append('mapping', JSON.stringify(mapping)); // inline override
 
-      const res = await axios.post(`${API_URL}/data-import/execute`, formData);
+      const res = await axios.post(`${API_URL}/data-import/execute`, formData, { withCredentials: true });
 
       setImportStatus(res.data);
       setStep(4);
