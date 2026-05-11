@@ -5,75 +5,77 @@ import {
   UploadedFile,
   Body,
   Get,
-  Param,
   BadRequestException,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DataImportService } from './data-import.service';
-import { Public } from '../auth/public.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { TenantGuard } from '../auth/tenant.guard';
+import { Roles } from '../auth/roles.decorator';
 
+@ApiTags('data-import')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@Roles('ADMIN_TENANT', 'SUPERADMIN')
 @Controller('data-import')
 export class DataImportController {
   constructor(private readonly dataImportService: DataImportService) {}
 
-  @Public()
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
-    @Body('tenantId') tenantId: string,
+    @Req() req: Request,
     @Body('categoryId') categoryId: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    if (!tenantId) {
-      throw new BadRequestException('tenantId is required');
-    }
     return this.dataImportService.parseFileAndPreview(
       file.buffer,
       file.originalname,
-      tenantId,
+      req.tenantId!,
       categoryId,
     );
   }
 
-  @Public()
   @Post('templates')
-  async saveTemplate(@Body() body: any) {
-    const { tenantId, name, categoryId, mapping } = body;
+  async saveTemplate(@Req() req: Request, @Body() body: any) {
+    const { name, categoryId, mapping } = body;
     return this.dataImportService.saveTemplate(
-      tenantId,
+      req.tenantId!,
       name,
       categoryId,
       mapping,
     );
   }
 
-  @Public()
-  @Get('templates/:tenantId')
-  async getTemplates(@Param('tenantId') tenantId: string) {
-    return this.dataImportService.getTemplates(tenantId);
+  @Get('templates')
+  async getTemplates(@Req() req: Request) {
+    return this.dataImportService.getTemplates(req.tenantId!);
   }
 
-  @Public()
   @Post('execute')
   @UseInterceptors(FileInterceptor('file'))
   async executeImport(
     @UploadedFile() file: Express.Multer.File,
-    @Body('tenantId') tenantId: string,
+    @Req() req: Request,
     @Body('templateId') templateId: string,
     @Body('categoryId') categoryId: string,
     @Body('mapping') mappingRaw: string,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    if (!tenantId) throw new BadRequestException('tenantId is required');
     // mapping arrives as a JSON string from FormData
     const mapping = mappingRaw ? JSON.parse(mappingRaw) : undefined;
     return this.dataImportService.executeImport(
       file.buffer,
       file.originalname,
-      tenantId,
+      req.tenantId!,
       templateId,
       categoryId,
       mapping,
