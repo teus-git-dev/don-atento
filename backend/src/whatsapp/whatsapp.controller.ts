@@ -9,9 +9,12 @@ import {
   Headers,
   Req,
   UnauthorizedException,
+  InternalServerErrorException,
+  BadRequestException,
+  RawBodyRequest,
 } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { Public } from '../auth/public.decorator';
 import * as crypto from 'crypto';
 
@@ -28,28 +31,29 @@ export class WhatsappController {
   ) {
     const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
-    if (!verifyToken || !token) {
-      console.error('WHATSAPP_VERIFY_TOKEN not set or token missing.');
-      return 'Configuration Error';
+    // Fail-closed: server misconfiguration is a 500, never a silent 200.
+    if (!verifyToken) {
+      throw new InternalServerErrorException(
+        'WHATSAPP_VERIFY_TOKEN not configured',
+      );
+    }
+    if (!token) {
+      throw new UnauthorizedException('Missing hub.verify_token');
+    }
+    if (mode !== 'subscribe') {
+      throw new BadRequestException('Invalid hub.mode');
     }
 
-    let isValid = false;
-    try {
-      const tokenBuffer = Buffer.from(token);
-      const verifyTokenBuffer = Buffer.from(verifyToken);
-      if (tokenBuffer.length === verifyTokenBuffer.length) {
-        isValid = crypto.timingSafeEqual(tokenBuffer, verifyTokenBuffer);
-      }
-    } catch(e) {
-       isValid = false;
+    const tokenBuffer = Buffer.from(token);
+    const verifyTokenBuffer = Buffer.from(verifyToken);
+    if (
+      tokenBuffer.length !== verifyTokenBuffer.length ||
+      !crypto.timingSafeEqual(tokenBuffer, verifyTokenBuffer)
+    ) {
+      throw new UnauthorizedException('Invalid hub.verify_token');
     }
 
-    if (mode === 'subscribe' && isValid) {
-      console.log('WEBHOOK_VERIFIED');
-      return challenge;
-    }
-    console.warn(`Webhook Verification failed. Mode: ${mode}, Token: ${token}`);
-    return 'Verification failed';
+    return challenge;
   }
 
   @Post('webhook')
@@ -57,28 +61,39 @@ export class WhatsappController {
   async handleIncomingMessage(
     @Body() body: any,
     @Headers('x-hub-signature-256') signature: string,
-    @Req() req: any, // RawBodyRequest
+    @Req() req: RawBodyRequest<Request>,
   ) {
-    // Validate Meta Webhook Signature
+    // Validate Meta Webhook Signature — fail-closed.
+    // Any missing piece (env var, header, raw body) means we cannot verify
+    // authenticity, so we refuse to process the message instead of silently
+    // accepting it as before.
     const appSecret = process.env.WHATSAPP_APP_SECRET;
-    if (appSecret && signature && req.rawBody) {
-      const expectedSignature = 'sha256=' + crypto
-        .createHmac('sha256', appSecret)
-        .update(req.rawBody)
-        .digest('hex');
-      
-      try {
-        const expectedBuffer = Buffer.from(expectedSignature);
-        const signatureBuffer = Buffer.from(signature);
-        if (expectedBuffer.length !== signatureBuffer.length || !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) {
-          throw new UnauthorizedException('Invalid signature');
-        }
-      } catch (e) {
-        throw new UnauthorizedException('Invalid signature format');
-      }
+    if (!appSecret) {
+      throw new InternalServerErrorException(
+        'WHATSAPP_APP_SECRET not configured',
+      );
+    }
+    if (!signature) {
+      throw new UnauthorizedException('Missing x-hub-signature-256 header');
+    }
+    if (!req.rawBody) {
+      throw new InternalServerErrorException(
+        'Raw body not available — main.ts must set rawBody: true',
+      );
     }
 
-    // Registro de auditoría cognitiva: entrada de Meta (Sanitized to avoid logging full payload in prod if needed, but keeping for now per requirements or we can drop it. Let's remove the console.log of the full body to comply with the audit.)
+    const expectedSignature =
+      'sha256=' +
+      crypto.createHmac('sha256', appSecret).update(req.rawBody).digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const signatureBuffer = Buffer.from(signature);
+    if (
+      expectedBuffer.length !== signatureBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
+    ) {
+      throw new UnauthorizedException('Invalid signature');
+    }
 
     if (body.object) {
       if (

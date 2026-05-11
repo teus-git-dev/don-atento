@@ -28,6 +28,10 @@ services:
         sync: false
       - key: WHATSAPP_ENCRYPTION_KEY
         sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false  # Meta App Secret — required for webhook signature validation
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false  # Required for webhook subscription verification
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
