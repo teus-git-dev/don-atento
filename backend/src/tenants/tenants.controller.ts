@@ -1,14 +1,30 @@
-import { Controller, Get, Patch, Post, Body, Req, Param, UseGuards, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Body,
+  Req,
+  Param,
+  UseGuards,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { BypassTenantGuard } from '../auth/tenant-bypass.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
-import { OnboardingService, ProvisionTenantInput, UpdateTenantAdminInput } from './onboarding.service';
+import {
+  OnboardingService,
+  ProvisionTenantInput,
+  UpdateTenantAdminInput,
+} from './onboarding.service';
 
 @ApiTags('tenants')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('tenants')
 export class TenantsController {
   constructor(
@@ -18,15 +34,12 @@ export class TenantsController {
 
   // ─── SuperAdmin: Provision new Inmobiliaria ───────────────────────────────
   @Post('provision')
-  @ApiOperation({ summary: 'SUPERADMIN: Provision a new Inmobiliaria (Tenant + Admin User + Welcome Email)' })
-  async provisionTenant(
-    @Req() req: any,
-    @Body() body: ProvisionTenantInput,
-  ) {
-    if (req.user?.role !== 'SUPERADMIN') {
-      throw new ForbiddenException('Solo los SuperAdmins pueden provisionar nuevas inmobiliarias.');
-    }
-
+  @Roles('SUPERADMIN')
+  @ApiOperation({
+    summary:
+      'SUPERADMIN: Provision a new Inmobiliaria (Tenant + Admin User + Welcome Email)',
+  })
+  async provisionTenant(@Body() body: ProvisionTenantInput) {
     const result = await this.onboardingService.provisionNewTenant(body);
 
     // ⚠ The temporaryPassword is returned ONCE here for the SuperAdmin to copy.
@@ -56,24 +69,32 @@ export class TenantsController {
       throw new ForbiddenException('Las contraseñas no coinciden.');
     }
 
-    await this.onboardingService.completePasswordReset(userId, body.newPassword);
+    await this.onboardingService.completePasswordReset(
+      userId,
+      body.newPassword,
+    );
 
-    return { success: true, message: 'Contraseña actualizada correctamente. Bienvenido/a.' };
+    return {
+      success: true,
+      message: 'Contraseña actualizada correctamente. Bienvenido/a.',
+    };
   }
 
   // ─── SuperAdmin: Update Admin User of an existing Tenant ─────────────────
   @Patch(':id/admin')
-  @ApiOperation({ summary: 'SUPERADMIN: Update tenant admin user info. Re-sends welcome email if email changes.' })
+  @Roles('SUPERADMIN')
+  @ApiOperation({
+    summary:
+      'SUPERADMIN: Update tenant admin user info. Re-sends welcome email if email changes.',
+  })
   async updateTenantAdmin(
-    @Req() req: any,
     @Param('id') tenantId: string,
     @Body() body: Omit<UpdateTenantAdminInput, 'tenantId'>,
   ) {
-    if (req.user?.role !== 'SUPERADMIN') {
-      throw new ForbiddenException('Solo los SuperAdmins pueden modificar el admin de una inmobiliaria.');
-    }
-
-    const result = await this.onboardingService.updateTenantAdmin({ ...body, tenantId });
+    const result = await this.onboardingService.updateTenantAdmin({
+      ...body,
+      tenantId,
+    });
 
     return {
       success: true,
@@ -83,18 +104,18 @@ export class TenantsController {
         ? 'Admin actualizado. Se envió un email con nuevas credenciales temporales.'
         : 'Admin actualizado correctamente.',
       // Only present when email changed — show ONCE to SuperAdmin
-      ...(result.newTemporaryPassword && { newTemporaryPassword: result.newTemporaryPassword }),
+      ...(result.newTemporaryPassword && {
+        newTemporaryPassword: result.newTemporaryPassword,
+      }),
     };
   }
 
   // ─── SuperAdmin: List all tenants ────────────────────────────────────────
   @BypassTenantGuard()
+  @Roles('SUPERADMIN')
   @Get()
   @ApiOperation({ summary: 'SUPERADMIN: List all tenants' })
-  async listTenants(@Req() req: any) {
-    if (req.user?.role !== 'SUPERADMIN') {
-      throw new ForbiddenException('Solo los SuperAdmins pueden listar todos los tenants.');
-    }
+  async listTenants() {
     return this.prisma.tenant.findMany({
       select: { id: true, name: true, nit: true, status: true },
       orderBy: { name: 'asc' },
@@ -131,6 +152,7 @@ export class TenantsController {
   }
 
   @Patch('whatsapp-config')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Save WhatsApp credentials for the current tenant' })
   async saveWhatsappConfig(
     @Req() req: any,
@@ -158,6 +180,7 @@ export class TenantsController {
   }
 
   @Patch('whatsapp-disconnect')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Disconnect WhatsApp from the current tenant' })
   async disconnectWhatsapp(@Req() req: any) {
     const tenantId = req['tenantId'];
