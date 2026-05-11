@@ -17,6 +17,17 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] `auth.module.ts` — JWT_SECRET fallback to literal string `'MISSING_JWT_SECRET'`
+
+- **Resolved by**: 8a47e5c (`security(auth): fail-fast at module load if JWT_SECRET missing`)
+- **Surfaced by**: auth module audit (ALTO #1)
+- **What was wrong**: `JwtModule.register({ secret: process.env.JWT_SECRET || 'MISSING_JWT_SECRET' })`
+  meant any future code path calling `JwtService.sign(...)` could silently
+  sign tokens with the literal constant in misconfigured environments.
+- **What was applied**: Top-level `const + throw` at module load mirroring
+  the existing check in `jwt.strategy.ts:16-19`. Server refuses to import
+  AuthModule if env is missing.
+
 ### [x] Frontend `importar/page.tsx` — axios without `withCredentials` after data-import auth fix
 
 - **Resolved by**: e7ac51b (`fix: importar page send credentials with axios`)
