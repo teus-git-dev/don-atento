@@ -1,13 +1,16 @@
-# Render Blueprint — Don Atento Backend
+# Render Blueprint — Don Atento
 # https://render.com/docs/blueprint-spec
+
 services:
+  # ── API Backend ──────────────────────────────────────────────────────────────
   - type: web
     name: don-atento-api
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npm run start:prod
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -20,7 +23,7 @@ services:
       - key: DIRECT_URL
         sync: false
       - key: JWT_SECRET
-        sync: false  # Set manually (128-char secret)
+        sync: false  # Set manually (128-char secret: openssl rand -hex 64)
       - key: GEMINI_API_KEY
         sync: false
       - key: WHATSAPP_ENCRYPTION_KEY
@@ -31,3 +34,15 @@ services:
         sync: false
       - key: SUPABASE_STORAGE_BUCKET
         value: atento-media
+      - key: REDIS_URL
+        fromService:
+          name: don-atento-redis
+          type: redis
+          property: connectionString
+
+  # ── Redis (WhatsApp conversation state) ──────────────────────────────────────
+  - type: redis
+    name: don-atento-redis
+    region: oregon
+    plan: free
+    maxmemoryPolicy: allkeys-lru

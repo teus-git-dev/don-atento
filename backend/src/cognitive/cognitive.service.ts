@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SentimentAnalysis, InteractionChannel } from '@prisma/client';
 import {
@@ -23,6 +23,8 @@ import { TicketPriority } from '@prisma/client';
 
 @Injectable()
 export class CognitiveService {
+  private readonly logger = new Logger(CognitiveService.name);
+
   constructor(
     private prisma: PrismaService,
     private brandBrain: BrandBrainService,
@@ -37,40 +39,49 @@ export class CognitiveService {
     return this.aiChatService.processChat(tenantId, userId, message);
   }
 
-  async processWhatsappWithAi(tenantId: string, message: string, context?: { name?: string; address?: string; systemAction?: string }) {
-    return this.aiChatService.processWhatsappMessage(tenantId, message, context);
+  async processWhatsappWithAi(
+    tenantId: string,
+    message: string,
+    context?: { name?: string; address?: string; systemAction?: string },
+  ) {
+    return this.aiChatService.processWhatsappMessage(
+      tenantId,
+      message,
+      context,
+    );
   }
 
+  /**
+   * FinOps Analytics — returns per-tenant ticket volume and property counts.
+   * NOTE: The original implementation referenced a `TenantSubscription` model
+   * that does not exist in schema.prisma. This corrected version uses the
+   * actual Tenant model and aggregates real usage metrics.
+   * TODO: Add a `TenantSubscription` model with token tracking for true FinOps.
+   */
   async getFinOpsAnalytics() {
-    const subscriptions = await this.prisma.tenantSubscription.findMany({
-      include: { tenant: true },
+    const tenants = await this.prisma.tenant.findMany({
+      include: {
+        _count: {
+          select: {
+            properties: true,
+            tickets: true,
+            users: true,
+          },
+        },
+        subscriptionPlan: true,
+      },
     });
 
-    const analytics = subscriptions.map((sub) => {
-      const revenue = sub.planType === 'PRO' ? 202 : 137;
-      
-      // Calculate real cost directly from DB aggregation of TokenUsageLogs
-      // Though we could theoretically sum currentTokensInput/Output, reading the raw logs gives financial accuracy.
-      // But to be fast, we'll just calculate based on the currentTokens since they represent the billing cycle.
-      const costIn = (sub.currentTokensInput / 1000000) * 0.150;
-      const costOut = (sub.currentTokensOutput / 1000000) * 0.600;
-      const totalCostUsd = costIn + costOut;
-
-      const margin = revenue - totalCostUsd;
-
-      return {
-        tenantId: sub.tenantId,
-        name: sub.tenant?.name || 'Agencia Desconocida',
-        planType: sub.planType,
-        tokenQuota: sub.monthlyTokenQuota,
-        totalUsed: sub.currentTokensInput + sub.currentTokensOutput,
-        totalCostUsd: Number(totalCostUsd.toFixed(4)),
-        revenue,
-        margin: Number(margin.toFixed(4)),
-      };
-    });
-
-    return analytics;
+    return tenants.map((tenant) => ({
+      tenantId: tenant.id,
+      name: tenant.name,
+      planName: tenant.subscriptionPlan?.name ?? 'Unknown',
+      priceMonthly: tenant.subscriptionPlan?.priceMonthly ?? 0,
+      propertyCount: tenant._count.properties,
+      ticketCount: tenant._count.tickets,
+      userCount: tenant._count.users,
+      status: tenant.status,
+    }));
   }
 
   async generateResponse(

@@ -1,5 +1,4 @@
 import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
-// Trigger hot reload
 import { HttpService } from '@nestjs/axios';
 import { TicketsService } from '../tickets/tickets.service';
 import { firstValueFrom } from 'rxjs';
@@ -13,6 +12,7 @@ import {
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { CrmService } from '../crm/crm.service';
 import { BaileysManager } from './baileys.manager';
+import * as IORedis from 'ioredis';
 
 export enum Intent {
   GREETING = 'GREETING',
@@ -25,13 +25,14 @@ export enum Intent {
   UNKNOWN = 'UNKNOWN',
 }
 
+/** Seconds a conversation state entry lives in Redis before auto-expiry */
+const CONVERSATION_TTL_SECONDS = 900; // 15 minutes
+
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
-  private conversationState = new Map<
-    string,
-    { step: string; timestamp: number; data?: any }
-  >();
+  /** Redis client for persistent conversation state — survives restarts and scales horizontally */
+  private readonly redis: IORedis.Redis;
 
   constructor(
     private readonly httpService: HttpService,
@@ -42,6 +43,21 @@ export class WhatsappService {
     private readonly crmService: CrmService,
     private readonly baileysManager: BaileysManager,
   ) {
+    // Use REDIS_URL env var if available, otherwise default to local Redis.
+    // Falls back gracefully: if Redis is unreachable, conversation state is simply lost
+    // (stateless fallback — no crash).
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    this.redis = new IORedis.Redis(redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+    });
+    this.redis.on('error', (err) =>
+      this.logger.warn(
+        `[Redis] Connection issue: ${err.message} — conversation state may be ephemeral`,
+      ),
+    );
+
     this.baileysManager.setMessageHandler(
       async (tenantId, from, text, mediaType) => {
         this.logger.log(
@@ -56,6 +72,44 @@ export class WhatsappService {
         );
       },
     );
+  }
+
+  /** Get conversation state from Redis (returns null on miss or Redis error) */
+  private async getState(
+    key: string,
+  ): Promise<{ step: string; timestamp: number; data?: any } | null> {
+    try {
+      const raw = await this.redis.get(`wa:state:${key}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Set conversation state in Redis with automatic TTL */
+  private async setState(
+    key: string,
+    value: { step: string; timestamp: number; data?: any },
+  ): Promise<void> {
+    try {
+      await this.redis.set(
+        `wa:state:${key}`,
+        JSON.stringify(value),
+        'EX',
+        CONVERSATION_TTL_SECONDS,
+      );
+    } catch (err) {
+      this.logger.warn(`[Redis] setState failed for ${key}: ${err.message}`);
+    }
+  }
+
+  /** Delete conversation state from Redis */
+  private async deleteState(key: string): Promise<void> {
+    try {
+      await this.redis.del(`wa:state:${key}`);
+    } catch {
+      // Best-effort — silent failure is acceptable
+    }
   }
 
   detectIntent(input: string): Intent {
@@ -107,18 +161,13 @@ export class WhatsappService {
     phoneNumberId?: string,
     receivedOnTenantId?: string,
   ) {
-    const fs = require('fs');
-    const logMsg = (m: string) => {
-      const line = `[${new Date().toISOString()}] [WA_LOG] ${m}\n`;
-      fs.appendFileSync('whatsapp_debug.log', line);
-      this.logger.log(m);
-    };
+    const logMsg = (m: string) => this.logger.log(`[WA] ${m}`);
 
     logMsg(`Incoming message from ${from}: "${text}"`);
     const cleanPhone = from.split('@')[0];
     const intent = this.detectIntent(text);
     logMsg(`Detected intent: ${intent} for phone: ${cleanPhone}`);
-    
+
     let resolvedTenantId = receivedOnTenantId || null;
     if (phoneNumberId) {
       const tenantByPhone = await this.prisma.tenant.findFirst({
@@ -129,7 +178,9 @@ export class WhatsappService {
 
     const normalizedIncoming = cleanPhone.replace(/[^0-9]/g, '');
     const last10Digits =
-      normalizedIncoming.length >= 10 ? normalizedIncoming.slice(-10) : normalizedIncoming;
+      normalizedIncoming.length >= 10
+        ? normalizedIncoming.slice(-10)
+        : normalizedIncoming;
 
     const user = await this.prisma.user.findFirst({
       where: {
@@ -143,14 +194,16 @@ export class WhatsappService {
       include: { tenant: true },
     });
 
-    logMsg(`User lookup result: ${user ? `${user.firstName} (ID: ${user.id})` : 'NOT FOUND'}`);
+    logMsg(
+      `User lookup result: ${user ? `${user.firstName} (ID: ${user.id})` : 'NOT FOUND'}`,
+    );
 
     if (!resolvedTenantId && user?.tenantId) {
       resolvedTenantId = user.tenantId;
     }
 
     if (!user) {
-      const state = this.conversationState.get(from);
+      const state = await this.getState(from);
 
       if (state?.step === 'AWAITING_OWNER_NAME') {
         const ownerName = text.trim();
@@ -175,7 +228,7 @@ export class WhatsappService {
             data: { additionalContacts: updatedContacts },
           });
 
-          this.conversationState.delete(from);
+          await this.deleteState(from);
           const linkMsg = `Excelente. He verificado que los datos concuerdan y estás en nuestros registros.\n\nTe he vinculado como contacto autorizado para este inmueble en nuestro sistema Don IQ. ¿En qué te puedo ayudar hoy con respecto al inmueble?`;
           return this.sendMessage(from, linkMsg, resolvedTenantId || undefined);
         } else {
@@ -188,10 +241,10 @@ export class WhatsappService {
         }
       }
 
-      // First time asking
+      // First time asking — set state in Redis with TTL
       const unknownMsg = `¡Bienvenido a Incasa! Soy Daniel. ¿En qué te puedo ayudar con tu inmueble hoy?\n\nHe notado que tu número no está actualmente vinculado a una propiedad. Para poder asistirte y reportar cualquier daño, ¿podrías indicarme el número de identificación (Cédula) del titular principal del contrato?`;
 
-      this.conversationState.set(from, {
+      await this.setState(from, {
         step: 'AWAITING_OWNER_NAME',
         timestamp: Date.now(),
       });
@@ -199,15 +252,27 @@ export class WhatsappService {
     }
 
     // Intercept Disambiguation State BEFORE anything else
-    const state = this.conversationState.get(from);
+    const state = await this.getState(from);
     if (user && state?.step === 'AWAITING_TICKET_DISAMBIGUATION') {
       const choice = parseInt(text.trim());
-      const { activeTickets, originalText, finalCleanResponse, propertyName, propertyId, resolvedTenantId, dbSentiment } = state.data;
-      
-      this.conversationState.delete(from);
+      const {
+        activeTickets,
+        originalText,
+        finalCleanResponse,
+        propertyName,
+        propertyId,
+        resolvedTenantId,
+        dbSentiment,
+      } = state.data;
+
+      await this.deleteState(from);
 
       if (isNaN(choice) || choice < 0 || choice > activeTickets.length) {
-        return this.sendMessage(from, `❌ Opción no válida. Por favor, escribe un número entre 0 y ${activeTickets.length}.`, resolvedTenantId || undefined);
+        return this.sendMessage(
+          from,
+          `❌ Opción no válida. Por favor, escribe un número entre 0 y ${activeTickets.length}.`,
+          resolvedTenantId || undefined,
+        );
       }
 
       if (choice === 0) {
@@ -217,8 +282,11 @@ export class WhatsappService {
             where: { tenantId: resolvedTenantId || user.tenantId || 'default' },
           });
           if (!workflow) workflow = await this.prisma.workflow.findFirst();
-          
-          const title = originalText.length > 50 ? originalText.substring(0, 47) + '...' : originalText;
+
+          const title =
+            originalText.length > 50
+              ? originalText.substring(0, 47) + '...'
+              : originalText;
           const newTicket = await this.ticketsService.createTicket({
             tenantId: resolvedTenantId || user.tenantId || 'default',
             propertyId: propertyId,
@@ -230,18 +298,38 @@ export class WhatsappService {
             priority: 'MEDIUM',
             attachments: undefined,
           });
-          const short = (newTicket as any).shortId || newTicket.id.split('-')[0].toUpperCase();
-          const response = finalCleanResponse + `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
-          return this.sendMessage(from, response, resolvedTenantId || undefined);
+          const short =
+            (newTicket as any).shortId ||
+            newTicket.id.split('-')[0].toUpperCase();
+          const response =
+            finalCleanResponse +
+            `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
+          return this.sendMessage(
+            from,
+            response,
+            resolvedTenantId || undefined,
+          );
         } catch (error) {
           this.logger.error('Error auto-creating ticket:', error);
-          return this.sendMessage(from, `Lo siento ${user.firstName}, tuve un inconveniente técnico intentando crear el reporte.`, resolvedTenantId || undefined);
+          return this.sendMessage(
+            from,
+            `Lo siento ${user.firstName}, tuve un inconveniente técnico intentando crear el reporte.`,
+            resolvedTenantId || undefined,
+          );
         }
       } else {
         // Append to existing ticket
         const selectedTicket = activeTickets[choice - 1];
-        await this.cognitiveService.logInteraction(selectedTicket.id, user.id, `[Client WA] ${originalText}`, InteractionChannel.WHATSAPP, dbSentiment);
-        const response = finalCleanResponse + `\n\n*(Información anexada a tu Ticket activo #${selectedTicket.shortId || selectedTicket.id.split('-')[0].toUpperCase()})*`;
+        await this.cognitiveService.logInteraction(
+          selectedTicket.id,
+          user.id,
+          `[Client WA] ${originalText}`,
+          InteractionChannel.WHATSAPP,
+          dbSentiment,
+        );
+        const response =
+          finalCleanResponse +
+          `\n\n*(Información anexada a tu Ticket activo #${selectedTicket.shortId || selectedTicket.id.split('-')[0].toUpperCase()})*`;
         return this.sendMessage(from, response, resolvedTenantId || undefined);
       }
     }
@@ -265,29 +353,36 @@ export class WhatsappService {
 
     // 1. Process with AI FIRST to get Sentiment and Action
     let aiResponse = '';
-    let parsedMetadata: any = {};
+    const parsedMetadata: any = {};
     let finalCleanResponse = '';
 
     try {
-      this.logger.log(`[WhatsApp Hybrid] Sending intent resolution to Cognitive AI...`);
+      this.logger.log(
+        `[WhatsApp Hybrid] Sending intent resolution to Cognitive AI...`,
+      );
       const aiTenantId = resolvedTenantId || user?.tenantId || 'default';
-      aiResponse = await this.cognitiveService.processWhatsappWithAi(aiTenantId, text, {
-        name: user.firstName,
-        address: propertyName,
-        systemAction: '',
-      });
+      aiResponse = await this.cognitiveService.processWhatsappWithAi(
+        aiTenantId,
+        text,
+        {
+          name: user.firstName,
+          address: propertyName,
+          systemAction: '',
+        },
+      );
 
       const match = aiResponse.match(/\[METADATA\]([\s\S]*?)\[\/METADATA\]/);
       if (match) {
         finalCleanResponse = aiResponse.replace(match[0], '').trim();
         const metaStr = match[1];
-        
+
         const sentimentMatch = metaStr.match(/Sentiment:\s*(.*)/);
         const intensityMatch = metaStr.match(/Intensity Score:\s*(.*)/);
         const actionMatch = metaStr.match(/Action:\s*(.*)/);
-        
+
         if (sentimentMatch) parsedMetadata.sentiment = sentimentMatch[1].trim();
-        if (intensityMatch) parsedMetadata.intensity = parseInt(intensityMatch[1].trim(), 10);
+        if (intensityMatch)
+          parsedMetadata.intensity = parseInt(intensityMatch[1].trim(), 10);
         if (actionMatch) parsedMetadata.action = actionMatch[1].trim();
       } else {
         finalCleanResponse = aiResponse;
@@ -303,7 +398,13 @@ export class WhatsappService {
       const s = parsedMetadata.sentiment.toUpperCase();
       if (s.includes('SATISFIED')) dbSentiment = 'POSITIVE';
       else if (s.includes('NEUTRAL')) dbSentiment = 'NEUTRAL';
-      else if (s.includes('FRUSTRATED') || s.includes('ANGRY') || s.includes('CRITICAL') || s.includes('HOSTILE')) dbSentiment = 'NEGATIVE';
+      else if (
+        s.includes('FRUSTRATED') ||
+        s.includes('ANGRY') ||
+        s.includes('CRITICAL') ||
+        s.includes('HOSTILE')
+      )
+        dbSentiment = 'NEGATIVE';
     }
 
     let aiAction = parsedMetadata.action || 'GENERAL_REPLY';
@@ -329,7 +430,8 @@ export class WhatsappService {
 
     // 2. Logic Routing based on Intent & AI Action
     if (intent === Intent.PHOTO_SUBMISSION || mediaUrl) {
-      const latestTicket = await this.ticketsService.findLatestByPhone(cleanPhone);
+      const latestTicket =
+        await this.ticketsService.findLatestByPhone(cleanPhone);
       if (latestTicket && !latestTicket.resolvedAt) {
         finalResponse = `He recibido el archivo/evidencia y lo he anexado a tu reporte actual (Ticket #${(latestTicket as any).shortId || latestTicket.id.split('-')[0].toUpperCase()}).`;
       } else {
@@ -338,27 +440,38 @@ export class WhatsappService {
     } else if (aiAction === 'DE_ESCALATE') {
       // AI determined the user is hostile and did not specify the problem.
       // We ONLY send the AI's calming response. We DO NOT create a ticket.
-      this.logger.log(`[WA AI Routing] De-escalation triggered. No ticket created.`);
+      this.logger.log(
+        `[WA AI Routing] De-escalation triggered. No ticket created.`,
+      );
     } else if (aiAction === 'CREATE_TICKET') {
       try {
         const activeTickets = await this.prisma.ticket.findMany({
           where: { reportedByUserPhone: cleanPhone, resolvedAt: null },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'desc' },
         });
 
         if (activeTickets.length > 0) {
           // INTERCEPT: Ask for disambiguation
           let menuMsg = `¡Hola, ${user.firstName}! Veo que actualmente tienes los siguientes reportes activos en ${propertyName}:\n\n`;
           activeTickets.forEach((t, i) => {
-             const short = (t as any).shortId || t.id.split('-')[0].toUpperCase();
-             menuMsg += `*${i + 1}.* ${short} - ${t.title}\n`;
+            const short =
+              (t as any).shortId || t.id.split('-')[0].toUpperCase();
+            menuMsg += `*${i + 1}.* ${short} - ${t.title}\n`;
           });
           menuMsg += `\n*0.* 🆕 Es un problema totalmente nuevo.\n\n¿Este mensaje está relacionado con alguno de esos reportes? *Por favor, responde únicamente con el número de la opción.*`;
-          
-          this.conversationState.set(from, {
+
+          await this.setState(from, {
             step: 'AWAITING_TICKET_DISAMBIGUATION',
             timestamp: Date.now(),
-            data: { activeTickets, originalText: text, finalCleanResponse, propertyName, propertyId, resolvedTenantId, dbSentiment }
+            data: {
+              activeTickets,
+              originalText: text,
+              finalCleanResponse,
+              propertyName,
+              propertyId,
+              resolvedTenantId,
+              dbSentiment,
+            },
           });
 
           finalResponse = menuMsg;
@@ -368,7 +481,7 @@ export class WhatsappService {
             where: { tenantId: resolvedTenantId || user.tenantId || 'default' },
           });
           if (!workflow) workflow = await this.prisma.workflow.findFirst();
-          
+
           const title = text.length > 50 ? text.substring(0, 47) + '...' : text;
           const newTicket = await this.ticketsService.createTicket({
             tenantId: resolvedTenantId || user.tenantId || 'default',
@@ -381,8 +494,12 @@ export class WhatsappService {
             priority: 'MEDIUM',
             attachments: undefined,
           });
-          const short = (newTicket as any).shortId || newTicket.id.split('-')[0].toUpperCase();
-          finalResponse = finalCleanResponse + `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
+          const short =
+            (newTicket as any).shortId ||
+            newTicket.id.split('-')[0].toUpperCase();
+          finalResponse =
+            finalCleanResponse +
+            `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
         }
       } catch (error) {
         this.logger.error('Error auto-creating ticket:', error);
@@ -391,43 +508,76 @@ export class WhatsappService {
     } else {
       // GENERAL_REPLY
       if (intent === Intent.STATUS_QUERY) {
-        const latestTicket = await this.ticketsService.findLatestByPhone(cleanPhone);
+        const latestTicket =
+          await this.ticketsService.findLatestByPhone(cleanPhone);
         if (latestTicket) {
-          const status = (latestTicket as any).currentState?.name || 'Pendiente de asignación';
+          const status =
+            (latestTicket as any).currentState?.name ||
+            'Pendiente de asignación';
           finalResponse = `Hola ${user.firstName}. Sobre tu reporte (Ticket #${latestTicket.id.split('-')[0].toUpperCase()}), te informo que actualmente se encuentra en estado: *${status}*. ¿Te puedo ayudar con algo más?`;
         } else {
           finalResponse = `Hola ${user.firstName}. No encontré ningún ticket reciente asociado a tu cuenta. ¿Necesitas reportar un problema en *${propertyName}*?`;
         }
       } else if (intent === Intent.SURVEY_RESPONSE) {
         const lastResolvedTicket = await this.prisma.ticket.findFirst({
-          where: { reportedByUserPhone: cleanPhone, resolvedAt: { not: null }, satisfactionStars: null },
+          where: {
+            reportedByUserPhone: cleanPhone,
+            resolvedAt: { not: null },
+            satisfactionStars: null,
+          },
           orderBy: { resolvedAt: 'desc' },
         });
         if (lastResolvedTicket) {
           const stars = parseInt(text.trim().charAt(0));
-          await this.ticketsService.updateSatisfaction(lastResolvedTicket.id, lastResolvedTicket.tenantId, stars, text);
+          await this.ticketsService.updateSatisfaction(
+            lastResolvedTicket.id,
+            lastResolvedTicket.tenantId,
+            stars,
+            text,
+          );
           finalResponse = `¡Muchas gracias por calificar con ${stars} estrellas! En Incasa valoramos tu retroalimentación.`;
         }
       }
     }
 
     // 3. Log Interaction
-    if (intent === Intent.STATUS_QUERY || intent === Intent.PHOTO_SUBMISSION || text.length > 0) {
-      const latestTicket = await this.ticketsService.findLatestByPhone(cleanPhone);
+    if (
+      intent === Intent.STATUS_QUERY ||
+      intent === Intent.PHOTO_SUBMISSION ||
+      text.length > 0
+    ) {
+      const latestTicket =
+        await this.ticketsService.findLatestByPhone(cleanPhone);
       if (latestTicket) {
-        await this.cognitiveService.logInteraction(latestTicket.id, user.id, `[Client WA] ${text}`, InteractionChannel.WHATSAPP, dbSentiment);
-        await this.cognitiveService.logInteraction(latestTicket.id, null, `[Daniel AI] ${finalResponse} (Intensity: ${parsedMetadata.intensity || 0})`, InteractionChannel.WHATSAPP, dbSentiment);
+        await this.cognitiveService.logInteraction(
+          latestTicket.id,
+          user.id,
+          `[Client WA] ${text}`,
+          InteractionChannel.WHATSAPP,
+          dbSentiment,
+        );
+        await this.cognitiveService.logInteraction(
+          latestTicket.id,
+          null,
+          `[Daniel AI] ${finalResponse} (Intensity: ${parsedMetadata.intensity || 0})`,
+          InteractionChannel.WHATSAPP,
+          dbSentiment,
+        );
       }
     }
 
-    logMsg(`Process complete, sending response: "${finalResponse.substring(0, 50)}..."`);
+    logMsg(
+      `Process complete, sending response: "${finalResponse.substring(0, 50)}..."`,
+    );
     await this.sendMessage(from, finalResponse, resolvedTenantId || undefined);
   }
 
   async sendMessage(to: string, text: string, tenantId?: string) {
     this.logger.log(`[WhatsApp Hybrid] Sending to ${to} (Tenant: ${tenantId})`);
 
-    const baileysAdapter = this.baileysManager.getAdapter(tenantId || 'default');
+    const baileysAdapter = this.baileysManager.getAdapter(
+      tenantId || 'default',
+    );
     if (baileysAdapter && baileysAdapter.getStatus() === 'connected') {
       this.logger.log(
         `[Baileys] Routing message via Baileys for tenant ${tenantId || 'default'}`,

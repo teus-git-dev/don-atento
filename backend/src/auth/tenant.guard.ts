@@ -26,7 +26,7 @@ export class TenantGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const isBypassed = this.reflector.getAllAndOverride<boolean>(
       BYPASS_TENANT_GUARD_KEY,
-      [context.getHandler(), context.getClass()]
+      [context.getHandler(), context.getClass()],
     );
     if (isBypassed) return true;
 
@@ -38,11 +38,12 @@ export class TenantGuard implements CanActivate {
 
     // SUPERADMIN can operate across tenants
     if (user.role === 'SUPERADMIN') {
-      // Allow explicit tenantId from query or params for cross-tenant operations
-      const resolvedTenant = request.query?.tenantId || request.params?.id || request.params?.tenantId || user.tenantId;
+      // Require an explicit, validated tenantId in query string for cross-tenant ops.
+      // NOTE: request.params.id is intentionally excluded — it is the resource ID (e.g. property UUID),
+      // NOT a tenantId, and confusing the two causes silent data isolation failures.
+      const resolvedTenant =
+        request.query?.tenantId || request.params?.tenantId || user.tenantId;
 
-      // If there's still no tenantId (SUPERADMIN with no tenant context),
-      // we must stop here to prevent downstream Prisma calls from receiving undefined.
       if (!resolvedTenant) {
         throw new ForbiddenException(
           'SUPERADMIN: proporciona un ?tenantId= válido para esta operación.',

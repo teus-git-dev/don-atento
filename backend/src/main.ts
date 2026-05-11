@@ -1,21 +1,23 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import * as dotenv from 'dotenv';
 dotenv.config(); // MUST BE BEFORE IMPORTING APP.MODULE TO SET JWT_SECRET!
 
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { Logger as PinoLogger } from 'nestjs-pino';
 
-import { join } from 'path';
-import * as express from 'express';
 import helmet from 'helmet';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
-  
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    bufferLogs: true,
+  });
+
   const cookieParser = require('cookie-parser');
   app.use(cookieParser());
-  
+
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // For static uploads
@@ -51,7 +53,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // Strip properties not in DTO
-      forbidNonWhitelisted: false, // Permissive for now — log but don't reject
+      forbidNonWhitelisted: true, // Reject requests with unknown fields
       transform: true, // Auto-transform payloads to DTO instances
     }),
   );
@@ -77,9 +79,11 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`Backend server running on http://localhost:${port}`);
-  console.log(
-    `Swagger documentation available at http://localhost:${port}/api/docs`,
-  );
+
+  const logger = new Logger('Bootstrap');
+  logger.log(`Backend server running on http://localhost:${port}`);
+  if (process.env.NODE_ENV !== 'production') {
+    logger.log(`Swagger docs at http://localhost:${port}/api/docs`);
+  }
 }
 bootstrap();

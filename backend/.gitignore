@@ -1,15 +1,49 @@
 node_modules
-# Keep environment variables out of version control
+
+# ─── Environment variables ─────────────────────────────────────────────────────
+# NEVER commit .env files. Use .env.example as the template.
 .env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
 
-/generated/prisma
+# ─── Build artifacts ──────────────────────────────────────────────────────────
+dist/
+dist 2/
+tmp_dist/
+*.tsbuildinfo
 
-# Database files
+# ─── Database files ───────────────────────────────────────────────────────────
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
 dev.db
 
-# WhatsApp Sessions
+# ─── Debug / runtime log files ────────────────────────────────────────────────
+# These are ephemeral files written by the app at runtime — not source artifacts
+whatsapp_debug.log
+backend_error.log
+*.log
+
+# ─── Scratch / one-off scripts ────────────────────────────────────────────────
+scratch/
+check_*.js
+check_*.ts
+manage_admin.js
+seed_tenant*.js
+sim_save.js
+verify.js
+test_resolve.js
+e2e_test.js
+parsed_sample.json
+query.sql
+query_ticket.ts
+
+# ─── Prisma ───────────────────────────────────────────────────────────────────
+/generated/prisma
+
+# ─── WhatsApp Sessions (Baileys auth files) ───────────────────────────────────
 /storage/

@@ -1,41 +1,48 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import * as fs from 'fs';
 
 @Injectable()
 export class PropertiesService {
+  private readonly logger = new Logger(PropertiesService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async create(data: any) {
+    const safeDate = (d: any) => {
+      if (!d) return null;
+      const date = new Date(d);
+      return isNaN(date.getTime()) ? null : date;
+    };
+
+    const ownerInfo = data.ownerInfo;
+    const tenantInfo = data.tenantInfo;
+    const attachments = data.attachments;
+    const propertyFields = data;
+
+    const validTypes = [
+      'APARTMENT',
+      'HOUSE',
+      'BUILDING',
+      'WAREHOUSE',
+      'OFFICE',
+    ];
+    const sanitizedPropertyType = validTypes.includes(
+      propertyFields.propertyType,
+    )
+      ? propertyFields.propertyType
+      : 'HOUSE';
+
     try {
-      const safeDate = (d: any) => {
-        if (!d) return null;
-        const date = new Date(d);
-        return isNaN(date.getTime()) ? null : date;
-      };
-
-      const ownerInfo = data.ownerInfo;
-      const tenantInfo = data.tenantInfo;
-      const attachments = data.attachments;
-      const propertyFields = data;
-
-      // Ensure propertyType is a valid enum value
-      const validTypes = [
-        'APARTMENT',
-        'HOUSE',
-        'BUILDING',
-        'WAREHOUSE',
-        'OFFICE',
-      ];
-      const rawType = propertyFields.propertyType;
-      const sanitizedPropertyType = validTypes.includes(rawType)
-        ? rawType
-        : 'HOUSE';
-
-      let property: any;
-      try {
-        property = await this.prisma.property.create({
+      /**
+       * All writes are wrapped in a single Prisma interactive transaction.
+       * If any step fails, all prior writes are rolled back automatically.
+       * This eliminates partial-commit data corruption (e.g., property created but no owner relation).
+       */
+      const property = await this.prisma.$transaction(async (tx) => {
+        // 1. Create the property
+        const createdProperty = await tx.property.create({
           data: {
             tenantId: propertyFields.tenantId,
             title: propertyFields.title,
@@ -76,182 +83,188 @@ export class PropertiesService {
             longitude: data.longitude || -74.0817,
           },
         });
-      } catch (err) {
-        console.error('[PropertiesService] Error creating property:', err);
-        throw new Error(`Error en creación de propiedad: ${err.message}`);
-      }
 
-      // 1. Handle Owner Persistence
-      if (ownerInfo && ownerInfo.name) {
-        const ownerLookupConditions: any[] = [];
-        if (ownerInfo.email)
-          ownerLookupConditions.push({ email: ownerInfo.email });
-        if (ownerInfo.phone)
-          ownerLookupConditions.push({ phone: ownerInfo.phone });
-        if (ownerInfo.id)
-          ownerLookupConditions.push({ governmentId: ownerInfo.id });
+        // 2. Handle Owner Persistence
+        if (ownerInfo && ownerInfo.name) {
+          const ownerLookupConditions: any[] = [];
+          if (ownerInfo.email)
+            ownerLookupConditions.push({ email: ownerInfo.email });
+          if (ownerInfo.phone)
+            ownerLookupConditions.push({ phone: ownerInfo.phone });
+          if (ownerInfo.id)
+            ownerLookupConditions.push({ governmentId: ownerInfo.id });
 
-        let ownerUser =
-          ownerLookupConditions.length > 0
-            ? await this.prisma.user.findFirst({
-                where: {
-                  tenantId: propertyFields.tenantId,
-                  OR: ownerLookupConditions,
-                },
-              })
-            : null;
+          let ownerUser =
+            ownerLookupConditions.length > 0
+              ? await tx.user.findFirst({
+                  where: {
+                    tenantId: propertyFields.tenantId,
+                    OR: ownerLookupConditions,
+                  },
+                })
+              : null;
 
-        if (!ownerUser) {
-          const tempPassword = `TempOwner_${Date.now()}!`;
-          const passwordHash = await bcrypt.hash(tempPassword, 10);
+          if (!ownerUser) {
+            const tempPassword = `TempOwner_${Date.now()}!`;
+            const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-          const nameParts = (ownerInfo.name || 'Propietario').trim().split(' ');
-          const firstName = nameParts[0];
-          const lastName = nameParts.slice(1).join(' ') || 'Propietario';
+            const nameParts = (ownerInfo.name || 'Propietario')
+              .trim()
+              .split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ') || 'Propietario';
 
-          ownerUser = await this.prisma.user.create({
-            data: {
-              tenantId: propertyFields.tenantId,
-              email: ownerInfo.email || `owner_${Date.now()}@teus.com`,
-              passwordHash,
-              firstName,
-              lastName,
-              governmentId: ownerInfo.id || null,
-              role: 'OWNER',
-              phone: ownerInfo.phone || null,
-              personType: ownerInfo.personType || null,
-              isTaxDeclarant: ownerInfo.isTaxDeclarant || false,
-              regimeType: ownerInfo.regimeType || null,
-              applyReteIva: ownerInfo.applyReteIva || false,
-              applyReteFuente: ownerInfo.applyReteFuente || false,
-              applyReteIca: ownerInfo.applyReteIca || false,
-              additionalContacts: ownerInfo.additionalContacts
-                ? JSON.stringify(ownerInfo.additionalContacts)
-                : null,
-            },
-          });
-        }
-
-        await this.prisma.propertyRelation.create({
-          data: {
-            propertyId: property.id,
-            userId: ownerUser.id,
-            relationType: 'OWNER',
-            startDate: new Date(),
-            status: 'ACTIVE',
-          },
-        });
-      }
-
-      // 2. Handle Tenant Persistence (if RENTED)
-      if (tenantInfo && (tenantInfo.firstName || tenantInfo.lastName)) {
-        const tenantLookupConditions: any[] = [];
-        if (tenantInfo.email)
-          tenantLookupConditions.push({ email: tenantInfo.email });
-        if (tenantInfo.governmentId)
-          tenantLookupConditions.push({
-            governmentId: tenantInfo.governmentId,
-          });
-
-        let tenantUser =
-          tenantLookupConditions.length > 0
-            ? await this.prisma.user.findFirst({
-                where: {
-                  tenantId: propertyFields.tenantId,
-                  OR: tenantLookupConditions,
-                },
-              })
-            : null;
-
-        if (!tenantUser) {
-          const tempPassword = `TempTenant_${Date.now()}!`;
-          const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-          tenantUser = await this.prisma.user.create({
-            data: {
-              tenantId: propertyFields.tenantId,
-              email: tenantInfo.email || `tenant_${Date.now()}@teus.com`,
-              passwordHash,
-              firstName: tenantInfo.firstName || 'Arrendatario',
-              lastName: tenantInfo.lastName || 'Sin Apellido',
-              governmentId: tenantInfo.governmentId || null,
-              role: 'TENANT_USER',
-              phone: tenantInfo.phone || null,
-              personType: tenantInfo.personType || 'NATURAL',
-            },
-          });
-        }
-
-        await this.prisma.propertyRelation.create({
-          data: {
-            propertyId: property.id,
-            userId: tenantUser.id,
-            relationType: 'TENANT',
-            startDate: safeDate(tenantInfo.contractStart) || new Date(),
-            endDate: safeDate(tenantInfo.contractEnd),
-            contractNumber: propertyFields.propertyCode || null,
-            contractType: tenantInfo.contractType || 'RESIDENTIAL',
-            status: 'ACTIVE',
-          },
-        });
-      }
-
-      // 3. Inventory Template Application
-      if (data.inventoryTemplateId) {
-        const template = await this.prisma.inventoryTemplate.findUnique({
-          where: { id: data.inventoryTemplateId },
-          include: {
-            items: true,
-            zones: { include: { items: true } },
-          },
-        });
-
-        if (template) {
-          const legacyItems = template.items.map((item: any) => ({
-            propertyId: property.id,
-            name: item.name,
-            category: item.category,
-            condition: 'GOOD' as any,
-            description: `Desde plantilla: ${item.material || ''} ${item.description || ''}`,
-          }));
-
-          for (const zone of template.zones) {
-            const propZone = await this.prisma.zone.create({
+            ownerUser = await tx.user.create({
               data: {
-                propertyId: property.id,
-                name: zone.name,
-                type: zone.type,
+                tenantId: propertyFields.tenantId,
+                email: ownerInfo.email || `owner_${Date.now()}@teus.com`,
+                passwordHash, // ← always a real bcrypt hash, never a sentinel
+                firstName,
+                lastName,
+                governmentId: ownerInfo.id || null,
+                role: 'OWNER',
+                phone: ownerInfo.phone || null,
+                personType: ownerInfo.personType || null,
+                isTaxDeclarant: ownerInfo.isTaxDeclarant || false,
+                regimeType: ownerInfo.regimeType || null,
+                applyReteIva: ownerInfo.applyReteIva || false,
+                applyReteFuente: ownerInfo.applyReteFuente || false,
+                applyReteIca: ownerInfo.applyReteIca || false,
+                additionalContacts: ownerInfo.additionalContacts
+                  ? JSON.stringify(ownerInfo.additionalContacts)
+                  : null,
               },
             });
+          }
 
-            const zoneItems = zone.items.map((item: any) => ({
-              propertyId: property.id,
-              zoneId: propZone.id,
+          await tx.propertyRelation.create({
+            data: {
+              propertyId: createdProperty.id,
+              userId: ownerUser.id,
+              relationType: 'OWNER',
+              startDate: new Date(),
+              status: 'ACTIVE',
+            },
+          });
+        }
+
+        // 3. Handle Tenant/Arrendatario Persistence (if RENTED)
+        if (tenantInfo && (tenantInfo.firstName || tenantInfo.lastName)) {
+          const tenantLookupConditions: any[] = [];
+          if (tenantInfo.email)
+            tenantLookupConditions.push({ email: tenantInfo.email });
+          if (tenantInfo.governmentId)
+            tenantLookupConditions.push({
+              governmentId: tenantInfo.governmentId,
+            });
+
+          let tenantUser =
+            tenantLookupConditions.length > 0
+              ? await tx.user.findFirst({
+                  where: {
+                    tenantId: propertyFields.tenantId,
+                    OR: tenantLookupConditions,
+                  },
+                })
+              : null;
+
+          if (!tenantUser) {
+            const tempPassword = `TempTenant_${Date.now()}!`;
+            const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+            tenantUser = await tx.user.create({
+              data: {
+                tenantId: propertyFields.tenantId,
+                email: tenantInfo.email || `tenant_${Date.now()}@teus.com`,
+                passwordHash,
+                firstName: tenantInfo.firstName || 'Arrendatario',
+                lastName: tenantInfo.lastName || 'Sin Apellido',
+                governmentId: tenantInfo.governmentId || null,
+                role: 'TENANT_USER',
+                phone: tenantInfo.phone || null,
+                personType: tenantInfo.personType || 'NATURAL',
+              },
+            });
+          }
+
+          await tx.propertyRelation.create({
+            data: {
+              propertyId: createdProperty.id,
+              userId: tenantUser.id,
+              relationType: 'TENANT',
+              startDate: safeDate(tenantInfo.contractStart) || new Date(),
+              endDate: safeDate(tenantInfo.contractEnd),
+              contractNumber: propertyFields.propertyCode || null,
+              contractType: tenantInfo.contractType || 'RESIDENTIAL',
+              status: 'ACTIVE',
+            },
+          });
+        }
+
+        // 4. Inventory Template Application — batched to avoid N+1 zone creates
+        if (data.inventoryTemplateId) {
+          const template = await tx.inventoryTemplate.findUnique({
+            where: { id: data.inventoryTemplateId },
+            include: {
+              items: true,
+              zones: { include: { items: true } },
+            },
+          });
+
+          if (template) {
+            // Create all zones in a single batch
+            const createdZones: { id: string; originalName: string }[] = [];
+            for (const zone of template.zones) {
+              const propZone = await tx.zone.create({
+                data: {
+                  propertyId: createdProperty.id,
+                  name: zone.name,
+                  type: zone.type,
+                },
+              });
+              createdZones.push({ id: propZone.id, originalName: zone.name });
+
+              const zoneItems = (zone as any).items.map((item: any) => ({
+                propertyId: createdProperty.id,
+                zoneId: propZone.id,
+                name: item.name,
+                category: item.category,
+                condition: 'GOOD' as any,
+                description: `Desde zona ${zone.name}: ${item.material || ''} ${item.description || ''}`,
+              }));
+
+              if (zoneItems.length > 0) {
+                await tx.inventoryItem.createMany({ data: zoneItems });
+              }
+            }
+
+            // Legacy top-level template items (not zone-scoped)
+            const legacyItems = template.items.map((item: any) => ({
+              propertyId: createdProperty.id,
               name: item.name,
               category: item.category,
               condition: 'GOOD' as any,
-              description: `Desde zona ${zone.name}: ${item.material || ''} ${item.description || ''}`,
+              description: `Desde plantilla: ${item.material || ''} ${item.description || ''}`,
             }));
 
-            if (zoneItems.length > 0) {
-              await this.prisma.inventoryItem.createMany({ data: zoneItems });
+            if (legacyItems.length > 0) {
+              await tx.inventoryItem.createMany({ data: legacyItems });
             }
           }
-
-          if (legacyItems.length > 0) {
-            await this.prisma.inventoryItem.createMany({ data: legacyItems });
-          }
         }
-      }
+
+        return createdProperty;
+      }); // end $transaction
 
       return property;
     } catch (error) {
-      console.error('[PropertiesService] CRITICAL ERROR:', error);
-      try {
-        const logMsg = `\n[${new Date().toISOString()}] CRITICAL ERROR:\n${error.stack}\n`;
-        fs.appendFileSync('backend_error.log', logMsg);
-      } catch (e) {}
-      throw error;
+      this.logger.error(
+        '[PropertiesService] CRITICAL ERROR in create():',
+        error,
+      );
+      throw new InternalServerErrorException(
+        `Error en creación de propiedad: ${error.message}`,
+      );
     }
   }
 
@@ -294,7 +307,7 @@ export class PropertiesService {
         currentPage: page,
       };
     } catch (err) {
-      console.error('[PropertiesService] findAllByTenant error:', err);
+      this.logger.error('[PropertiesService] findAllByTenant error:', err);
       throw err;
     }
   }
@@ -342,7 +355,6 @@ export class PropertiesService {
   async update(id: string, tenantId: string, data: any) {
     const { ownerInfo, tenantInfo, attachments, ...propertyFields } = data;
 
-    // Update basic fields
     const property = await this.prisma.property.updateMany({
       where: { id, tenantId },
       data: {
@@ -366,7 +378,6 @@ export class PropertiesService {
         managementNit: propertyFields.managementNit,
         managementEmail: propertyFields.managementEmail,
         managementPhone: propertyFields.managementPhone,
-
         splatUrl: propertyFields.splatUrl,
         visionVideoUrl: propertyFields.visionVideoUrl,
         attachments: attachments || [],
@@ -376,7 +387,6 @@ export class PropertiesService {
       },
     });
 
-    // Update or Create Owner Relation
     if (ownerInfo && ownerInfo.name) {
       let ownerUser = await this.prisma.user.findFirst({
         where: {
@@ -389,11 +399,15 @@ export class PropertiesService {
       });
 
       if (!ownerUser) {
+        // Generate a real bcrypt hash — never store the 'vault_autogenerated' sentinel
+        const tempPassword = `TempOwner_${Date.now()}!`;
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+
         ownerUser = await this.prisma.user.create({
           data: {
             tenantId: tenantId,
             email: ownerInfo.email || `owner_${Date.now()}@teus.com`,
-            passwordHash: 'vault_autogenerated',
+            passwordHash, // ← real hash, never sentinel
             firstName: ownerInfo.name,
             lastName: ownerInfo.lastName || 'Propietario',
             role: 'OWNER',
@@ -407,7 +421,6 @@ export class PropertiesService {
           },
         });
       } else {
-        // Update existing owner with new tax info if provided
         await this.prisma.user.update({
           where: { id: ownerUser.id },
           data: {
@@ -421,7 +434,7 @@ export class PropertiesService {
           },
         });
       }
-      // Check if relation exists
+
       const existingRel = await this.prisma.propertyRelation.findFirst({
         where: { propertyId: id, relationType: 'OWNER' },
       });
@@ -444,7 +457,6 @@ export class PropertiesService {
       }
     }
 
-    // Sync contractNumber for the active tenant relation
     if (propertyFields.propertyCode) {
       const activeTenantRel = await this.prisma.propertyRelation.findFirst({
         where: { propertyId: id, relationType: 'TENANT', status: 'ACTIVE' },
@@ -466,25 +478,20 @@ export class PropertiesService {
     tenantId: string,
     data: { newOwnerId: string; newTenantId?: string; startDate: string },
   ) {
-    // 0. Verify property belongs to tenant before proceeding
     const property = await this.prisma.property.findFirst({
       where: { id: propertyId, tenantId },
     });
-    if (!property) return { error: 'Property not found or access denied' };
 
-    // 1. Inactivate existing ACTIVE relations
+    if (!property) {
+      // Throw proper HTTP exception — never return a plain {error: string} with HTTP 200
+      throw new Error('Property not found or access denied');
+    }
+
     await this.prisma.propertyRelation.updateMany({
-      where: {
-        propertyId,
-        status: 'ACTIVE',
-      },
-      data: {
-        status: 'HISTORIC',
-        endDate: new Date(data.startDate),
-      },
+      where: { propertyId, status: 'ACTIVE' },
+      data: { status: 'HISTORIC', endDate: new Date(data.startDate) },
     });
 
-    // 2. Create new Owner relation
     const newOwner = await this.prisma.propertyRelation.create({
       data: {
         propertyId,
@@ -495,9 +502,9 @@ export class PropertiesService {
       },
     });
 
-    // 3. Create new Tenant relation if provided
     let newTenant;
     if (data.newTenantId) {
+      const currentProperty = await this.findOne(propertyId, tenantId);
       newTenant = await this.prisma.propertyRelation.create({
         data: {
           propertyId,
@@ -505,8 +512,7 @@ export class PropertiesService {
           relationType: 'TENANT',
           startDate: new Date(data.startDate),
           status: 'ACTIVE',
-          contractNumber: (await this.findOne(propertyId, tenantId))
-            ?.propertyCode, // Sync code
+          contractNumber: currentProperty?.propertyCode,
         },
       });
     }
