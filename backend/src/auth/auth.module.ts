@@ -8,12 +8,22 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { TenantGuard } from './tenant.guard';
 import { RolesGuard } from './roles.guard';
 
+// Fail-fast at module load: JWT_SECRET must be set or any secret-derived
+// operation in this module (signing tokens, validating tokens) is unsafe.
+// Mirrors the same check in jwt.strategy.ts:16-19.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error(
+    'FATAL: JWT_SECRET environment variable is required. Server cannot start without it.',
+  );
+}
+
 @Module({
   imports: [
     PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'MISSING_JWT_SECRET',
+      secret: JWT_SECRET,
       signOptions: { expiresIn: '1h' },
     }),
   ],
