@@ -47,3 +47,10 @@ backend/test-cert/
 
 # Baileys Sessions
 /backend/storage/
+
+# Scratch / one-off scripts (root)
+/scratch/
+
+# Claude Code local config
+.claude/
+!backend/prisma/dev.db

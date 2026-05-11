@@ -47,3 +47,6 @@ query_ticket.ts
 
 # ─── WhatsApp Sessions (Baileys auth files) ───────────────────────────────────
 /storage/
+
+# Conservar la SQLite de desarrollo
+!prisma/dev.db
