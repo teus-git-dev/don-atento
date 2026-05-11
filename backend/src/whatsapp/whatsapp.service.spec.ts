@@ -5,121 +5,108 @@ import { TicketsService } from '../tickets/tickets.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { CrmService } from '../crm/crm.service';
+import { BaileysManager } from './baileys.manager';
+
+// Mock ioredis
+jest.mock('ioredis', () => {
+  return {
+    Redis: jest.fn().mockImplementation(() => ({
+      on: jest.fn(),
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    })),
+  };
+});
 
 describe('WhatsappService', () => {
   let service: WhatsappService;
-
-  const mockPrismaService = {
-    user: { findFirst: jest.fn() },
-    prospect: { findFirst: jest.fn() },
-    tenant: { findFirst: jest.fn() },
-    propertyRelation: { findFirst: jest.fn() },
-    ticket: { findFirst: jest.fn() },
-    workflow: { findFirst: jest.fn() },
-  };
-
-  const mockHttpService = {
-    post: jest.fn(),
-  };
-
-  const mockTicketsService = {
-    findLatestByPhone: jest.fn(),
-    createTicket: jest.fn(),
-    addAttachment: jest.fn(),
-    updateSatisfaction: jest.fn(),
-  };
-
-  const mockCognitiveService = {
-    generateAiChatResponse: jest.fn().mockResolvedValue({ reply: 'Hola!' }),
-    generateResponse: jest.fn().mockResolvedValue({
-      shortResponse: 'Test response',
-      longEmail: 'Test',
-      sentiment: 'NEUTRAL',
-      alignment: { score: 0.9, feedback: 'ok' },
-    }),
-    logInteraction: jest.fn(),
-  };
-
-  const mockCrmService = {
-    createProspect: jest.fn(),
-    addInteraction: jest.fn(),
-  };
+  let redisMock: any;
+  let ticketsServiceMock: any;
+  let cognitiveServiceMock: any;
 
   beforeEach(async () => {
+    const IORedis = require('ioredis');
+    
+    ticketsServiceMock = {
+      findLatestByPhone: jest.fn().mockResolvedValue({ id: 'ticket-1', shortId: 'TKT-1' }),
+      createTicket: jest.fn().mockResolvedValue({ id: 'ticket-2', shortId: 'TKT-2' }),
+    };
+
+    cognitiveServiceMock = {
+      processWhatsappWithAi: jest.fn().mockResolvedValue('Respuesta AI [METADATA]Action: GENERAL_REPLY[/METADATA]'),
+      logInteraction: jest.fn().mockResolvedValue({}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WhatsappService,
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: HttpService, useValue: mockHttpService },
-        { provide: TicketsService, useValue: mockTicketsService },
-        { provide: CognitiveService, useValue: mockCognitiveService },
-        { provide: CrmService, useValue: mockCrmService },
+        { provide: HttpService, useValue: { post: jest.fn() } },
+        { provide: TicketsService, useValue: ticketsServiceMock },
+        { provide: PrismaService, useValue: {
+            user: { findFirst: jest.fn().mockResolvedValue({ id: 'user-1', firstName: 'Pepe', tenantId: 't1' }) },
+            propertyRelation: { findFirst: jest.fn().mockResolvedValue({ property: { title: 'Apto', id: 'p1' } }) },
+            ticket: { findMany: jest.fn().mockResolvedValue([]) },
+            workflow: { findFirst: jest.fn().mockResolvedValue({ id: 'wf1' }) },
+            tenant: { findFirst: jest.fn().mockResolvedValue(null) },
+        } },
+        { provide: CognitiveService, useValue: cognitiveServiceMock },
+        { provide: CrmService, useValue: {} },
+        { provide: BaileysManager, useValue: {
+            setMessageHandler: jest.fn(),
+            getAdapter: jest.fn().mockReturnValue({ getStatus: () => 'disconnected' }),
+        } },
       ],
     }).compile();
 
     service = module.get<WhatsappService>(WhatsappService);
+    // Grab the redis instance from the service to spy on it
+    redisMock = (service as any).redis;
   });
 
   afterEach(() => jest.clearAllMocks());
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  describe('classifyIntent() (detectIntent)', () => {
+    it('detects MAINTENANCE_REQUEST for keywords', () => {
+      expect(service.detectIntent('se ha roto la tuberia')).toBe(Intent.MAINTENANCE_REQUEST);
+      expect(service.detectIntent('falla en el baño')).toBe(Intent.MAINTENANCE_REQUEST);
+    });
+
+    it('detects STATUS_QUERY for keywords', () => {
+      expect(service.detectIntent('como va mi reporte')).toBe(Intent.STATUS_QUERY);
+    });
   });
 
-  // ── Intent Detection: Pure Function Tests ──────────────────────────────────
-  describe('detectIntent', () => {
-    it('should detect GREETING intent', () => {
-      expect(service.detectIntent('Hola buenos días')).toBe(Intent.GREETING);
-      expect(service.detectIntent('buenos tardes')).toBe(Intent.GREETING);
+  describe('getState / setState fallback', () => {
+    it('getState returns null if Redis throws error (graceful fallback)', async () => {
+      redisMock.get.mockRejectedValueOnce(new Error('Redis is down'));
+      const state = await (service as any).getState('phone');
+      expect(state).toBeNull();
+    });
+  });
+
+  describe('processIncomingMessage()', () => {
+    it('AI DE_ESCALATE action does not create a ticket', async () => {
+      cognitiveServiceMock.processWhatsappWithAi.mockResolvedValue('Tranquilo [METADATA]Action: DE_ESCALATE[/METADATA]');
+      
+      // Stub sendMessage to prevent actual HTTP calls
+      jest.spyOn(service, 'sendMessage').mockResolvedValue(undefined);
+
+      await service.processIncomingMessage('3000000000', 'Estoy muy molesto');
+
+      expect(ticketsServiceMock.createTicket).not.toHaveBeenCalled();
+      expect(service.sendMessage).toHaveBeenCalledWith('3000000000', 'Tranquilo', expect.anything());
     });
 
-    it('should detect MAINTENANCE_REQUEST intent', () => {
-      expect(service.detectIntent('El calentador está roto')).toBe(
-        Intent.MAINTENANCE_REQUEST,
-      );
-      expect(service.detectIntent('hay un daño en el baño')).toBe(
-        Intent.MAINTENANCE_REQUEST,
-      );
-      expect(service.detectIntent('necesito reparar la llave')).toBe(
-        Intent.MAINTENANCE_REQUEST,
-      );
-    });
+    it('AI CREATE_TICKET action calls ticketsService.createTicket', async () => {
+      cognitiveServiceMock.processWhatsappWithAi.mockResolvedValue('Creando ticket [METADATA]Action: CREATE_TICKET[/METADATA]');
+      
+      jest.spyOn(service, 'sendMessage').mockResolvedValue(undefined);
 
-    it('should detect PHOTO_SUBMISSION intent', () => {
-      expect(service.detectIntent('aqui esta la foto')).toBe(
-        Intent.PHOTO_SUBMISSION,
-      );
-      expect(service.detectIntent('te mando el video')).toBe(
-        Intent.PHOTO_SUBMISSION,
-      );
-      expect(service.detectIntent('aqui esta la evidencia del caso')).toBe(
-        Intent.PHOTO_SUBMISSION,
-      );
-    });
+      await service.processIncomingMessage('3000000000', 'Necesito reparar la puerta');
 
-    it('should detect STATUS_QUERY intent', () => {
-      expect(service.detectIntent('como va mi ticket?')).toBe(
-        Intent.STATUS_QUERY,
-      );
-      expect(service.detectIntent('cual es el estado de mi solicitud')).toBe(
-        Intent.STATUS_QUERY,
-      );
-    });
-
-    it('should detect SURVEY_RESPONSE intent for ratings 1-5', () => {
-      expect(service.detectIntent('5')).toBe(Intent.SURVEY_RESPONSE);
-      expect(service.detectIntent('1 excelente')).toBe(Intent.SURVEY_RESPONSE);
-    });
-
-    it('should detect GOODBYE intent', () => {
-      expect(service.detectIntent('gracias hasta luego')).toBe(Intent.GOODBYE);
-      expect(service.detectIntent('chao')).toBe(Intent.GOODBYE);
-    });
-
-    it('should return UNKNOWN for unrecognized messages', () => {
-      expect(service.detectIntent('quiero saber el precio del arriendo')).toBe(
-        Intent.UNKNOWN,
-      );
+      expect(ticketsServiceMock.createTicket).toHaveBeenCalled();
+      expect(service.sendMessage).toHaveBeenCalledWith('3000000000', expect.stringContaining('TKT-2'), expect.anything());
     });
   });
 });

@@ -20,8 +20,8 @@ export class DataImportService {
       if (!workSheets || workSheets.length === 0) {
         throw new BadRequestException('The file is empty or invalid.');
       }
-      
-      const rawData = workSheets[0].data as any[][];
+
+      const rawData = workSheets[0].data;
 
       if (!rawData || rawData.length === 0) {
         throw new BadRequestException('The file is empty.');
@@ -96,7 +96,10 @@ export class DataImportService {
   ) {
     const logger = new Logger('DataImportService');
     const debugLogPath = path.resolve(process.cwd(), 'import_debug.log');
-    fs.appendFileSync(debugLogPath, `\n--- START IMPORT: ${fileName} (${categoryId}) ---\n`);
+    fs.appendFileSync(
+      debugLogPath,
+      `\n--- START IMPORT: ${fileName} (${categoryId}) ---\n`,
+    );
 
     let mapping: Record<string, string>;
 
@@ -115,7 +118,7 @@ export class DataImportService {
     }
     const workSheets = parseXlsx(fileBuffer);
     if (!workSheets || workSheets.length === 0) return null;
-    const rawArray = workSheets[0].data as any[][];
+    const rawArray = workSheets[0].data;
     if (!rawArray || rawArray.length === 0) return null;
 
     const headerRowIndex = 0;
@@ -158,7 +161,7 @@ export class DataImportService {
               val = row[idx + 1];
             }
             if (typeof val === 'string') val = val.trim();
-            
+
             // Only assign if the new value is valid, or if the field is currently empty
             if (val !== null && val !== undefined && val !== '') {
               // If we already have a value, we can optionally concatenate it, but prioritizing the first non-empty is safer for IDs
@@ -166,7 +169,7 @@ export class DataImportService {
               if (obj[targetField]) {
                 if (targetField === 'phones' || targetField === 'emails') {
                   if (!String(obj[targetField]).includes(String(val))) {
-                     obj[targetField] = `${obj[targetField]}, ${val}`;
+                    obj[targetField] = `${obj[targetField]}, ${val}`;
                   }
                 }
               } else {
@@ -181,7 +184,10 @@ export class DataImportService {
       })
       .filter((obj) => Object.keys(obj).length > 0);
 
-    fs.appendFileSync(debugLogPath, `Records parsed from file: ${recordsToImport.length}\n`);
+    fs.appendFileSync(
+      debugLogPath,
+      `Records parsed from file: ${recordsToImport.length}\n`,
+    );
     let savedRecords = 0;
     const errors: any[] = [];
     const sourceTag = `XLS_IMPORT_${new Date().getTime()}`;
@@ -190,7 +196,10 @@ export class DataImportService {
       try {
         if (categoryId === 'OWNER' || categoryId === 'TENANT') {
           if (!record.contact_id) {
-            fs.appendFileSync(debugLogPath, `Skipping record: Missing contact_id. Data: ${JSON.stringify(record)}\n`);
+            fs.appendFileSync(
+              debugLogPath,
+              `Skipping record: Missing contact_id. Data: ${JSON.stringify(record)}\n`,
+            );
             continue;
           }
           const governmentId = String(record.contact_id).trim();
@@ -230,11 +239,17 @@ export class DataImportService {
               where: { id: existingUser.id },
               data,
             });
-            fs.appendFileSync(debugLogPath, `Updated user: ${user.id} (${governmentId})\n`);
+            fs.appendFileSync(
+              debugLogPath,
+              `Updated user: ${user.id} (${governmentId})\n`,
+            );
           } else {
             (data as any)['passwordHash'] = 'IMPORTED_NO_PASSWORD';
             user = await this.prisma.user.create({ data: data as any });
-            fs.appendFileSync(debugLogPath, `Created user: ${user.id} (${governmentId})\n`);
+            fs.appendFileSync(
+              debugLogPath,
+              `Created user: ${user.id} (${governmentId})\n`,
+            );
           }
 
           if (record.property_id) {
@@ -256,7 +271,10 @@ export class DataImportService {
                     : undefined,
                 },
               });
-              fs.appendFileSync(debugLogPath, `Linked user ${user.id} to property ${property.id}\n`);
+              fs.appendFileSync(
+                debugLogPath,
+                `Linked user ${user.id} to property ${property.id}\n`,
+              );
 
               if (categoryId === 'TENANT') {
                 await this.prisma.property.update({

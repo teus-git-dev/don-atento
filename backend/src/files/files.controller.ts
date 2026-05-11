@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Res, UseGuards, NotFoundException, StreamableFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Res,
+  UseGuards,
+  NotFoundException,
+  StreamableFile,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { join } from 'path';
 import { createReadStream, existsSync } from 'fs';
@@ -12,7 +20,10 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 export class FilesController {
   @Get(':filename')
   @ApiOperation({ summary: 'Securely fetch an uploaded file' })
-  getFile(@Param('filename') filename: string, @Res({ passthrough: true }) res: Response): StreamableFile {
+  getFile(
+    @Param('filename') filename: string,
+    @Res({ passthrough: true }) res: Response,
+  ): StreamableFile {
     // Basic path traversal protection
     if (filename.includes('..') || filename.includes('/')) {
       throw new NotFoundException('Invalid filename');

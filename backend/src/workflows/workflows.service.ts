@@ -92,7 +92,7 @@ export class WorkflowsService {
     await this.prisma.workflowState.deleteMany({
       where: { workflowId: id },
     });
-    
+
     return this.prisma.workflow.delete({
       where: { id },
     });

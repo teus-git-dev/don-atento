@@ -174,11 +174,13 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
     // Fallback for offline/local development or 'default' tenantId
     for (const [id, a] of this.adapters) {
       if (a.getStatus() === 'connected') {
-        this.logger.warn(`Fallback: Using Baileys session from tenant ${id} instead of requested ${tenantId}`);
+        this.logger.warn(
+          `Fallback: Using Baileys session from tenant ${id} instead of requested ${tenantId}`,
+        );
         return a;
       }
     }
-    
+
     return null;
   }
 

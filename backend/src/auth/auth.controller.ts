@@ -1,4 +1,13 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Res, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Res,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -19,8 +28,11 @@ export class AuthController {
     @Body() body: { email: string; password: string },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, refreshToken, user } = await this.authService.login(body.email, body.password);
-    
+    const { accessToken, refreshToken, user } = await this.authService.login(
+      body.email,
+      body.password,
+    );
+
     res.cookie('don_atento_token_v1', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -75,7 +87,11 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token no proporcionado');
     }
 
-    const { accessToken, refreshToken: newRefreshToken, user } = await this.authService.refreshToken(refreshToken);
+    const {
+      accessToken,
+      refreshToken: newRefreshToken,
+      user,
+    } = await this.authService.refreshToken(refreshToken);
 
     res.cookie('don_atento_token_v1', accessToken, {
       httpOnly: true,

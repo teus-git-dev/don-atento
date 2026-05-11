@@ -131,7 +131,12 @@ export class TicketsController {
       fileFilter: (req, file, cb) => {
         const allowed = /\.(jpg|jpeg|png|gif|webp|mp4|mov|pdf|doc|docx)$/i;
         if (!allowed.test(extname(file.originalname))) {
-          return cb(new Error('Tipo de archivo no permitido. Solo: jpg, png, gif, webp, mp4, pdf, doc, docx'), false);
+          return cb(
+            new Error(
+              'Tipo de archivo no permitido. Solo: jpg, png, gif, webp, mp4, pdf, doc, docx',
+            ),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -154,11 +159,18 @@ export class TicketsController {
   }
 
   // ── HMAC helper for survey token validation ──
-  private validateSurveyToken(ticketId: string, token: string | undefined): boolean {
+  private validateSurveyToken(
+    ticketId: string,
+    token: string | undefined,
+  ): boolean {
     if (!token) return false;
     const secret = process.env.JWT_SECRET || 'MISSING';
     const crypto = require('crypto');
-    const expected = crypto.createHmac('sha256', secret).update(ticketId).digest('hex').substring(0, 16);
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(ticketId)
+      .digest('hex')
+      .substring(0, 16);
     return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
   }
 
@@ -169,7 +181,9 @@ export class TicketsController {
     if (!this.validateSurveyToken(id, token)) {
       throw new ForbiddenException('Token de encuesta inválido.');
     }
-    const ticket = await this.ticketsService.findOne(id, undefined as any).catch(() => null);
+    const ticket = await this.ticketsService
+      .findOne(id, undefined as any)
+      .catch(() => null);
     if (!ticket) return { title: 'Ticket no encontrado' };
     return { title: ticket.title };
   }

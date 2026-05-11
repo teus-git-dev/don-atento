@@ -150,7 +150,11 @@ Instrucciones Críticas:
     return { reply, contextUsed: metrics };
   }
 
-  async processWhatsappMessage(tenantId: string, message: string, context?: { name?: string; address?: string; systemAction?: string }) {
+  async processWhatsappMessage(
+    tenantId: string,
+    message: string,
+    context?: { name?: string; address?: string; systemAction?: string },
+  ) {
     const systemPrompt = `
 Role: You are Daniel, the AI Assistant for Incasa. Your primary goal is to provide excellent customer service to tenants and owners. You must monitor the user's emotional state in every interaction.
 
@@ -195,14 +199,17 @@ Context: The user is ${context?.name || 'a client'}. Property: ${context?.addres
 
       // 1. Pre-flight Check: Has the tenant exceeded their quota?
       if (tenantId) {
-        const subscription = await this.prisma.tenantSubscription.findUnique({ where: { tenantId } });
+        const subscription = await this.prisma.tenantSubscription.findUnique({
+          where: { tenantId },
+        });
         if (subscription) {
-           const totalUsed = subscription.currentTokensInput + subscription.currentTokensOutput;
-           if (totalUsed >= subscription.monthlyTokenQuota) {
-               console.warn(`[FinOps] Tenant ${tenantId} exceeded quota.`);
-               // We could throw an error to trigger the fallback, blocking the AI response.
-               // throw new Error('QUOTA_EXCEEDED');
-           }
+          const totalUsed =
+            subscription.currentTokensInput + subscription.currentTokensOutput;
+          if (totalUsed >= subscription.monthlyTokenQuota) {
+            console.warn(`[FinOps] Tenant ${tenantId} exceeded quota.`);
+            // We could throw an error to trigger the fallback, blocking the AI response.
+            // throw new Error('QUOTA_EXCEEDED');
+          }
         }
       }
 
@@ -226,17 +233,25 @@ Context: The user is ${context?.name || 'a client'}. Property: ${context?.addres
       // 2. Token Metering & FinOps Logic
       const usage = response.data.usage;
       if (usage && tenantId) {
-         const costIn = (usage.prompt_tokens / 1000000) * 0.150;
-         const costOut = (usage.completion_tokens / 1000000) * 0.600;
-         const totalCostUsd = costIn + costOut;
+        const costIn = (usage.prompt_tokens / 1000000) * 0.15;
+        const costOut = (usage.completion_tokens / 1000000) * 0.6;
+        const totalCostUsd = costIn + costOut;
 
-         // Async fire-and-forget to avoid blocking the user response
-         this.logTokenUsageAsync(tenantId, usage.prompt_tokens, usage.completion_tokens, totalCostUsd).catch(e => console.error('[FinOps] Error logging tokens:', e));
+        // Async fire-and-forget to avoid blocking the user response
+        this.logTokenUsageAsync(
+          tenantId,
+          usage.prompt_tokens,
+          usage.completion_tokens,
+          totalCostUsd,
+        ).catch((e) => console.error('[FinOps] Error logging tokens:', e));
       }
 
       return response.data.choices[0].message.content;
     } catch (error) {
-      console.warn('[AiChatService] Error connecting to LLM for WA message:', error.message);
+      console.warn(
+        '[AiChatService] Error connecting to LLM for WA message:',
+        error.message,
+      );
       // Fallback response since LLM is unavailable
       return `[METADATA]
 Sentiment: 2 - NEUTRAL
@@ -247,35 +262,42 @@ Comprendo la situación. En este momento estoy revisando la información, pero h
     }
   }
 
-  private async logTokenUsageAsync(tenantId: string, input: number, output: number, cost: number) {
-     await this.prisma.$transaction([
-        this.prisma.tokenUsageLog.create({
-           data: {
-             tenantId,
-             feature: 'WHATSAPP_BOT',
-             tokensInput: input,
-             tokensOutput: output,
-             modelUsed: 'gpt-4o-mini',
-             costUsd: cost
-           }
-        }),
-        // Update subscription counters. We use an upsert to create a default plan if they don't have one
-        this.prisma.tenantSubscription.upsert({
-           where: { tenantId },
-           update: {
-              currentTokensInput: { increment: input },
-              currentTokensOutput: { increment: output }
-           },
-           create: {
-              tenantId,
-              planType: 'BASIC',
-              monthlyTokenQuota: 500000,
-              billingCycleStart: new Date(),
-              billingCycleEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)),
-              currentTokensInput: input,
-              currentTokensOutput: output
-           }
-        })
-     ]);
+  private async logTokenUsageAsync(
+    tenantId: string,
+    input: number,
+    output: number,
+    cost: number,
+  ) {
+    await this.prisma.$transaction([
+      this.prisma.tokenUsageLog.create({
+        data: {
+          tenantId,
+          feature: 'WHATSAPP_BOT',
+          tokensInput: input,
+          tokensOutput: output,
+          modelUsed: 'gpt-4o-mini',
+          costUsd: cost,
+        },
+      }),
+      // Update subscription counters. We use an upsert to create a default plan if they don't have one
+      this.prisma.tenantSubscription.upsert({
+        where: { tenantId },
+        update: {
+          currentTokensInput: { increment: input },
+          currentTokensOutput: { increment: output },
+        },
+        create: {
+          tenantId,
+          planType: 'BASIC',
+          monthlyTokenQuota: 500000,
+          billingCycleStart: new Date(),
+          billingCycleEnd: new Date(
+            new Date().setMonth(new Date().getMonth() + 1),
+          ),
+          currentTokensInput: input,
+          currentTokensOutput: output,
+        },
+      }),
+    ]);
   }
 }

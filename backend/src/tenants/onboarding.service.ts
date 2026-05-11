@@ -57,14 +57,15 @@ export class OnboardingService {
    *  - No dictionary words or sequential patterns
    */
   private generateSecureTemporaryPassword(): string {
-    const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ';    // No I, O (confusable)
-    const lower   = 'abcdefghjkmnpqrstuvwxyz';      // No i, l, o
-    const digits  = '23456789';                      // No 0, 1 (confusable)
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // No I, O (confusable)
+    const lower = 'abcdefghjkmnpqrstuvwxyz'; // No i, l, o
+    const digits = '23456789'; // No 0, 1 (confusable)
     const symbols = '@#$!%*?&^+-=';
 
     const pick = (charset: string, count: number): string[] =>
-      Array.from({ length: count }, () =>
-        charset[crypto.randomInt(0, charset.length)],
+      Array.from(
+        { length: count },
+        () => charset[crypto.randomInt(0, charset.length)],
       );
 
     const all = upper + lower + digits + symbols;
@@ -78,8 +79,9 @@ export class OnboardingService {
     ];
 
     // Fill remaining with any chars
-    const remaining = Array.from({ length: 4 }, () =>
-      all[crypto.randomInt(0, all.length)],
+    const remaining = Array.from(
+      { length: 4 },
+      () => all[crypto.randomInt(0, all.length)],
     );
 
     // Shuffle with Fisher-Yates using crypto.randomInt for true entropy
@@ -93,8 +95,12 @@ export class OnboardingService {
   }
 
   // ─── Main Provisioning Flow ────────────────────────────────────────────────
-  async provisionNewTenant(input: ProvisionTenantInput): Promise<ProvisionResult> {
-    this.logger.log(`[Onboarding] Provisioning new tenant: ${input.companyName}`);
+  async provisionNewTenant(
+    input: ProvisionTenantInput,
+  ): Promise<ProvisionResult> {
+    this.logger.log(
+      `[Onboarding] Provisioning new tenant: ${input.companyName}`,
+    );
 
     const temporaryPassword = this.generateSecureTemporaryPassword();
 
@@ -109,7 +115,9 @@ export class OnboardingService {
     }
 
     if (!planId) {
-      throw new Error('No subscription plan provided and no default plan found in the database.');
+      throw new Error(
+        'No subscription plan provided and no default plan found in the database.',
+      );
     }
 
     // ── 2. Create Tenant record ────────────────────────────────────────────
@@ -135,12 +143,14 @@ export class OnboardingService {
         role: 'ADMIN_TENANT',
         passwordHash,
         isActive: true,
-        mustChangePassword: true,       // ← Force-reset on first login
-        passwordChangedAt: null,        // ← Not yet changed
+        mustChangePassword: true, // ← Force-reset on first login
+        passwordChangedAt: null, // ← Not yet changed
       },
     });
 
-    this.logger.log(`[Onboarding] Admin user created: ${user.id} (mustChangePassword=true)`);
+    this.logger.log(
+      `[Onboarding] Admin user created: ${user.id} (mustChangePassword=true)`,
+    );
 
     // ── 4. Send Welcome Email ──────────────────────────────────────────────
     let emailSent = false;
@@ -164,7 +174,9 @@ export class OnboardingService {
       );
 
       emailSent = true;
-      this.logger.log(`[Onboarding] Welcome email dispatched to ${input.adminEmail}`);
+      this.logger.log(
+        `[Onboarding] Welcome email dispatched to ${input.adminEmail}`,
+      );
     } catch (err) {
       // Email failure is non-blocking — the account still exists
       this.logger.error('[Onboarding] Email dispatch failed:', err);
@@ -185,8 +197,12 @@ export class OnboardingService {
    * If the email changes, a new temporary password is generated and the
    * welcome email is re-sent to the new address with mustChangePassword=true.
    */
-  async updateTenantAdmin(input: UpdateTenantAdminInput): Promise<UpdateTenantAdminResult> {
-    this.logger.log(`[Onboarding] Updating admin for tenant: ${input.tenantId}`);
+  async updateTenantAdmin(
+    input: UpdateTenantAdminInput,
+  ): Promise<UpdateTenantAdminResult> {
+    this.logger.log(
+      `[Onboarding] Updating admin for tenant: ${input.tenantId}`,
+    );
 
     // Find the current ADMIN_TENANT user for this tenant
     const existingAdmin = await this.prisma.user.findFirst({
@@ -195,7 +211,9 @@ export class OnboardingService {
     });
 
     if (!existingAdmin) {
-      throw new NotFoundException(`No se encontró un usuario ADMIN_TENANT para el tenant ${input.tenantId}`);
+      throw new NotFoundException(
+        `No se encontró un usuario ADMIN_TENANT para el tenant ${input.tenantId}`,
+      );
     }
 
     const emailChanged = existingAdmin.email !== input.adminEmail;
@@ -220,7 +238,9 @@ export class OnboardingService {
         },
       });
 
-      this.logger.log(`[Onboarding] Email changed for user ${existingAdmin.id} → mustChangePassword=true`);
+      this.logger.log(
+        `[Onboarding] Email changed for user ${existingAdmin.id} → mustChangePassword=true`,
+      );
 
       // Re-send welcome email to new address
       try {
@@ -243,7 +263,9 @@ export class OnboardingService {
         );
 
         emailSent = true;
-        this.logger.log(`[Onboarding] Re-onboarding email sent to ${input.adminEmail}`);
+        this.logger.log(
+          `[Onboarding] Re-onboarding email sent to ${input.adminEmail}`,
+        );
       } catch (err) {
         this.logger.error('[Onboarding] Re-onboarding email failed:', err);
       }
@@ -284,7 +306,9 @@ export class OnboardingService {
       },
     });
 
-    this.logger.log(`[Onboarding] Password reset completed for user: ${userId}`);
+    this.logger.log(
+      `[Onboarding] Password reset completed for user: ${userId}`,
+    );
   }
 
   // ─── Password Strength Validator ──────────────────────────────────────────
@@ -297,13 +321,14 @@ export class OnboardingService {
       errors.push('Debe contener al menos una letra mayúscula.');
     if (!/[a-z]/.test(password))
       errors.push('Debe contener al menos una letra minúscula.');
-    if (!/\d/.test(password))
-      errors.push('Debe contener al menos un número.');
+    if (!/\d/.test(password)) errors.push('Debe contener al menos un número.');
     if (!/[@#$!%*?&^+\-=]/.test(password))
       errors.push('Debe contener al menos un símbolo (@, #, $, !, %, etc.).');
 
     if (errors.length > 0) {
-      throw new Error(`Contraseña no cumple estándares de seguridad: ${errors.join(' ')}`);
+      throw new Error(
+        `Contraseña no cumple estándares de seguridad: ${errors.join(' ')}`,
+      );
     }
   }
 
@@ -315,9 +340,10 @@ export class OnboardingService {
     temporaryPassword: string;
     loginUrl: string;
   }): string {
-    const { firstName, companyName, email, temporaryPassword, loginUrl } = params;
+    const { firstName, companyName, email, temporaryPassword, loginUrl } =
+      params;
 
-    return /* html */`
+    return /* html */ `
 <!DOCTYPE html>
 <html lang="es">
 <head>

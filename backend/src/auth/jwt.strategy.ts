@@ -14,7 +14,9 @@ export interface JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly prisma: PrismaService) {
     if (!process.env.JWT_SECRET) {
-      throw new Error('FATAL: JWT_SECRET environment variable is required. Server cannot start without it.');
+      throw new Error(
+        'FATAL: JWT_SECRET environment variable is required. Server cannot start without it.',
+      );
     }
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([

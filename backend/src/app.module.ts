@@ -27,10 +27,12 @@ import { ContractsModule } from './contracts/contracts.module';
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{
-      ttl: 60000, // 60 seconds
-      limit: 100, // 100 requests per IP per minute (global default)
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 60 seconds
+        limit: 100, // 100 requests per IP per minute (global default)
+      },
+    ]),
     ContractsModule,
     PrismaModule,
     AuthModule,

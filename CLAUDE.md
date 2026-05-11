@@ -128,3 +128,109 @@ Security headers (CSP-adjacent: X-Frame-Options DENY, HSTS, etc.) are set in `ne
 - Logs use NestJS `Logger`, not `fs.appendFileSync` — the recent security hardening replaced ad-hoc file logging throughout.
 - Refresh tokens, passwords, and WhatsApp creds are always stored hashed/encrypted; never log them.
 - The repo root has a lot of one-off `check_*.js` / `seed_*.js` / `test_*.js` scripts (and a `scratch/` dir per app). Treat these as throwaway debugging tools — they're not part of the test suite or build.
+
+## Estándares de Auditoría — DonAtento
+
+### Rol de Claude Code en este proyecto
+
+Claude Code actúa como auditor y mejorador del código generado por Google Antigravity.
+Antes de proponer cualquier cambio, reporta todos los hallazgos con severidad y ubicación exacta.
+No apliques cambios sin aprobación explícita del desarrollador.
+
+---
+
+### 🔴 CRÍTICO — Bloquea aprobación del código
+
+**Seguridad**
+
+- Cero secretos hardcodeados: API keys, passwords, tokens, connection strings en el código fuente
+- Toda entrada del usuario debe ser validada y sanitizada antes de procesarse
+- Queries a base de datos deben usar parámetros preparados, nunca concatenación de strings
+- Autenticación y autorización verificadas en cada endpoint sensible
+- Variables de entorno para toda configuración sensible, nunca en el código
+- Dependencias sin vulnerabilidades conocidas (CVE críticas o altas)
+
+**Bugs estructurales**
+
+- Sin referencias a variables o funciones no definidas
+- Sin errores de tipos que causen fallos en runtime
+- Toda operación asíncrona con manejo de errores explícito (try/catch o .catch())
+- Sin loops infinitos o condiciones de carrera evidentes
+
+---
+
+### 🟠 ALTO — Debe corregirse antes de merge
+
+**Calidad de código**
+
+- Funciones con responsabilidad única: máximo 40 líneas por función
+- Sin código duplicado: si un bloque se repite 2+ veces, debe extraerse
+- Nombres de variables y funciones descriptivos en el idioma del proyecto (español o inglés, consistente)
+- Sin console.log, print() o debug statements en código que va a producción
+- Sin código comentado abandonado (dead code)
+
+**Rendimiento**
+
+- Sin queries N+1 en operaciones con ORM o base de datos
+- Operaciones costosas no ejecutadas en el hilo principal sin async
+- Sin imports innecesarios que inflen el bundle
+- Índices de base de datos considerados para campos de búsqueda frecuente
+
+**Manejo de errores**
+
+- Todo error debe loguearse con contexto suficiente para debugging
+- Mensajes de error al usuario no deben exponer detalles internos del sistema
+- Flujos de error deben ser tan completos como los flujos de éxito
+
+---
+
+### 🟡 MEDIO — Reportar y mejorar cuando sea posible
+
+**Mantenibilidad**
+
+- Complejidad ciclomática máxima de 10 por función
+- Archivos de más de 300 líneas deben evaluarse para división
+- Cada módulo, clase y función pública con comentario de propósito
+- Sin magic numbers: constantes con nombre descriptivo
+- Interfaces y tipos definidos explícitamente (TypeScript/tipado cuando aplique)
+
+**Tests**
+
+- Funcionalidad nueva debe tener al menos un test unitario
+- Casos de error deben estar cubiertos en tests, no solo el happy path
+- Tests no deben depender de datos externos o del orden de ejecución
+
+---
+
+### 🔵 INFORMATIVO — Sugerencias de mejora
+
+- Oportunidades de aplicar patrones de diseño que simplifiquen el código
+- Mejoras de legibilidad sin impacto funcional
+- Actualizaciones de dependencias no críticas
+- Optimizaciones de rendimiento de bajo riesgo
+
+---
+
+### Flujo de reporte
+
+Cuando audites código, usa este formato por cada hallazgo:
+
+**[SEVERIDAD] Archivo: línea**
+
+- Problema: descripción clara de qué está mal
+- Riesgo: qué puede pasar si no se corrige
+- Sugerencia: cómo corregirlo
+
+Al final del reporte incluye:
+
+- Total de hallazgos por severidad
+- Recomendación: APROBAR / APROBAR CON CAMBIOS / RECHAZAR
+
+---
+
+### Lo que NO debes hacer
+
+- No modificar lógica de negocio sin instrucción explícita
+- No refactorizar código fuera del scope auditado
+- No asumir que el código generado por Antigravity es correcto por defecto
+- No omitir hallazgos por parecer obvios o menores

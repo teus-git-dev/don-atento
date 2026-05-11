@@ -55,8 +55,13 @@ export class TicketsService {
       }
 
       // Generate Short ID
-      const tenant = await this.prisma.tenant.findUnique({ where: { id: data.tenantId } });
-      const prefix = tenant && tenant.name ? tenant.name.substring(0, 3).toUpperCase() : 'TKT';
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: data.tenantId },
+      });
+      const prefix =
+        tenant && tenant.name
+          ? tenant.name.substring(0, 3).toUpperCase()
+          : 'TKT';
       const randomNum = Math.floor(10000 + Math.random() * 90000);
       const generatedShortId = `${prefix}-${randomNum}`;
 
@@ -247,7 +252,11 @@ export class TicketsService {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const crypto = require('crypto');
       const secret = process.env.JWT_SECRET || 'MISSING';
-      const token = crypto.createHmac('sha256', secret).update(ticket.id).digest('hex').substring(0, 16);
+      const token = crypto
+        .createHmac('sha256', secret)
+        .update(ticket.id)
+        .digest('hex')
+        .substring(0, 16);
       const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey?token=${token}`;
       const surveyMessage = `¡Hola! Don Atento informa: Tu requerimiento "${ticket.title}" ha sido marcado como RESUELTO. \n\nPor favor, califica nuestro servicio aquí: ${surveyLink} \n\no responde con un número del 1 al 5.`;
       await this.whatsappService.sendMessage(
@@ -308,24 +317,28 @@ export class TicketsService {
     if (!ticket) throw new Error('Ticket not found');
 
     if (!ticket.workflow) {
-      console.log(`[TicketsService] Ticket ${id} has no workflow. Auto-assigning default.`);
+      console.log(
+        `[TicketsService] Ticket ${id} has no workflow. Auto-assigning default.`,
+      );
       const defaultWf = await this.prisma.workflow.findFirst({
-         include: { states: { orderBy: { order: 'asc' } } }
+        include: { states: { orderBy: { order: 'asc' } } },
       });
       if (defaultWf) {
-         await this.prisma.ticket.update({ 
-            where: { id: ticket.id }, 
-            data: { 
-               workflowId: defaultWf.id, 
-               currentStateId: defaultWf.states[0]?.id 
-            } 
-         });
-         ticket = await this.prisma.ticket.findUnique({
-            where: { id, tenantId },
-            include: { workflow: { include: { states: true } } }
-         }) as any;
+        await this.prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            workflowId: defaultWf.id,
+            currentStateId: defaultWf.states[0]?.id,
+          },
+        });
+        ticket = (await this.prisma.ticket.findUnique({
+          where: { id, tenantId },
+          include: { workflow: { include: { states: true } } },
+        })) as any;
       } else {
-         throw new Error('Ticket or Workflow not found and no default available');
+        throw new Error(
+          'Ticket or Workflow not found and no default available',
+        );
       }
     }
 
@@ -376,22 +389,28 @@ export class TicketsService {
     if (!ticket) throw new Error('Ticket not found');
 
     if (!ticket.workflow) {
-      console.log(`[TicketsService] Ticket ${ticketId} has no workflow. Auto-assigning default.`);
+      console.log(
+        `[TicketsService] Ticket ${ticketId} has no workflow. Auto-assigning default.`,
+      );
       const defaultWf = await this.prisma.workflow.findFirst({
-         include: { states: { orderBy: { order: 'asc' } } }
+        include: { states: { orderBy: { order: 'asc' } } },
       });
       if (defaultWf) {
-         await this.prisma.ticket.update({ 
-            where: { id: ticket.id }, 
-            data: { 
-               workflowId: defaultWf.id, 
-               currentStateId: defaultWf.states[0]?.id 
-            } 
-         });
-         ticket = await this.prisma.ticket.findUnique({
-            where: { id: ticketId, tenantId },
-            include: { currentState: true, reportedByUser: true, workflow: { include: { states: { orderBy: { order: 'asc' } } } } }
-         });
+        await this.prisma.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            workflowId: defaultWf.id,
+            currentStateId: defaultWf.states[0]?.id,
+          },
+        });
+        ticket = await this.prisma.ticket.findUnique({
+          where: { id: ticketId, tenantId },
+          include: {
+            currentState: true,
+            reportedByUser: true,
+            workflow: { include: { states: { orderBy: { order: 'asc' } } } },
+          },
+        });
       }
     }
 
@@ -499,7 +518,9 @@ export class TicketsService {
     });
 
     if (!ticket || !ticket.workflow) {
-      console.warn('Ticket or Workflow not found even after fallback. Aborting state transition but saving comment.');
+      console.warn(
+        'Ticket or Workflow not found even after fallback. Aborting state transition but saving comment.',
+      );
       return ticket;
     }
 
