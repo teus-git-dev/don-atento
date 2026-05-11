@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Public } from './auth/public.decorator';
 import { PrismaService } from './prisma/prisma.service';
@@ -23,17 +23,23 @@ export class AppController {
    */
   @Public()
   @Get('api/health')
-  async healthCheck(): Promise<{ status: string; db: string; uptime: number }> {
-    let dbStatus = 'ok';
+  async healthCheck() {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
+      return {
+        status: 'ok',
+        db: 'ok',
+        uptime: Math.floor(process.uptime()),
+      };
     } catch {
-      dbStatus = 'unreachable';
+      throw new HttpException(
+        {
+          status: 'degraded',
+          db: 'unreachable',
+          uptime: Math.floor(process.uptime()),
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
-    return {
-      status: dbStatus === 'ok' ? 'ok' : 'degraded',
-      db: dbStatus,
-      uptime: Math.floor(process.uptime()),
-    };
   }
 }

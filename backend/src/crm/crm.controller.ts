@@ -8,15 +8,19 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
   BadRequestException,
   Req,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CrmService } from './crm.service';
 import { LegalAiService } from '../cognitive/legal-ai.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 
 /** Allowed MIME types for contract/document uploads */
 const ALLOWED_MIME_TYPES = [
@@ -29,6 +33,9 @@ const ALLOWED_MIME_TYPES = [
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
+@ApiTags('crm')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('crm')
 export class CrmController {
   constructor(
@@ -41,14 +48,14 @@ export class CrmController {
     // Use tenantId from JWT (injected by TenantGuard), not from body
     return this.crmService.createProspect({
       ...data,
-      tenantId: req['tenantId'],
+      tenantId: req.tenantId!,
     });
   }
 
   @Get('prospects')
   findAll(@Req() req: Request) {
     // tenantId comes from the JWT via TenantGuard — never from query params
-    return this.crmService.findAll(req['tenantId']);
+    return this.crmService.findAll(req.tenantId!);
   }
 
   @Patch('prospects/:id')
@@ -58,12 +65,12 @@ export class CrmController {
 
   @Get('analytics/funnel')
   getFunnel(@Req() req: Request) {
-    return this.crmService.getFunnel(req['tenantId']);
+    return this.crmService.getFunnel(req.tenantId!);
   }
 
   @Get('analytics/sentiment')
   getSentiment(@Req() req: Request) {
-    return this.crmService.getSentimentMetrics(req['tenantId']);
+    return this.crmService.getSentimentMetrics(req.tenantId!);
   }
 
   @Post('prospects/:id/tasks')
@@ -78,7 +85,7 @@ export class CrmController {
 
   @Post('prospects/:id/convert')
   convert(@Param('id') id: string, @Req() req: Request) {
-    return this.crmService.convertToClient(id, req['tenantId']);
+    return this.crmService.convertToClient(id, req.tenantId!);
   }
 
   @Post('prospects/:id/contract')
@@ -91,7 +98,7 @@ export class CrmController {
     return this.crmService.startContractProcess(
       prospectId,
       propertyId,
-      req['tenantId'],
+      req.tenantId!,
       formData,
     );
   }

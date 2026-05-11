@@ -75,7 +75,7 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role,
         tenantId: user.tenantId,
-        mustChangePassword: (user as any).mustChangePassword ?? false,
+        mustChangePassword: user.mustChangePassword,
         tenant: user.tenant
           ? { id: user.tenant.id, name: user.tenant.name }
           : null,
@@ -147,7 +147,7 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role,
         tenantId: user.tenantId,
-        mustChangePassword: (user as any).mustChangePassword ?? false,
+        mustChangePassword: user.mustChangePassword,
         tenant: user.tenant
           ? { id: user.tenant.id, name: user.tenant.name }
           : null,

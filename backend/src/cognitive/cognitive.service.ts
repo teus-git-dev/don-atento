@@ -51,37 +51,34 @@ export class CognitiveService {
     );
   }
 
-  /**
-   * FinOps Analytics — returns per-tenant ticket volume and property counts.
-   * NOTE: The original implementation referenced a `TenantSubscription` model
-   * that does not exist in schema.prisma. This corrected version uses the
-   * actual Tenant model and aggregates real usage metrics.
-   * TODO: Add a `TenantSubscription` model with token tracking for true FinOps.
-   */
   async getFinOpsAnalytics() {
-    const tenants = await this.prisma.tenant.findMany({
-      include: {
-        _count: {
-          select: {
-            properties: true,
-            tickets: true,
-            users: true,
-          },
-        },
-        subscriptionPlan: true,
-      },
+    const subscriptions = await this.prisma.tenantSubscription.findMany({
+      include: { tenant: true },
     });
 
-    return tenants.map((tenant) => ({
-      tenantId: tenant.id,
-      name: tenant.name,
-      planName: tenant.subscriptionPlan?.name ?? 'Unknown',
-      priceMonthly: tenant.subscriptionPlan?.priceMonthly ?? 0,
-      propertyCount: tenant._count.properties,
-      ticketCount: tenant._count.tickets,
-      userCount: tenant._count.users,
-      status: tenant.status,
-    }));
+    // Gemini pricing per million tokens (input / output) — adjust if pricing changes.
+    const INPUT_USD_PER_MILLION = 0.15;
+    const OUTPUT_USD_PER_MILLION = 0.6;
+
+    return subscriptions.map((sub) => {
+      const revenue = sub.planType === 'PRO' ? 202 : 137;
+      const costIn = (sub.currentTokensInput / 1_000_000) * INPUT_USD_PER_MILLION;
+      const costOut =
+        (sub.currentTokensOutput / 1_000_000) * OUTPUT_USD_PER_MILLION;
+      const totalCostUsd = costIn + costOut;
+      const margin = revenue - totalCostUsd;
+
+      return {
+        tenantId: sub.tenantId,
+        name: sub.tenant?.name || 'Agencia Desconocida',
+        planType: sub.planType,
+        tokenQuota: sub.monthlyTokenQuota,
+        totalUsed: sub.currentTokensInput + sub.currentTokensOutput,
+        totalCostUsd: Number(totalCostUsd.toFixed(4)),
+        revenue,
+        margin: Number(margin.toFixed(4)),
+      };
+    });
   }
 
   async generateResponse(

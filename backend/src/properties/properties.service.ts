@@ -1,6 +1,10 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -483,8 +487,7 @@ export class PropertiesService {
     });
 
     if (!property) {
-      // Throw proper HTTP exception — never return a plain {error: string} with HTTP 200
-      throw new Error('Property not found or access denied');
+      throw new NotFoundException('Property not found or access denied');
     }
 
     await this.prisma.propertyRelation.updateMany({
