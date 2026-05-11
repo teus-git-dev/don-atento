@@ -11,11 +11,67 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Pending
 
-(empty)
+### [ ] RBAC dormant on remaining controllers — `@Roles()` not yet applied
+
+- **Owner**: backend team
+- **Files**: every controller listed below uses `RolesGuard` but no handler
+  declares `@Roles(...)`, so the guard is a no-op for them.
+  - `backend/src/properties/properties.controller.ts`
+  - `backend/src/providers/providers.controller.ts`
+  - `backend/src/tickets/tickets.controller.ts`
+  - Plus controllers that use `JwtAuthGuard + TenantGuard` without
+    `RolesGuard` at all (no RBAC layer):
+    - `backend/src/accounting/accounting.controller.ts`
+    - `backend/src/invoicing/invoicing.controller.ts`
+    - `backend/src/contracts/contracts.controller.ts`
+    - `backend/src/crm/crm.controller.ts`
+    - `backend/src/crm/radar.controller.ts`
+    - `backend/src/data-import/data-import.controller.ts` (already partially
+      gated by `@Roles('ADMIN_TENANT','SUPERADMIN')` from `fb95c7f`)
+    - `backend/src/inventory-master/inventory-master.controller.ts`
+    - `backend/src/inventory-templates/inventory-templates.controller.ts`
+    - `backend/src/workflows/workflows.controller.ts`
+    - `backend/src/whatsapp/baileys.controller.ts`
+- **Surfaced by**: auth audit (ALTO #2 partial). Resolved for
+  `tenants`, `users`, `roles` in fcffd7a.
+- **What**: RBAC was activated on the highest-blast-radius admin surfaces
+  but the rest still allow any authenticated tenant user to perform every
+  operation on their tenant (read, write, delete) regardless of declared role.
+- **Why it matters**: A `TENANT_USER`, `OWNER`, or `TECHNICIAN` can today
+  delete properties, mutate workflows, delete providers, create invoices,
+  etc. — anything the tenant admin can do. Inside-tenant abuse, no
+  cross-tenant escalation (TenantGuard still enforces).
+- **Suggested fix**: For each controller, add per-handler `@Roles(...)`
+  based on the operation. Reads can often be broader (e.g. `'AGENT'` and
+  up); writes/deletes should be `'ADMIN_TENANT'`/`'SUPERADMIN'` unless
+  there is a documented business reason.
+- **Watch out**: `GET /users/technicians` may be called from the agent-
+  side ticket-assignment dropdown; if AGENT users report 403s after
+  fcffd7a, either expand `@Roles()` on that handler or move it to its
+  own controller without role gating.
 
 ---
 
 ## Resolved
+
+### [x] `auth audit ALTO #2` — RBAC dormant on `tenants`, `users`, `roles` controllers
+
+- **Resolved by**: fcffd7a (`security(rbac): activate @Roles() on tenants, users, and roles controllers`)
+- **Surfaced by**: auth module audit (ALTO #2)
+- **What was wrong**: `@Roles()` decorator existed but was never applied
+  anywhere in the codebase. `RolesGuard` was registered on 5 controllers
+  but always returned `true`. RBAC system was dormant despite being declared.
+- **What was applied**:
+  - `roles.controller`: `@Roles('ADMIN_TENANT','SUPERADMIN')` controller-level
+  - `users.controller`: `@Roles('ADMIN_TENANT','SUPERADMIN')` controller-level
+  - `tenants.controller`: per-handler — `'SUPERADMIN'` only on
+    provision/updateAdmin/listTenants; `'ADMIN_TENANT','SUPERADMIN'` on
+    WhatsApp config; no `@Roles` on `me` and `change-password` (open to
+    any authenticated user).
+  - Removed three redundant manual `req.user?.role !== 'SUPERADMIN'`
+    checks in `tenants.controller` now that `RolesGuard` handles it.
+- **Still outstanding**: see Pending entry above for the remaining
+  ~10 controllers.
 
 ### [x] `auth.module.ts` — JWT_SECRET fallback to literal string `'MISSING_JWT_SECRET'`
 
