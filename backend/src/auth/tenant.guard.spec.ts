@@ -13,7 +13,12 @@ describe('TenantGuard', () => {
     guard = new TenantGuard(reflectorMock);
   });
 
-  const makeContext = (user: any, query: any = {}, body: any = {}, params: any = {}): ExecutionContext => {
+  const makeContext = (
+    user: any,
+    query: any = {},
+    body: any = {},
+    params: any = {},
+  ): ExecutionContext => {
     return {
       getHandler: jest.fn(),
       getClass: jest.fn(),
@@ -38,8 +43,12 @@ describe('TenantGuard', () => {
     it('passes if user has a tenantId and assigns it to req.tenantId', () => {
       const user = { role: 'ADMIN_TENANT', tenantId: 'tenant-1' };
       const req = makeContext(user).switchToHttp().getRequest();
-      
-      const context = { switchToHttp: () => ({ getRequest: () => req }), getHandler: jest.fn(), getClass: jest.fn() } as any;
+
+      const context = {
+        switchToHttp: () => ({ getRequest: () => req }),
+        getHandler: jest.fn(),
+        getClass: jest.fn(),
+      } as any;
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('tenant-1');
@@ -57,8 +66,14 @@ describe('TenantGuard', () => {
   describe('SUPERADMIN role', () => {
     it('passes if ?tenantId query param is provided, overriding user tenantId', () => {
       const user = { role: 'SUPERADMIN', tenantId: 'super-tenant' };
-      const req = makeContext(user, { tenantId: 'target-tenant' }).switchToHttp().getRequest();
-      const context = { switchToHttp: () => ({ getRequest: () => req }), getHandler: jest.fn(), getClass: jest.fn() } as any;
+      const req = makeContext(user, { tenantId: 'target-tenant' })
+        .switchToHttp()
+        .getRequest();
+      const context = {
+        switchToHttp: () => ({ getRequest: () => req }),
+        getHandler: jest.fn(),
+        getClass: jest.fn(),
+      } as any;
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('target-tenant');
@@ -67,7 +82,11 @@ describe('TenantGuard', () => {
     it('uses user.tenantId if no query/param tenantId is provided', () => {
       const user = { role: 'SUPERADMIN', tenantId: 'super-tenant' };
       const req = makeContext(user).switchToHttp().getRequest();
-      const context = { switchToHttp: () => ({ getRequest: () => req }), getHandler: jest.fn(), getClass: jest.fn() } as any;
+      const context = {
+        switchToHttp: () => ({ getRequest: () => req }),
+        getHandler: jest.fn(),
+        getClass: jest.fn(),
+      } as any;
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('super-tenant');

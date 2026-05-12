@@ -71,14 +71,14 @@ describe('PropertiesService', () => {
 
       const txMock = {
         property: { create: jest.fn().mockResolvedValue(makeProperty()) },
-        user: { 
+        user: {
           findFirst: jest.fn().mockResolvedValue(null),
-          create: jest.fn().mockResolvedValue({ id: 'user-2' })
+          create: jest.fn().mockResolvedValue({ id: 'user-2' }),
         },
         propertyRelation: { create: jest.fn().mockResolvedValue({}) },
         inventoryTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
       };
-      
+
       prismaMock.$transaction.mockImplementation(
         async (cb: (tx: any) => Promise<any>) => cb(txMock),
       );
@@ -95,7 +95,9 @@ describe('PropertiesService', () => {
     it('rolls back (throws error) if transaction fails', async () => {
       prismaMock.$transaction.mockRejectedValue(new Error('DB Error'));
 
-      await expect(service.create({ tenantId: 't1' })).rejects.toThrow(InternalServerErrorException);
+      await expect(service.create({ tenantId: 't1' })).rejects.toThrow(
+        InternalServerErrorException,
+      );
     });
   });
 
@@ -108,15 +110,20 @@ describe('PropertiesService', () => {
           where: { tenantId: 'tenant-1' },
           skip: 5,
           take: 5,
-        })
+        }),
       );
-      expect(prismaMock.property.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1' } });
+      expect(prismaMock.property.count).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1' },
+      });
     });
   });
 
   describe('update()', () => {
     it('updates only the provided fields on the property', async () => {
-      await service.update('prop-1', 'tenant-1', { title: 'New Title', bathrooms: 2 });
+      await service.update('prop-1', 'tenant-1', {
+        title: 'New Title',
+        bathrooms: 2,
+      });
 
       expect(prismaMock.property.updateMany).toHaveBeenCalledWith({
         where: { id: 'prop-1', tenantId: 'tenant-1' },
@@ -143,7 +150,7 @@ describe('PropertiesService', () => {
       expect(prismaMock.property.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { tenantId: 'tenant-1', propertyCode: 'EXT-999' },
-        })
+        }),
       );
     });
   });

@@ -47,7 +47,9 @@ const makePrismaMock = () => ({
     findMany: jest.fn().mockResolvedValue([makeTicket()]),
   },
   tenant: {
-    findUnique: jest.fn().mockResolvedValue({ id: 'tenant-1', name: 'Incasa NC Group' }),
+    findUnique: jest
+      .fn()
+      .mockResolvedValue({ id: 'tenant-1', name: 'Incasa NC Group' }),
   },
   workflow: {
     findUnique: jest.fn().mockResolvedValue({
@@ -64,7 +66,12 @@ const makePrismaMock = () => ({
     }),
   },
   workflowState: {
-    findUnique: jest.fn().mockResolvedValue({ id: 'state-2', name: 'Asignado', order: 1, assignedRole: null }),
+    findUnique: jest.fn().mockResolvedValue({
+      id: 'state-2',
+      name: 'Asignado',
+      order: 1,
+      assignedRole: null,
+    }),
   },
   ticketStateLog: {
     create: jest.fn().mockResolvedValue({}),
@@ -76,8 +83,12 @@ const makePrismaMock = () => ({
 });
 
 const makeCognitiveMock = () => ({
-  classifyPriority: jest.fn().mockResolvedValue({ priority: TicketPriority.MEDIUM, reason: 'General' }),
-  generateResponse: jest.fn().mockResolvedValue({ shortResponse: 'OK', longEmail: 'OK' }),
+  classifyPriority: jest
+    .fn()
+    .mockResolvedValue({ priority: TicketPriority.MEDIUM, reason: 'General' }),
+  generateResponse: jest
+    .fn()
+    .mockResolvedValue({ shortResponse: 'OK', longEmail: 'OK' }),
   logInteraction: jest.fn().mockResolvedValue({}),
   generateExecutiveQuotation: jest.fn().mockResolvedValue('Cotización OK'),
   generateQuotationDocx: jest.fn().mockResolvedValue('/files/q.docx'),
@@ -181,7 +192,10 @@ describe('TicketsService', () => {
       await service.createTicket(dto as any);
 
       // The AI classification should have been called
-      expect(cognitiveMock.classifyPriority).toHaveBeenCalledWith(dto.title, dto.description);
+      expect(cognitiveMock.classifyPriority).toHaveBeenCalledWith(
+        dto.title,
+        dto.description,
+      );
 
       // The created ticket should have URGENT priority in the data
       const createCall = prismaMock.ticket.create.mock.calls[0][0];
@@ -189,7 +203,10 @@ describe('TicketsService', () => {
     });
 
     it('generates shortId with tenant name prefix', async () => {
-      prismaMock.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', name: 'Incasa' });
+      prismaMock.tenant.findUnique.mockResolvedValue({
+        id: 'tenant-1',
+        name: 'Incasa',
+      });
 
       await service.createTicket({
         tenantId: 'tenant-1',
@@ -219,14 +236,27 @@ describe('TicketsService', () => {
         ...makeTicket(),
         currentStateId: 'state-2',
         currentState: { id: 'state-2', name: 'Asignado', order: 1 },
-        reportedByUser: { id: 'user-1', firstName: 'Juan', email: null, phone: null, whatsappId: null },
+        reportedByUser: {
+          id: 'user-1',
+          firstName: 'Juan',
+          email: null,
+          phone: null,
+          whatsappId: null,
+        },
         tenant: { id: 'tenant-1' },
       });
 
-      await service.transitionState('ticket-1', 'tenant-1', 'user-1', 'state-2');
+      await service.transitionState(
+        'ticket-1',
+        'tenant-1',
+        'user-1',
+        'state-2',
+      );
 
       expect(prismaMock.ticket.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'ticket-1', tenantId: 'tenant-1' } }),
+        expect.objectContaining({
+          where: { id: 'ticket-1', tenantId: 'tenant-1' },
+        }),
       );
       expect(prismaMock.ticketStateLog.create).toHaveBeenCalledTimes(1);
     });
@@ -241,11 +271,22 @@ describe('TicketsService', () => {
       prismaMock.ticket.update.mockResolvedValue({
         ...makeTicket({ resolvedAt: new Date() }),
         currentState: { id: 'state-3', name: 'Resuelto', order: 2 },
-        reportedByUser: { id: 'user-1', firstName: 'Juan', email: null, phone: '3001234567', whatsappId: null },
+        reportedByUser: {
+          id: 'user-1',
+          firstName: 'Juan',
+          email: null,
+          phone: '3001234567',
+          whatsappId: null,
+        },
         tenant: { id: 'tenant-1' },
       });
 
-      await service.transitionState('ticket-1', 'tenant-1', 'user-1', 'state-3');
+      await service.transitionState(
+        'ticket-1',
+        'tenant-1',
+        'user-1',
+        'state-3',
+      );
 
       const updateCall = prismaMock.ticket.update.mock.calls[0][0];
       expect(updateCall.data.resolvedAt).toBeDefined();
@@ -261,11 +302,22 @@ describe('TicketsService', () => {
       prismaMock.ticket.update.mockResolvedValue({
         ...makeTicket(),
         currentState: { id: 'state-2', name: 'En Proceso', order: 1 },
-        reportedByUser: { id: 'user-1', firstName: 'Juan', email: null, phone: null, whatsappId: null },
+        reportedByUser: {
+          id: 'user-1',
+          firstName: 'Juan',
+          email: null,
+          phone: null,
+          whatsappId: null,
+        },
         tenant: { id: 'tenant-1' },
       });
 
-      await service.transitionState('ticket-1', 'tenant-1', 'user-1', 'state-2');
+      await service.transitionState(
+        'ticket-1',
+        'tenant-1',
+        'user-1',
+        'state-2',
+      );
 
       const updateCall = prismaMock.ticket.update.mock.calls[0][0];
       expect(updateCall.data.resolvedAt).toBeUndefined();
@@ -296,11 +348,21 @@ describe('TicketsService', () => {
       prismaMock.ticket.update.mockResolvedValue({
         ...makeTicket({ resolvedAt: new Date() }),
         currentState: { id: 'state-3', name: 'Resuelto', order: 2 },
-        reportedByUser: { id: 'user-1', firstName: 'Juan', email: null, phone: null, whatsappId: null },
+        reportedByUser: {
+          id: 'user-1',
+          firstName: 'Juan',
+          email: null,
+          phone: null,
+          whatsappId: null,
+        },
         tenant: { id: 'tenant-1' },
       });
 
-      const result = await service.resolveTicket('ticket-1', 'tenant-1', 'Resuelto por técnico');
+      const result = await service.resolveTicket(
+        'ticket-1',
+        'tenant-1',
+        'Resuelto por técnico',
+      );
 
       expect(prismaMock.ticket.update).toHaveBeenCalled();
       expect(result).toBeDefined();
@@ -330,7 +392,13 @@ describe('TicketsService', () => {
       prismaMock.ticket.update.mockResolvedValue({
         ...makeTicket({ resolvedAt: new Date() }),
         currentState: { id: 's-2', name: 'Resuelto', order: 1 },
-        reportedByUser: { id: 'user-1', firstName: 'Juan', email: null, phone: null, whatsappId: null },
+        reportedByUser: {
+          id: 'user-1',
+          firstName: 'Juan',
+          email: null,
+          phone: null,
+          whatsappId: null,
+        },
         tenant: { id: 'tenant-1' },
       });
 
@@ -351,11 +419,19 @@ describe('TicketsService', () => {
         satisfactionComment: 'Excelente servicio',
       });
 
-      const result = await service.updateSatisfaction('ticket-1', 'tenant-1', 5, 'Excelente servicio');
+      const result = await service.updateSatisfaction(
+        'ticket-1',
+        'tenant-1',
+        5,
+        'Excelente servicio',
+      );
 
       expect(prismaMock.ticket.update).toHaveBeenCalledWith({
         where: { id: 'ticket-1', tenantId: 'tenant-1' },
-        data: { satisfactionStars: 5, satisfactionComment: 'Excelente servicio' },
+        data: {
+          satisfactionStars: 5,
+          satisfactionComment: 'Excelente servicio',
+        },
       });
     });
   });
