@@ -208,6 +208,51 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] WhatsApp webhook fail-closed — defense-in-depth (no active Meta tenants in prod)
+
+- **Resolved by**: 07fe4ed (`security(whatsapp): fail-closed on webhook signature validation`)
+- **Original audit framing**: CRÍTICO #2 — "missing `WHATSAPP_APP_SECRET`
+  silently skipped HMAC validation, allowing webhook forgery". The
+  consolidated pre-deploy checklist promoted setting the two env vars
+  in Render as a deploy blocker.
+- **Production state (verified in Supabase)**:
+  ```
+  whatsappProvider | active tenants
+  -----------------+----------------
+  baileys          | 2
+  meta             | 0
+  ```
+  Inbound for the active 2 tenants flows through
+  `BaileysAdapter.setMessageHandler()` callbacks (socket-based, no
+  webhook). The Meta endpoint at `whatsapp.controller.ts:26,59`
+  (`@Get/@Post('webhook')`) is registered and exposed via
+  `whatsapp.module.ts` but receives no real traffic.
+- **Re-classification**: **defense-in-depth** for a latent capability,
+  not mitigation of an active vulnerability. The fix is still correct
+  (any `@Public()` endpoint that processes externally-controlled input
+  must validate), but its practical value today is protection for the
+  future: if someone configures a Meta App pointing at
+  `https://don-atento-api.onrender.com/whatsapp/webhook`, the handler
+  is now safe by construction.
+- **NOT a pre-deploy blocker** in current state. `WHATSAPP_APP_SECRET`
+  and `WHATSAPP_VERIFY_TOKEN` are dormant requirements that activate
+  when BOTH:
+  1. At least one tenant flips `whatsappProvider` from `baileys` to
+     `meta` (today: zero), AND
+  2. A Meta App is configured to deliver webhooks to the URL above.
+- **What the fix did to the code**: HMAC validation on
+  `POST /whatsapp/webhook` is now mandatory — missing
+  `WHATSAPP_APP_SECRET` → 500, missing/invalid signature → 401.
+  GET `verifyWebhook` throws proper exceptions on misconfig instead
+  of returning 200 with text body. Removed dead `try/catch` around
+  `timingSafeEqual` and replaced `req: any` with
+  `RawBodyRequest<Request>` for proper typing.
+- **Trap warning for the future**: before flipping any tenant to
+  `meta` in the database, set both env vars in Render dashboard
+  FIRST. A tenant flipped without env vars set will silently
+  receive nothing because every Meta webhook call returns 500 and
+  Meta will eventually drop the messages.
+
 ### [x] `auth audit ALTO #5` — Refresh tokens: no reuse detection, no logout invalidation
 
 - **Resolved by**: a87d1f3 (`security(auth): refresh-token reuse detection + logout invalidation`)
