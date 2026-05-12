@@ -14,13 +14,13 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CrmService } from './crm.service';
 import { LegalAiService } from '../cognitive/legal-ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { FileUploadService } from '../storage/file-upload.service';
 
 /** Allowed MIME types for contract/document uploads */
 const ALLOWED_MIME_TYPES = [
@@ -33,6 +33,11 @@ const ALLOWED_MIME_TYPES = [
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
+// Contracts live long-term in ContractDocument.fileUrl. 24h is too short for
+// clients reviewing/signing over multiple days. Matches the quotations TTL in
+// cognitive.service.ts. Phase 3 will introduce URL refresh for older records.
+const CONTRACT_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
+
 @ApiTags('crm')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -41,6 +46,7 @@ export class CrmController {
   constructor(
     private readonly crmService: CrmService,
     private readonly legalAi: LegalAiService,
+    private readonly fileUpload: FileUploadService,
   ) {}
 
   @Post('prospects')
@@ -112,19 +118,14 @@ export class CrmController {
    * Secure file upload for contracts and documents.
    * - MIME type allowlist (no executables, scripts, or unknown types)
    * - 10 MB size limit
-   * - Files stored in public/uploads; production should redirect to Supabase Storage
+   * - Files stored in Supabase Storage under <tenantId>/contracts/<random>.<ext>
+   *   via FileUploadService (creates FileAsset row, rolls back on DB failure)
+   * - Returns a 7-day signed URL (see CONTRACT_SIGNED_URL_TTL_SECONDS).
    */
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './public/uploads',
-        filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, `contract-${uniqueSuffix}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: {
         fileSize: MAX_FILE_SIZE_BYTES,
         files: 1,
@@ -143,12 +144,27 @@ export class CrmController {
       },
     }),
   )
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
     if (!file) return { error: 'No se subió ningún archivo' };
 
+    const { url, filename } = await this.fileUpload.upload(
+      req.tenantId!,
+      'contracts',
+      file.buffer,
+      {
+        mimeType: file.mimetype,
+        originalName: file.originalname,
+        ttlSeconds: CONTRACT_SIGNED_URL_TTL_SECONDS,
+      },
+    );
+
     return {
-      url: `/uploads/${file.filename}`,
+      url,
       name: file.originalname,
+      filename,
     };
   }
 

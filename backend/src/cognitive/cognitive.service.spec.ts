@@ -3,7 +3,7 @@ import { CognitiveService } from './cognitive.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BrandBrainService } from './brand-brain.service';
 import { AiChatService } from './ai-chat.service';
-import { SupabaseStorageService } from '../storage/supabase-storage.service';
+import { FileUploadService } from '../storage/file-upload.service';
 
 describe('CognitiveService', () => {
   let service: CognitiveService;
@@ -19,7 +19,6 @@ describe('CognitiveService', () => {
         brandBrain: null,
       }),
     },
-    fileAsset: { create: jest.fn() },
   };
 
   const mockBrandBrainService = {
@@ -37,11 +36,8 @@ describe('CognitiveService', () => {
       .mockResolvedValue('Hola, soy el asistente de Don Atento.'),
   };
 
-  const mockStorageService = {
+  const mockFileUploadService = {
     upload: jest.fn(),
-    download: jest.fn(),
-    signedUrl: jest.fn(),
-    delete: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -51,7 +47,7 @@ describe('CognitiveService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: BrandBrainService, useValue: mockBrandBrainService },
         { provide: AiChatService, useValue: mockAiChatService },
-        { provide: SupabaseStorageService, useValue: mockStorageService },
+        { provide: FileUploadService, useValue: mockFileUploadService },
       ],
     }).compile();
 
@@ -142,106 +138,6 @@ describe('CognitiveService', () => {
       );
       expect(typeof result.reason).toBe('string');
       expect(result.reason.length).toBeGreaterThan(0);
-    });
-  });
-
-  // ── persistQuotation (private — accessed via typed cast) ───────────────────
-  describe('persistQuotation', () => {
-    type InternalAccess = {
-      persistQuotation: (
-        tenantId: string,
-        buffer: Buffer,
-        opts: { mimeType: string; originalName: string },
-      ) => Promise<string>;
-    };
-
-    const callPersist = (
-      tenantId: string,
-      buffer: Buffer,
-      opts: { mimeType: string; originalName: string },
-    ) =>
-      (service as unknown as InternalAccess).persistQuotation(
-        tenantId,
-        buffer,
-        opts,
-      );
-
-    it('uploads, creates FileAsset, and returns a 7-day signed URL', async () => {
-      mockStorageService.upload.mockResolvedValue({
-        bucketKey: 't1/quotations/abc.pdf',
-        filename: 'abc.pdf',
-      });
-      mockPrismaService.fileAsset.create.mockResolvedValue({});
-      mockStorageService.signedUrl.mockResolvedValue('https://sig/url');
-
-      const buffer = Buffer.from('pdf-bytes');
-      const url = await callPersist('t1', buffer, {
-        mimeType: 'application/pdf',
-        originalName: 'quote.pdf',
-      });
-
-      expect(mockStorageService.upload).toHaveBeenCalledWith(
-        't1',
-        'quotations',
-        buffer,
-        { mimeType: 'application/pdf', originalName: 'quote.pdf' },
-      );
-      expect(mockPrismaService.fileAsset.create).toHaveBeenCalledWith({
-        data: {
-          tenantId: 't1',
-          filename: 'abc.pdf',
-          bucketKey: 't1/quotations/abc.pdf',
-          originalName: 'quote.pdf',
-          mimeType: 'application/pdf',
-          sizeBytes: buffer.length,
-        },
-      });
-      expect(mockStorageService.signedUrl).toHaveBeenCalledWith(
-        't1/quotations/abc.pdf',
-        7 * 24 * 60 * 60,
-      );
-      expect(url).toBe('https://sig/url');
-    });
-
-    it('rolls back the Supabase object when FileAsset.create fails', async () => {
-      mockStorageService.upload.mockResolvedValue({
-        bucketKey: 'k',
-        filename: 'f',
-      });
-      mockPrismaService.fileAsset.create.mockRejectedValue(
-        new Error('DB constraint'),
-      );
-      mockStorageService.delete.mockResolvedValue(undefined);
-
-      await expect(
-        callPersist('t1', Buffer.from('x'), {
-          mimeType: 'application/pdf',
-          originalName: 'q.pdf',
-        }),
-      ).rejects.toThrow('DB constraint');
-
-      expect(mockStorageService.delete).toHaveBeenCalledWith('k');
-      expect(mockStorageService.signedUrl).not.toHaveBeenCalled();
-    });
-
-    it('does not shadow the original error when rollback delete itself fails', async () => {
-      mockStorageService.upload.mockResolvedValue({
-        bucketKey: 'k',
-        filename: 'f',
-      });
-      mockPrismaService.fileAsset.create.mockRejectedValue(
-        new Error('Original DB error'),
-      );
-      mockStorageService.delete.mockRejectedValue(
-        new Error('Rollback also failed'),
-      );
-
-      await expect(
-        callPersist('t1', Buffer.from('x'), {
-          mimeType: 'application/pdf',
-          originalName: 'q.pdf',
-        }),
-      ).rejects.toThrow('Original DB error');
     });
   });
 });

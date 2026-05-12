@@ -18,7 +18,7 @@ import PDFDocument from 'pdfkit';
 import { BrandBrainService } from './brand-brain.service';
 import { AiChatService } from './ai-chat.service';
 import { TicketPriority } from '@prisma/client';
-import { SupabaseStorageService } from '../storage/supabase-storage.service';
+import { FileUploadService } from '../storage/file-upload.service';
 
 // Quotations are emailed/WhatsApped to clients who typically take days to
 // review and respond. 24h (the default for in-app uploads) is too short for
@@ -33,7 +33,7 @@ export class CognitiveService {
     private prisma: PrismaService,
     private brandBrain: BrandBrainService,
     private aiChatService: AiChatService,
-    private storage: SupabaseStorageService,
+    private fileUpload: FileUploadService,
   ) {}
 
   async generateAiChatResponse(
@@ -607,11 +607,18 @@ export class CognitiveService {
 
     const buffer = await Packer.toBuffer(doc);
     const fileName = `quote_${ticketId.split('-')[0]}_${Date.now()}.docx`;
-    return this.persistQuotation(tenantId, buffer, {
-      mimeType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      originalName: fileName,
-    });
+    const { url } = await this.fileUpload.upload(
+      tenantId,
+      'quotations',
+      buffer,
+      {
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        originalName: fileName,
+        ttlSeconds: QUOTATION_SIGNED_URL_TTL_SECONDS,
+      },
+    );
+    return url;
   }
 
   async generateQuotationPdf(
@@ -714,51 +721,17 @@ export class CognitiveService {
 
     doc.end();
     const buffer = await buffered;
-    return this.persistQuotation(tenantId, buffer, {
-      mimeType: 'application/pdf',
-      originalName: fileName,
-    });
-  }
-
-  /**
-   * Upload a quotation file to Supabase Storage, record it in FileAsset, and
-   * return a 7-day signed URL. If the FileAsset insert fails, the bucket
-   * object is removed to avoid orphans; rollback failure is logged but does
-   * not shadow the original error.
-   */
-  private async persistQuotation(
-    tenantId: string,
-    buffer: Buffer,
-    opts: { mimeType: string; originalName: string },
-  ): Promise<string> {
-    const { bucketKey, filename } = await this.storage.upload(
+    const { url } = await this.fileUpload.upload(
       tenantId,
       'quotations',
       buffer,
-      opts,
+      {
+        mimeType: 'application/pdf',
+        originalName: fileName,
+        ttlSeconds: QUOTATION_SIGNED_URL_TTL_SECONDS,
+      },
     );
-
-    try {
-      await this.prisma.fileAsset.create({
-        data: {
-          tenantId,
-          filename,
-          bucketKey,
-          originalName: opts.originalName,
-          mimeType: opts.mimeType,
-          sizeBytes: buffer.length,
-        },
-      });
-    } catch (err) {
-      await this.storage.delete(bucketKey).catch((cleanupErr: Error) => {
-        this.logger.error(
-          `Failed to rollback Supabase object after FileAsset insert failure: bucketKey=${bucketKey} cleanupErr=${cleanupErr.message}`,
-        );
-      });
-      throw err;
-    }
-
-    return this.storage.signedUrl(bucketKey, QUOTATION_SIGNED_URL_TTL_SECONDS);
+    return url;
   }
 
   async processQuoteDocument(tenantId: string, attachmentUrl: string) {

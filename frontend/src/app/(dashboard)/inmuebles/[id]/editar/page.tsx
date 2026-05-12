@@ -481,7 +481,7 @@ export default function EditarInmueblePage() {
                                                 <CheckCircle2 size={12} /> Analizado
                                             </span>
                                         )}
-                                        <a href={`${API_URL.replace('/api', '')}${contract.fileUrl}`} target="_blank" rel="noreferrer" className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center gap-2">
+                                        <a href={contract.fileUrl?.startsWith('http') ? contract.fileUrl : `${API_URL.replace('/api', '')}${contract.fileUrl}`} target="_blank" rel="noreferrer" className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center gap-2">
                                             Ver Documento
                                         </a>
                                     </div>

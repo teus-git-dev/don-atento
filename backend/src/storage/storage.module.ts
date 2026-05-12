@@ -5,6 +5,8 @@ import {
   SUPABASE_CLIENT,
   SupabaseStorageService,
 } from './supabase-storage.service';
+import { FileUploadService } from './file-upload.service';
+import { PrismaModule } from '../prisma/prisma.module';
 
 // Fail-fast at module load: Supabase credentials are required in every
 // environment (dev included — Fase 0 decision). Mirrors the JWT_SECRET
@@ -20,8 +22,10 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET) {
 }
 
 @Module({
+  imports: [PrismaModule],
   providers: [
     SupabaseStorageService,
+    FileUploadService,
     {
       provide: SUPABASE_CLIENT,
       useFactory: () =>
@@ -34,6 +38,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET) {
       useValue: SUPABASE_STORAGE_BUCKET,
     },
   ],
-  exports: [SupabaseStorageService],
+  exports: [SupabaseStorageService, FileUploadService],
 })
 export class StorageModule {}
