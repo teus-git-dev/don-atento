@@ -274,6 +274,37 @@ Close items with a checkbox once resolved (commit hash next to it).
   guard, which does not by itself enforce cross-tenant isolation
   without service-level cooperation.
 
+### [ ] 🔵 INFORMATIVO: brand-brain document upload is end-to-end dead code
+
+- **Owner**: backend team
+- **Surfaced by**: Phase 2.5 Supabase Storage migration (the method
+  was migrated for parity, but there's no path that actually calls it)
+- **What**: `BrandBrainService.uploadBrandDocument(tenantId, fileName,
+  content)` is a public method with **zero callers** across the entire
+  repo (verified by grep). Its sibling read path in `getBrandTone()`
+  lines 32-44 (the `CUSTOM_FILE` branch) checks for files in
+  `storage/tenants/<id>/brand_brain/` — a directory that, post-Phase 2.5,
+  receives no writes from anywhere. Both paths are functionally dead.
+- **Why it matters**: Maintenance overhead. The constructor at line
+  11-13 still creates `storage/tenants/` on every boot. The
+  `storagePath` field and the `fs.existsSync` / `fs.readdirSync` calls
+  in `getBrandTone` continue to exist but never produce a meaningful
+  result.
+- **Suggested fix** (two acceptable directions):
+  1. **Delete both paths** + drop the `storagePath` field, the
+     constructor mkdir, the `CUSTOM_FILE` branch in `getBrandTone`,
+     and the migrated `uploadBrandDocument` method. The
+     `BrandBrain` table in Prisma covers the live use case
+     (structured tone, policies, FAQ).
+  2. **Wire up a controller + UI** for uploading brand documents
+     (PDFs of brand guidelines, policy docs) and reading them back.
+     This was likely the original intent — `getBrandTone` already
+     handles the CUSTOM_FILE tone — but the controller never shipped.
+- **What Phase 2.5 did**: migrated the write side (`uploadBrandDocument`)
+  to Supabase Storage under `<tenantId>/brand/` so that **if** a future
+  caller wires it up, files persist across Render redeploys. The
+  signature and shape are now consistent with the rest of the migration.
+
 ---
 
 ## Resolved

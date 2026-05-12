@@ -2,12 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import { FileUploadService } from '../storage/file-upload.service';
+
+// Brand documents (policies, FAQ PDFs) referenced from the tenant admin
+// dashboard. 7d TTL matches the rest of the migration; Phase 3 will add
+// URL refresh for older references.
+const BRAND_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class BrandBrainService {
   private readonly storagePath = path.join(process.cwd(), 'storage', 'tenants');
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private fileUpload: FileUploadService,
+  ) {
     if (!fs.existsSync(this.storagePath)) {
       fs.mkdirSync(this.storagePath, { recursive: true });
     }
@@ -121,14 +130,17 @@ export class BrandBrainService {
     fileName: string,
     content: Buffer,
   ) {
-    const brandPath = path.join(this.storagePath, tenantId, 'brand_brain');
-    if (!fs.existsSync(brandPath)) {
-      fs.mkdirSync(brandPath, { recursive: true });
-    }
-
-    const filePath = path.join(brandPath, fileName);
-    fs.writeFileSync(filePath, content);
-    return { success: true, path: filePath };
+    const { url, filename } = await this.fileUpload.upload(
+      tenantId,
+      'brand',
+      content,
+      {
+        mimeType: 'application/octet-stream',
+        originalName: fileName,
+        ttlSeconds: BRAND_SIGNED_URL_TTL_SECONDS,
+      },
+    );
+    return { success: true, url, filename };
   }
 
   async recordContractKnowledge(tenantId: string, summary: string) {
