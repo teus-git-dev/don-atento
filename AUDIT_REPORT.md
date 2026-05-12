@@ -11,6 +11,69 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Pending
 
+### [ ] Cleanup cron for `RefreshToken` table — unbounded growth
+
+- **Owner**: backend team
+- **Surfaced by**: ALTO #5 (a87d1f3 introduces `usedAt` semantics — used
+  records are no longer deleted on rotation, only marked).
+- **What**: After a87d1f3, rotated tokens stay in DB with `usedAt` set
+  (needed for reuse detection). Without periodic cleanup, the table
+  grows by ~1 row per refresh per user × 7 days. At scale this becomes
+  meaningful.
+- **Suggested fix**: BullMQ scheduled job (deps already include `bullmq`)
+  that runs daily and executes:
+  ```sql
+  DELETE FROM "RefreshToken"
+  WHERE (usedAt IS NOT NULL AND usedAt < NOW() - INTERVAL '30 days')
+     OR expiresAt < NOW() - INTERVAL '7 days';
+  ```
+  The 30-day window for used tokens preserves recent reuse-detection
+  signal for forensics; the 7-day window for expired catches naturally
+  abandoned sessions. The schema already has `@@index([usedAt, expiresAt])`
+  for fast scanning.
+- **Blocker**: no cron infrastructure exists yet. BullMQ is in deps but
+  no scheduler / queue is wired up. Adding the first queue is a small
+  but real architectural step.
+
+### [ ] "Logout from this device only" semantics — currently logs out everywhere
+
+- **Owner**: backend + frontend team
+- **Surfaced by**: ALTO #5 design trade-off (a87d1f3)
+- **What**: `logout()` after a87d1f3 invalidates every active refresh
+  token for the user via `updateMany({ where: { userId } })` — a user
+  logged in on phone + desktop who hits "logout" on desktop is also
+  kicked from phone. Stricter security but unexpected UX.
+- **Why this design**: The refresh cookie is path-scoped to
+  `/api/auth/refresh`, so it does not arrive at `/api/auth/logout`.
+  Without the refresh cookie, the handler cannot identify the specific
+  session to invalidate; only the userId from the access token (which
+  has path `/`).
+- **Suggested fix**: Either
+  - (a) Widen refresh cookie path to `/api/auth` (covers refresh AND
+    logout, but forces every existing session to re-login on the deploy
+    that ships this).
+  - (b) Add a separate `POST /api/auth/refresh/logout` endpoint inside
+    the refresh path so the browser sends the refresh cookie. Hash and
+    update only the matching record.
+  - (c) Add a "logout from all devices" toggle in the UI alongside the
+    default "logout this device only" button. Most UX-friendly.
+
+### [ ] IP / User-Agent per refresh-token record for forensics
+
+- **Owner**: backend team
+- **Surfaced by**: ALTO #5 (a87d1f3 added reuse detection but no
+  context for the security warning log)
+- **What**: When `Refresh token reuse detected for userId=...` fires,
+  the security log only has the userId. We don't know the IP or
+  User-Agent of either the legit user OR the attacker. Forensics is
+  blind.
+- **Suggested fix**: Add nullable columns to `RefreshToken`:
+  `createdFromIp String?`, `createdFromUserAgent String?`,
+  `lastUsedFromIp String?`, `lastUsedFromUserAgent String?`. Set on
+  create/refresh from `req.ip` and `req.headers['user-agent']`.
+  Include in the reuse-detection log so IR (incident response) can
+  triage which session was the legit one.
+
 ### [ ] PRE-DEPLOY: write `backfill-file-assets.ts` and run before next deploy
 
 - **Owner**: backend team
@@ -144,6 +207,32 @@ Close items with a checkbox once resolved (commit hash next to it).
 ---
 
 ## Resolved
+
+### [x] `auth audit ALTO #5` — Refresh tokens: no reuse detection, no logout invalidation
+
+- **Resolved by**: a87d1f3 (`security(auth): refresh-token reuse detection + logout invalidation`)
+- **Surfaced by**: auth module audit (ALTO #5)
+- **What was wrong**:
+  - Refresh rotation DELETEd the old record. A stolen token used by
+    attacker before legit user got rotated tokens; legit user couldn't
+    detect the theft because the response was identical to natural expiry.
+  - Logout cleared cookies but the DB record persisted until natural
+    7-day expiry, so a cookie stolen pre-logout remained replayable.
+- **What was applied**:
+  - `RefreshToken.usedAt DateTime?` column + `@@index([userId])` and
+    `@@index([usedAt, expiresAt])`.
+  - `refreshToken()` UPDATEs `usedAt` instead of DELETE on rotation.
+  - Subsequent presentation of the same hash with `usedAt` set is
+    detected as reuse → `deleteMany` on user's tokens + log warning +
+    reject. Same FAILURE_MESSAGE as natural expiry (no enumeration).
+  - `logout()` decodes access token cookie, extracts userId,
+    `updateMany`s all of that user's `usedAt: null` records to mark them
+    used (which also primes them for reuse detection if a stolen pre-
+    logout cookie is presented).
+  - 5 new tests in `auth.service.spec.ts`.
+- **Schema migration**: requires `prisma db push` per environment.
+- **Follow-ups tracked above as Pending**: cleanup cron, per-device
+  logout, forensics IP/UA per record.
 
 ### [x] `auth audit ALTO #4` — `files.controller` cross-tenant access by filename
 
