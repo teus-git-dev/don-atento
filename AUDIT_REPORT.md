@@ -11,6 +11,62 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Pending
 
+### [ ] PRE-DEPLOY: write `backfill-file-assets.ts` and run before next deploy
+
+- **Owner**: backend team
+- **When**: BEFORE the next push that includes 97f1704 reaches production
+- **Surfaced by**: ALTO #4 (97f1704 introduces FileAsset tenant scoping)
+- **What**: 97f1704 makes `GET /uploads/:filename` return 404 for any file
+  that has no `FileAsset` record. After deploy, every existing file URL
+  saved in DB (Ticket attachments, ContractDocument urls, quotation paths
+  in cognitive.service.ts:611,712, etc.) will return 404 to users.
+- **Why it matters**: Visible UX regression on day-of-deploy. Mitigation
+  must run beforehand or simultaneously with the deploy.
+- **Suggested fix**: Write `backend/prisma/backfill-file-assets.ts` that:
+  1. `readdirSync(public/uploads)` recursively
+  2. For each file: prompt for tenantId (or use `--all-tenant=<id>` flag
+     for dev where everything belongs to one tenant)
+  3. Detect MIME from extension or `file-type` package
+  4. `prisma.fileAsset.create({ filename, tenantId, originalName: filename,
+     mimeType, sizeBytes: stat.size })`
+- **Acceptable shortcut for prod**: Render's free tier has ephemeral disk
+  (no persistent disk in render.yaml), so the prod filesystem is empty
+  after every deploy. There is essentially nothing to backfill in prod.
+  In local dev: 9 files (7 are orphans from pre-untrack cleanup, 2 are
+  test quotations) — backfill is trivially small.
+
+### [ ] BACKLOG PRIORITARIO: migrate `public/uploads/` to Supabase Storage
+
+- **Owner**: backend team
+- **Priority**: high — this is the root cause behind why ALTO #4 needed
+  the FileAsset metadata workaround in the first place.
+- **Estimate**: 1 sprint
+- **What**: The current upload pipeline writes to `public/uploads/` on
+  the Render web service local filesystem. Render free tier has no
+  persistent disk (no `disk:` block in render.yaml), so files evaporate
+  on every deploy. Users see broken images/PDFs cyclically.
+  Meanwhile `SUPABASE_STORAGE_BUCKET=atento-media` is already configured
+  in `.env.example:53` and `render.yaml:39` but no code in the backend
+  imports the Supabase SDK. It's a dead env var.
+- **Why it matters**: Persistent file storage is a baseline requirement
+  for the product. Tickets reference attachments that disappear, contracts
+  reference documents that disappear, etc.
+- **Suggested fix**: Create `SupabaseStorageService` that wraps
+  `@supabase/storage-js`. Replace the four upload sites (crm, tickets,
+  inventory-master, cognitive/quotations) to upload via the service
+  instead of `multer.diskStorage`. Replace `files.controller` to redirect
+  or stream from Supabase. Add `bucketKey: String?` field to FileAsset
+  model and set it on new uploads (the existing `filename @unique` can
+  remain for dev/legacy compat).
+- **Tenant scoping**: bucket key as `<tenantId>/<filename>` makes tenant
+  scoping fall out of the path, reducing reliance on FileAsset metadata.
+- **Files affected**: `crm.controller.ts`, `tickets.controller.ts`,
+  `inventory-master.controller.ts` + `inventory-report.service.ts`,
+  `cognitive.service.ts` (quotations), `files.controller.ts`,
+  `contracts/contracts.service.ts`.
+- **Out of scope for this ticket but related**: signed URLs vs public
+  URLs decision; CDN; max upload sizes per tenant.
+
 ### [ ] Timing leak in `auth.service.login()` — bcrypt only runs on valid-user path
 
 - **Owner**: backend team
@@ -88,6 +144,27 @@ Close items with a checkbox once resolved (commit hash next to it).
 ---
 
 ## Resolved
+
+### [x] `auth audit ALTO #4` — `files.controller` cross-tenant access by filename
+
+- **Resolved by**: 97f1704 (`security(files): tenant-scope file downloads via FileAsset metadata`)
+- **Surfaced by**: auth module audit (ALTO #4)
+- **What was wrong**: `GET /uploads/:filename` only required JWT; any
+  authenticated user could fetch any file in `public/uploads/` by
+  knowing the filename. Filenames were timestamp + 9-digit random,
+  hard but not impossible to guess; cross-tenant leakage via shared
+  URLs/screenshots/etc was the realistic vector.
+- **What was applied**: New `FileAsset` model in schema.prisma records
+  `(filename UNIQUE, tenantId, mimeType, ...)`. FilesController looks
+  up the asset and verifies `asset.tenantId === req.tenantId` before
+  serving. Same `NotFoundException` for "no record" and "wrong tenant"
+  to avoid leaking existence cross-tenant. Content-Type now sourced
+  from `asset.mimeType` instead of extension guess.
+- **Operational requirement**: `prisma db push` (or migrate deploy)
+  needed in target env — no automated migration in this repo.
+- **Follow-ups tracked**: backfill (Pending), upload-site
+  instrumentation (Pending — implicit in Supabase migration item),
+  Supabase Storage migration (Pending).
 
 ### [x] `auth audit ALTO #3` — Account enumeration via 3 distinct login error messages
 
