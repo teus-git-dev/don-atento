@@ -305,6 +305,32 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [ ] 🔵 INFORMATIVO: generateInventoryPDF produces a Buffer that no caller consumes
+
+- **Owner**: backend team
+- **Surfaced by**: Phase 2.6 scoping (skipped — nothing to migrate)
+- **What**: `InventoryReportService.generateInventoryPDF(propertyId)` at
+  `backend/src/inventory-master/inventory-report.service.ts:13` builds a
+  full PDF in memory and returns a Buffer. Grep across the entire repo
+  shows **zero callers** for this method. Its sibling
+  `sendInventoryReport(propertyId, type)` is called from
+  `inventory-master.service.ts:78,188`, but only sends a plain WhatsApp
+  text message ("Tu reporte de inventario ya está listo") — no link to
+  the PDF, no attachment, the Buffer is never produced.
+- **Why it matters**: ~150 lines of unreachable PDF generation code
+  (PDFKit constructions, layout, branding). Costs maintenance and
+  obscures intent. Worse than `uploadBrandDocument` because here there
+  isn't even a sibling read path that COULD consume it.
+- **Suggested fix** (two acceptable directions):
+  1. **Delete `generateInventoryPDF`** and either drop
+     `sendInventoryReport` too or simplify it to just send the WhatsApp
+     notification (the part that actually runs today).
+  2. **Wire up a delivery path**: store the PDF Buffer to Supabase via
+     `FileUploadService.upload(tenantId, 'inventory-reports', ...)`,
+     embed the signed URL in the WhatsApp message body. This is the
+     small migration that was originally proposed as Phase 2.6 but
+     was skipped because the consumer side never shipped.
+
 ---
 
 ## Resolved
