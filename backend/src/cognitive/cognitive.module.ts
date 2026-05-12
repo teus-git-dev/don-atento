@@ -10,9 +10,10 @@ import { DocumentGeneratorService } from './document-generator.service';
 import { EmailService } from './email.service';
 import { MaintenancePredictorService } from './maintenance-predictor.service';
 import { LegalAiService } from './legal-ai.service';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, StorageModule],
   controllers: [CognitiveController, BrandBrainController, AiChatController],
   providers: [
     CognitiveService,

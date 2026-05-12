@@ -204,6 +204,43 @@ Close items with a checkbox once resolved (commit hash next to it).
   fcffd7a, either expand `@Roles()` on that handler or move it to its
   own controller without role gating.
 
+### [ ] 🟠 ALTO: CI lint gate broken — 1271 errors + 181 warnings on master
+
+- **Owner**: backend team
+- **Surfaced by**: Phase 2.1 Supabase Storage migration work
+- **What**: `.github/workflows/ci.yml:38-39` runs `npm run lint`
+  (`eslint "{src,apps,libs,test}/**/*.ts" --fix`) without
+  `continue-on-error`. On current master, the command exits 1 with
+  **1271 errors and 181 warnings** across the backend, meaning the
+  ESLint step in CI fails on every push.
+- **Why it matters**: The lint gate provides zero quality signal today.
+  Three options, all bad:
+  1. The team has been ignoring CI failures (any new lint error is
+     invisible against the existing red background).
+  2. Branch protection is not enforcing the `backend` job (PRs merging
+     despite the failure).
+  3. The workflow is not actually running (configuration drift).
+- **Suggested fix**: Separate sprint — **do not mix with the Supabase
+  Storage migration**. Triage approach:
+  1. Snapshot violations grouped by rule (`eslint --format json`).
+  2. For rules where the team disagrees with the default
+     (e.g. `@typescript-eslint/no-unsafe-*` may be too strict for
+     this codebase's heavy `any` usage in DTOs / Prisma JSON fields),
+     downgrade or disable in `eslint.config.mjs`.
+  3. For rules the team wants to keep, fix violations by directory
+     or by rule, one PR each.
+  4. Optionally adopt an eslint-baseline so new code fails CI while
+     pre-existing violations don't block.
+- **Concrete carry-overs from Phase 2.1** (pre-existing in
+  `cognitive.service.ts`, untouched by the migration):
+  - L13: `BorderStyle` unused import.
+  - L52: Unsafe return of `Promise<any>` from
+    `aiChatService.processWhatsappMessage`.
+  - L242: `async validateEvidence` has no `await`.
+  - L330: `async classifyPriority` has no `await`.
+  Phase 2.1 net-removed 1 prettier auto-fix; net change to repo lint
+  count is -1.
+
 ---
 
 ## Resolved

@@ -14,12 +14,16 @@ import {
   AlignmentType,
 } from 'docx';
 import PDFDocument from 'pdfkit';
-import * as fs from 'fs';
-import { join } from 'path';
 
 import { BrandBrainService } from './brand-brain.service';
 import { AiChatService } from './ai-chat.service';
 import { TicketPriority } from '@prisma/client';
+import { SupabaseStorageService } from '../storage/supabase-storage.service';
+
+// Quotations are emailed/WhatsApped to clients who typically take days to
+// review and respond. 24h (the default for in-app uploads) is too short for
+// this specific flow; 7d balances UX against limiting link lifetime.
+const QUOTATION_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class CognitiveService {
@@ -29,6 +33,7 @@ export class CognitiveService {
     private prisma: PrismaService,
     private brandBrain: BrandBrainService,
     private aiChatService: AiChatService,
+    private storage: SupabaseStorageService,
   ) {}
 
   async generateAiChatResponse(
@@ -62,7 +67,8 @@ export class CognitiveService {
 
     return subscriptions.map((sub) => {
       const revenue = sub.planType === 'PRO' ? 202 : 137;
-      const costIn = (sub.currentTokensInput / 1_000_000) * INPUT_USD_PER_MILLION;
+      const costIn =
+        (sub.currentTokensInput / 1_000_000) * INPUT_USD_PER_MILLION;
       const costOut =
         (sub.currentTokensOutput / 1_000_000) * OUTPUT_USD_PER_MILLION;
       const totalCostUsd = costIn + costOut;
@@ -601,14 +607,11 @@ export class CognitiveService {
 
     const buffer = await Packer.toBuffer(doc);
     const fileName = `quote_${ticketId.split('-')[0]}_${Date.now()}.docx`;
-    const uploadDir = join(process.cwd(), 'public/uploads/quotations');
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    fs.writeFileSync(join(uploadDir, fileName), buffer);
-    return `/uploads/quotations/${fileName}`;
+    return this.persistQuotation(tenantId, buffer, {
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      originalName: fileName,
+    });
   }
 
   async generateQuotationPdf(
@@ -627,12 +630,13 @@ export class CognitiveService {
     const total = subtotal + tax;
 
     const fileName = `quote_${ticketId.split('-')[0]}_${Date.now()}.pdf`;
-    const uploadDir = join(process.cwd(), 'public/uploads/quotations');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const filePath = join(uploadDir, fileName);
-
     const doc = new PDFDocument({ margin: 50 });
-    doc.pipe(fs.createWriteStream(filePath));
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const buffered = new Promise<Buffer>((resolve, reject) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
 
     // Header
     doc
@@ -709,7 +713,52 @@ export class CognitiveService {
       );
 
     doc.end();
-    return `/uploads/quotations/${fileName}`;
+    const buffer = await buffered;
+    return this.persistQuotation(tenantId, buffer, {
+      mimeType: 'application/pdf',
+      originalName: fileName,
+    });
+  }
+
+  /**
+   * Upload a quotation file to Supabase Storage, record it in FileAsset, and
+   * return a 7-day signed URL. If the FileAsset insert fails, the bucket
+   * object is removed to avoid orphans; rollback failure is logged but does
+   * not shadow the original error.
+   */
+  private async persistQuotation(
+    tenantId: string,
+    buffer: Buffer,
+    opts: { mimeType: string; originalName: string },
+  ): Promise<string> {
+    const { bucketKey, filename } = await this.storage.upload(
+      tenantId,
+      'quotations',
+      buffer,
+      opts,
+    );
+
+    try {
+      await this.prisma.fileAsset.create({
+        data: {
+          tenantId,
+          filename,
+          bucketKey,
+          originalName: opts.originalName,
+          mimeType: opts.mimeType,
+          sizeBytes: buffer.length,
+        },
+      });
+    } catch (err) {
+      await this.storage.delete(bucketKey).catch((cleanupErr: Error) => {
+        this.logger.error(
+          `Failed to rollback Supabase object after FileAsset insert failure: bucketKey=${bucketKey} cleanupErr=${cleanupErr.message}`,
+        );
+      });
+      throw err;
+    }
+
+    return this.storage.signedUrl(bucketKey, QUOTATION_SIGNED_URL_TTL_SECONDS);
   }
 
   async processQuoteDocument(tenantId: string, attachmentUrl: string) {
