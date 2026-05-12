@@ -598,11 +598,11 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                            <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 group">
                               {att.type === 'video' ? (
                                  <div className="w-full h-full bg-gray-800 flex items-center justify-center"><Film size={16} className="text-gray-500" /></div>
-                               ) : att.url.toLowerCase().endsWith('.pdf') ? (
+                               ) : att.type === 'pdf' ? (
                                   <div className="w-full h-full bg-red-900/20 flex items-center justify-center">
                                      <FileText size={16} className="text-red-400" />
                                   </div>
-                               ) : att.url.toLowerCase().endsWith('.docx') || att.url.toLowerCase().endsWith('.doc') ? (
+                               ) : att.type === 'document' ? (
                                   <div className="w-full h-full bg-blue-900/20 flex items-center justify-center">
                                      <FileText size={16} className="text-blue-400" />
                                   </div>
@@ -672,7 +672,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                           body: JSON.stringify({ 
                             userId: user?.id || 'agent-demo-id', 
                             comment: finalComment,
-                            attachments: attachments.map(a => ({ name: a.url.split('/').pop(), url: a.url, type: a.type }))
+                            attachments: attachments.map(a => ({ name: a.name || a.url.split('/').pop(), url: a.url, type: a.type }))
                           })
                         });
 

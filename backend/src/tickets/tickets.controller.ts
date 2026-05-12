@@ -13,23 +13,33 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
 import { Public } from '../auth/public.decorator';
+import { FileUploadService } from '../storage/file-upload.service';
+
+// Ticket attachments (photos/videos) are referenced from WhatsApp notifications
+// to clients and from tenant/agent dashboards. Tickets can stay open for days
+// or weeks. 7d TTL matches the quotation/contract TTL; Phase 3 will add refresh
+// for accessing attachments after URL expiry.
+const TICKET_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @ApiTags('tickets')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('tickets')
 export class TicketsController {
-  constructor(private readonly ticketsService: TicketsService) {}
+  constructor(
+    private readonly ticketsService: TicketsService,
+    private readonly fileUpload: FileUploadService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
@@ -119,18 +129,11 @@ export class TicketsController {
   @ApiOperation({ summary: 'Sube un archivo de evidencia para un ticket' })
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './public/uploads',
-        filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, `ticket-${uniqueSuffix}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
       fileFilter: (req, file, cb) => {
         const allowed = /\.(jpg|jpeg|png|gif|webp|mp4|mov|pdf|doc|docx)$/i;
-        if (!allowed.test(extname(file.originalname))) {
+        if (!allowed.test(file.originalname)) {
           return cb(
             new Error(
               'Tipo de archivo no permitido. Solo: jpg, png, gif, webp, mp4, pdf, doc, docx',
@@ -142,7 +145,12 @@ export class TicketsController {
       },
     }),
   )
-  uploadFile(@UploadedFile() file: any) {
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
+    if (!file) return { error: 'No se subió ningún archivo' };
+
     let type = 'image';
     if (file.mimetype.startsWith('video')) type = 'video';
     else if (file.mimetype === 'application/pdf') type = 'pdf';
@@ -152,8 +160,21 @@ export class TicketsController {
     )
       type = 'document';
 
+    const { url, filename } = await this.fileUpload.upload(
+      req.tenantId!,
+      'tickets',
+      file.buffer,
+      {
+        mimeType: file.mimetype,
+        originalName: file.originalname,
+        ttlSeconds: TICKET_SIGNED_URL_TTL_SECONDS,
+      },
+    );
+
     return {
-      url: `/uploads/${file.filename}`,
+      url,
+      name: file.originalname,
+      filename,
       type,
     };
   }
