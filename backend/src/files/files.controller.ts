@@ -2,31 +2,47 @@ import {
   Controller,
   Get,
   Param,
+  Req,
   Res,
   UseGuards,
   NotFoundException,
   StreamableFile,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { Request, Response } from 'express';
 import { join } from 'path';
 import { createReadStream, existsSync } from 'fs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
+import { PrismaService } from '../prisma/prisma.service';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('files')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('uploads')
 export class FilesController {
+  constructor(private readonly prisma: PrismaService) {}
+
   @Get(':filename')
   @ApiOperation({ summary: 'Securely fetch an uploaded file' })
-  getFile(
+  async getFile(
+    @Req() req: Request,
     @Param('filename') filename: string,
     @Res({ passthrough: true }) res: Response,
-  ): StreamableFile {
+  ): Promise<StreamableFile> {
     // Basic path traversal protection
     if (filename.includes('..') || filename.includes('/')) {
       throw new NotFoundException('Invalid filename');
+    }
+
+    // Verify the file belongs to the caller's tenant via FileAsset metadata.
+    // Same NotFoundException for "no record" and "wrong tenant" so we don't
+    // leak whether the filename exists in another tenant.
+    const asset = await this.prisma.fileAsset.findUnique({
+      where: { filename },
+    });
+    if (!asset || asset.tenantId !== req.tenantId) {
+      throw new NotFoundException('File not found');
     }
 
     const file = join(process.cwd(), 'public/uploads', filename);
@@ -35,15 +51,9 @@ export class FilesController {
       throw new NotFoundException('File not found');
     }
 
-    // Set appropriate headers based on file extension (basic implementation)
-    const ext = filename.split('.').pop()?.toLowerCase();
-    let contentType = 'application/octet-stream';
-    if (ext === 'jpg' || ext === 'jpeg') contentType = 'image/jpeg';
-    else if (ext === 'png') contentType = 'image/png';
-    else if (ext === 'gif') contentType = 'image/gif';
-    else if (ext === 'webp') contentType = 'image/webp';
-    else if (ext === 'pdf') contentType = 'application/pdf';
-    else if (ext === 'mp4') contentType = 'video/mp4';
+    // Use the recorded MIME type from FileAsset instead of guessing from
+    // extension — upload-side validation already enforced an allowlist.
+    const contentType = asset.mimeType || 'application/octet-stream';
 
     res.set({
       'Content-Type': contentType,

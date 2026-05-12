@@ -487,6 +487,7 @@ model Tenant {
   Workflow               Workflow[]
   tenantSubscription     TenantSubscription?
   tokenUsageLogs         TokenUsageLog[]
+  fileAssets             FileAsset[]
 }
 
 model Ticket {
@@ -623,6 +624,7 @@ model User {
   WorkflowState_WorkflowState_assignedUserIdToUser WorkflowState[]           @relation("WorkflowState_assignedUserIdToUser")
   WorkflowState_RoleAssignments                    WorkflowState[]           @relation("RoleAssignments")
   RefreshTokens                                    RefreshToken[]
+  uploadedFiles                                    FileAsset[]
 
   @@index([phone])
   @@index([whatsappId])
@@ -956,4 +958,20 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  tenantId     String
+  filename     String   @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+
+  @@index([tenantId])
 }
