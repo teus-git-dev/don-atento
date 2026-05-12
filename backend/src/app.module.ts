@@ -24,6 +24,7 @@ import { InvoicingModule } from './invoicing/invoicing.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { DataImportModule } from './data-import/data-import.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ContractsModule } from './contracts/contracts.module';
     InvoicingModule,
     TenantsModule,
     DataImportModule,
+    StorageModule,
   ],
   controllers: [AppController, FilesController],
   providers: [

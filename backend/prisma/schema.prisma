@@ -968,6 +968,7 @@ model FileAsset {
   id           String   @id @default(cuid())
   tenantId     String
   filename     String   @unique
+  bucketKey    String?
   originalName String
   mimeType     String
   sizeBytes    Int?
