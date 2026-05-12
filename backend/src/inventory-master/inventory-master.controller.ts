@@ -6,18 +6,53 @@ import {
   Body,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
+  BadRequestException,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { InventoryMasterService } from './inventory-master.service';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
+import { FileUploadService } from '../storage/file-upload.service';
+
+/**
+ * Evidence (foto, video, nota de voz) attached to inventory items.
+ * Allowlist covers the categories the UI offers; deny everything else.
+ */
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/wav',
+  'audio/ogg',
+  'audio/webm',
+];
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+// Inventory evidence is referenced from the property dashboard over the
+// property's lifetime. 7d TTL matches the ticket/contract/quotation TTL;
+// Phase 3 will add URL refresh.
+const INVENTORY_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @ApiTags('inventory-master')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('inventory-master')
 export class InventoryMasterController {
   constructor(
     private readonly inventoryMasterService: InventoryMasterService,
+    private readonly fileUpload: FileUploadService,
   ) {}
 
   @Post('property/:propertyId')
@@ -57,22 +92,43 @@ export class InventoryMasterController {
   })
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './public/uploads',
-        filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
+      fileFilter: (req, file, cb) => {
+        if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
           cb(
-            null,
-            `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`,
+            new BadRequestException(
+              `Tipo de archivo no permitido: ${file.mimetype}. Solo se aceptan imágenes, video y audio.`,
+            ),
+            false,
           );
-        },
-      }),
+        }
+      },
     }),
   )
-  uploadFile(@UploadedFile() file: any) {
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
+    if (!file) return { error: 'No se subió ningún archivo' };
+
+    const { url, filename } = await this.fileUpload.upload(
+      req.tenantId!,
+      'inventory',
+      file.buffer,
+      {
+        mimeType: file.mimetype,
+        originalName: file.originalname,
+        ttlSeconds: INVENTORY_SIGNED_URL_TTL_SECONDS,
+      },
+    );
+
     return {
-      url: `/uploads/${file.filename}`,
+      url,
+      name: file.originalname,
+      filename,
     };
   }
 }

@@ -241,6 +241,39 @@ Close items with a checkbox once resolved (commit hash next to it).
   Phase 2.1 net-removed 1 prettier auto-fix; net change to repo lint
   count is -1.
 
+### [ ] 🟠 ALTO: inventory-master service-level tenant scoping still missing post-Phase 2.4
+
+- **Owner**: backend team
+- **Surfaced by**: Phase 2.4 Supabase Storage migration (added TenantGuard
+  at controller-level on the way through, but the deeper issue remained)
+- **What**: `inventory-master.controller.ts` now has
+  `@UseGuards(JwtAuthGuard, TenantGuard)` so `req.tenantId` is set on
+  every request. But the 3 non-upload handlers — `createInventory`,
+  `getInventory`, `addEvidence` — and their service methods
+  (`createPropertyInventory`, `getPropertyInventory`, `addEvidence`)
+  do not read `req.tenantId` or validate that the supplied `propertyId`
+  / `itemId` belongs to the caller's tenant.
+- **Why it matters**: A `TENANT_USER` on tenant A who knows or guesses
+  a `propertyId` belonging to tenant B can:
+  - `GET /api/inventory-master/property/<tenant-B-propertyId>` → read
+    tenant B's inventory zones, items, and evidence.
+  - `POST /api/inventory-master/property/<tenant-B-propertyId>` →
+    overwrite tenant B's inventory.
+  - `POST /api/inventory-master/item/<tenant-B-itemId>/evidence` →
+    inject evidence into tenant B's data.
+  Property IDs are cuid-based (predictable structure). Cross-tenant
+  attack realistic for a determined insider.
+- **Suggested fix**: Refactor `InventoryMasterService` methods to take
+  `tenantId` as a parameter and query with
+  `where: { id: propertyId, tenantId }` (or fetch the Property first
+  and assert `property.tenantId === tenantId`). Update the 3 handlers
+  to pass `req.tenantId!`. Pattern matches `crm.service.ts:findAll(tenantId)`.
+- **What Phase 2.4 fixed**: only the upload endpoint — MIME allowlist,
+  size limit, tenant-scoped bucket key path, FileAsset row creation.
+  The other 3 endpoints were touched only to add the class-level
+  guard, which does not by itself enforce cross-tenant isolation
+  without service-level cooperation.
+
 ---
 
 ## Resolved

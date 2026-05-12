@@ -6,6 +6,7 @@ import { InventoryReportService } from './inventory-report.service';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { InventoryTemplatesModule } from '../inventory-templates/inventory-templates.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { InventoryTemplatesModule } from '../inventory-templates/inventory-templ
     WhatsappModule,
     TicketsModule,
     InventoryTemplatesModule,
+    StorageModule,
   ],
   providers: [InventoryMasterService, InventoryReportService],
   controllers: [InventoryMasterController],
