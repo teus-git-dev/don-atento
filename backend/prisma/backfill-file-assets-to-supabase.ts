@@ -8,6 +8,11 @@
  * Idempotent — re-runnable. Files with bucketKey already set are skipped;
  * Supabase uploads use upsert:true to avoid "already exists" failures.
  *
+ * DB access bypasses Prisma — Prisma 7 enforces adapter/provider compatibility
+ * at PrismaClient construction, and this repo's dev sqlite + prod postgres
+ * setup runs into that check. Using better-sqlite3 (dev) and pg (prod)
+ * directly keeps this script self-contained.
+ *
  * Pre-requisites:
  *   - `cd backend && npx prisma db push` (creates FileAsset.bucketKey column)
  *   - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET in env
@@ -21,7 +26,6 @@
 import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
@@ -87,10 +91,77 @@ function scanFiles(dir: string): string[] {
   return out;
 }
 
+// ── DB abstraction (bypass Prisma; direct sqlite/pg) ─────────────────────────
+interface FileAssetRow {
+  tenantId: string;
+  bucketKey: string | null;
+}
+
+interface DbClient {
+  verifySchema(): Promise<void>;
+  findByFilename(filename: string): Promise<FileAssetRow | null>;
+  updateBucketKey(filename: string, bucketKey: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+function makeDb(): DbClient {
+  if (process.env.NODE_ENV === 'production') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Pool } = require('pg');
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    return {
+      verifySchema: async () => {
+        await pool.query('SELECT "bucketKey" FROM "FileAsset" LIMIT 1');
+      },
+      findByFilename: async (filename: string) => {
+        const result = await pool.query(
+          'SELECT "tenantId", "bucketKey" FROM "FileAsset" WHERE filename = $1',
+          [filename],
+        );
+        return (result.rows[0] as FileAssetRow | undefined) ?? null;
+      },
+      updateBucketKey: async (filename: string, bucketKey: string) => {
+        await pool.query(
+          'UPDATE "FileAsset" SET "bucketKey" = $1 WHERE filename = $2',
+          [bucketKey, filename],
+        );
+      },
+      close: async () => {
+        await pool.end();
+      },
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Database = require('better-sqlite3');
+  const sqlite = new Database('./dev.db');
+  return {
+    verifySchema: async () => {
+      sqlite.prepare('SELECT bucketKey FROM FileAsset LIMIT 1').get();
+    },
+    findByFilename: async (filename: string) => {
+      const row = sqlite
+        .prepare(
+          'SELECT tenantId, bucketKey FROM FileAsset WHERE filename = ?',
+        )
+        .get(filename) as FileAssetRow | undefined;
+      return row ?? null;
+    },
+    updateBucketKey: async (filename: string, bucketKey: string) => {
+      sqlite
+        .prepare('UPDATE FileAsset SET bucketKey = ? WHERE filename = ?')
+        .run(bucketKey, filename);
+    },
+    close: async () => {
+      sqlite.close();
+    },
+  };
+}
+
 // ── Schema verification ───────────────────────────────────────────────────────
-async function verifySchema(prisma: PrismaClient): Promise<void> {
+async function verifySchema(db: DbClient): Promise<void> {
   try {
-    await prisma.$queryRawUnsafe('SELECT bucketKey FROM FileAsset LIMIT 1');
+    await db.verifySchema();
   } catch (err) {
     const msg = (err as Error).message;
     console.error('\n❌ Schema verification failed.');
@@ -104,23 +175,6 @@ async function verifySchema(prisma: PrismaClient): Promise<void> {
     console.error(`   Underlying error: ${msg}\n`);
     process.exit(1);
   }
-}
-
-// ── Prisma client (mirror PrismaService adapter selection) ────────────────────
-function makePrisma(): PrismaClient {
-  if (process.env.NODE_ENV === 'production') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Pool } = require('pg');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PrismaPg } = require('@prisma/adapter-pg');
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    return new PrismaClient({ adapter: new PrismaPg(pool) });
-  }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
-  return new PrismaClient({
-    adapter: new PrismaBetterSqlite3({ url: 'file:./dev.db' }),
-  });
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -144,9 +198,8 @@ async function main(): Promise<void> {
   console.log(`Mode:   ${dryRun ? 'DRY RUN (no changes)' : 'APPLY'}`);
   console.log('');
 
-  const prisma = makePrisma();
-  await prisma.$connect();
-  await verifySchema(prisma);
+  const db = makeDb();
+  await verifySchema(db);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -162,9 +215,7 @@ async function main(): Promise<void> {
     const buffer = fs.readFileSync(fullPath);
     const mimeType = inferMime(filename);
 
-    const existing = await prisma.fileAsset.findUnique({
-      where: { filename },
-    });
+    const existing = await db.findByFilename(filename);
 
     if (existing?.bucketKey) {
       console.log(`  SKIP    ${filename}  (bucketKey already set)`);
@@ -194,10 +245,7 @@ async function main(): Promise<void> {
       if (upErr) throw new Error(`Supabase upload: ${upErr.message}`);
 
       if (existing) {
-        await prisma.fileAsset.update({
-          where: { filename },
-          data: { bucketKey },
-        });
+        await db.updateBucketKey(filename, bucketKey);
         console.log(`  UPDATED ${filename}  → ${bucketKey}`);
         counts.updated++;
       } else {
@@ -217,7 +265,7 @@ async function main(): Promise<void> {
   console.log(`  Orphan  (uploaded to legacy/, no DB row):  ${counts.orphan}`);
   console.log(`  Errors:                                    ${counts.error}`);
 
-  await prisma.$disconnect();
+  await db.close();
   if (counts.error > 0) process.exit(1);
 }
 
