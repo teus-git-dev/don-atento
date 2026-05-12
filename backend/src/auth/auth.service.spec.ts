@@ -16,6 +16,9 @@ const makePrismaMock = (overrides: Partial<any> = {}) => ({
     create: jest.fn().mockResolvedValue({}),
     findUnique: jest.fn(),
     delete: jest.fn().mockResolvedValue({}),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    update: jest.fn().mockResolvedValue({}),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
   $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
   ...overrides,
@@ -172,7 +175,7 @@ describe('AuthService', () => {
       );
     });
 
-    it('should rotate token — delete old, create new in transaction', async () => {
+    it('should rotate token — mark old as usedAt and create new in transaction', async () => {
       const rawToken = crypto.randomBytes(40).toString('hex');
       prismaMock.refreshToken.findUnique.mockResolvedValue({
         id: 'rt-1',
@@ -185,6 +188,70 @@ describe('AuthService', () => {
 
       // $transaction should have been called once
       expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should detect reuse of an already-used refresh token and revoke all user tokens', async () => {
+      const rawToken = crypto.randomBytes(40).toString('hex');
+      prismaMock.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'user-1',
+        token: 'hash',
+        expiresAt: new Date(Date.now() + 60000),
+        usedAt: new Date(Date.now() - 1000), // already rotated once
+        user: makeUser(),
+      });
+
+      await expect(service.refreshToken(rawToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prismaMock.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+      // Critical: rotation must NOT happen on the reuse path
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should not call deleteMany on a normal (first-time) rotation', async () => {
+      const rawToken = crypto.randomBytes(40).toString('hex');
+      prismaMock.refreshToken.findUnique.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'user-1',
+        token: 'hash',
+        expiresAt: new Date(Date.now() + 60000),
+        usedAt: null,
+        user: makeUser(),
+      });
+
+      await service.refreshToken(rawToken);
+      expect(prismaMock.refreshToken.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── logout() ─────────────────────────────────────────────────────────────
+
+  describe('logout()', () => {
+    it('marks all of the user refresh tokens as usedAt when given a valid access token', async () => {
+      jwtMock.verify.mockReturnValue({ sub: 'user-1' });
+
+      await service.logout('mock.access.token');
+
+      expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', usedAt: null },
+        data: { usedAt: expect.any(Date) },
+      });
+    });
+
+    it('is a noop when called with no token', async () => {
+      await service.logout(undefined);
+      expect(prismaMock.refreshToken.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('is a noop when access token is malformed (verify throws)', async () => {
+      jwtMock.verify.mockImplementation(() => {
+        throw new Error('jwt malformed');
+      });
+      await service.logout('garbage');
+      expect(prismaMock.refreshToken.updateMany).not.toHaveBeenCalled();
     });
   });
 

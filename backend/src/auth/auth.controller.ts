@@ -55,8 +55,15 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cerrar sesión y limpiar cookie JWT' })
-  logout(@Res({ passthrough: true }) res: Response) {
+  @ApiOperation({
+    summary:
+      'Cerrar sesión: invalida todos los refresh tokens del usuario y limpia cookies',
+  })
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Best-effort DB invalidation — cookie cleanup must succeed regardless.
+    const rawAccessToken = req.cookies?.['don_atento_token_v1'];
+    await this.authService.logout(rawAccessToken);
+
     res.clearCookie('don_atento_token_v1', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

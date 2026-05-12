@@ -104,7 +104,36 @@ export class AuthService {
     }
   }
 
+  /**
+   * Logout invalidates EVERY active refresh token for the user identified
+   * by the access token. "Logout from this device" semantics is impossible
+   * because the refresh cookie is path-scoped to /api/auth/refresh and
+   * does not reach /api/auth/logout. Invalidating-all-sessions is the
+   * stricter alternative: a thief on another device is also kicked.
+   * Best-effort — silent on malformed/missing tokens; cookies still cleared.
+   */
+  async logout(rawAccessToken: string | undefined): Promise<void> {
+    if (!rawAccessToken) return;
+    let userId: string | undefined;
+    try {
+      const payload = this.jwtService.verify(rawAccessToken, {
+        ignoreExpiration: true,
+      }) as JwtPayload;
+      userId = payload?.sub;
+    } catch {
+      return;
+    }
+    if (!userId) return;
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+  }
+
   async refreshToken(rawRefreshToken: string) {
+    // Single failure message for every failure path (account-enumeration
+    // resistance, same pattern as login()).
+    const FAILURE_MESSAGE = 'Refresh token inválido o expirado';
     // Hash the incoming raw token for DB lookup — never store or search plaintext
     const tokenHash = hashToken(rawRefreshToken);
 
@@ -113,18 +142,39 @@ export class AuthService {
       include: { user: { include: { tenant: true } } },
     });
 
-    if (!tokenRecord || tokenRecord.expiresAt < new Date()) {
-      if (tokenRecord) {
-        await this.prisma.refreshToken.delete({
-          where: { id: tokenRecord.id },
-        });
-      }
-      throw new UnauthorizedException('Refresh token inválido o expirado');
+    if (!tokenRecord) {
+      throw new UnauthorizedException(FAILURE_MESSAGE);
+    }
+
+    // Reuse detection: a token presented after it was already rotated is
+    // the strongest signal that an attacker stole it. Revoke ALL of the
+    // user's refresh tokens so both the legit user and the attacker must
+    // re-login. (RFC 6819 §5.2.2.3, OAuth RT auto-revocation pattern.)
+    // Truthy check covers both `Date` (production) and `undefined`
+    // (less-specific test mocks) in addition to `null`.
+    if (tokenRecord.usedAt) {
+      this.logger.warn(
+        `Refresh token reuse detected for userId=${tokenRecord.userId}; revoking all sessions`,
+      );
+      await this.prisma.refreshToken.deleteMany({
+        where: { userId: tokenRecord.userId },
+      });
+      throw new UnauthorizedException(FAILURE_MESSAGE);
+    }
+
+    if (tokenRecord.expiresAt < new Date()) {
+      await this.prisma.refreshToken.delete({
+        where: { id: tokenRecord.id },
+      });
+      throw new UnauthorizedException(FAILURE_MESSAGE);
     }
 
     const { user } = tokenRecord;
     if (!user.isActive) {
-      throw new UnauthorizedException('Usuario inactivo');
+      this.logger.warn(
+        `Refresh attempt by inactive user: ${user.email} (id=${user.id})`,
+      );
+      throw new UnauthorizedException(FAILURE_MESSAGE);
     }
 
     const payload: JwtPayload = {
@@ -135,12 +185,17 @@ export class AuthService {
     };
     const newAccessToken = this.jwtService.sign(payload);
 
-    // Token rotation — delete old hash, create new hash in a single transaction
     const newRawToken = crypto.randomBytes(40).toString('hex');
     const newTokenHash = hashToken(newRawToken);
 
+    // Token rotation — mark old as used (NOT delete, so reuse detection can
+    // still trigger if the same hash is presented again) and create the new
+    // one atomically.
     await this.prisma.$transaction([
-      this.prisma.refreshToken.delete({ where: { id: tokenRecord.id } }),
+      this.prisma.refreshToken.update({
+        where: { id: tokenRecord.id },
+        data: { usedAt: new Date() },
+      }),
       this.prisma.refreshToken.create({
         data: {
           userId: user.id,
