@@ -14,7 +14,9 @@ const makeProperty = (overrides = {}) => ({
   ...overrides,
 });
 
-const makePrismaMock = () => ({
+// `any` return type is required because makePrismaMock is recursively
+// referenced from $transaction's callback below — TS can't infer otherwise.
+const makePrismaMock = (): any => ({
   property: {
     create: jest.fn().mockResolvedValue(makeProperty()),
     findMany: jest.fn().mockResolvedValue([makeProperty()]),
@@ -35,7 +37,7 @@ const makePrismaMock = () => ({
   inventoryTemplate: {
     findUnique: jest.fn().mockResolvedValue(null),
   },
-  $transaction: jest.fn(async (cb) => {
+  $transaction: jest.fn(async (cb: (tx: any) => Promise<any>) => {
     return cb(makePrismaMock());
   }),
 });
@@ -77,9 +79,9 @@ describe('PropertiesService', () => {
         inventoryTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
       };
       
-      prismaMock.$transaction.mockImplementation(async (cb) => {
-        return cb(txMock);
-      });
+      prismaMock.$transaction.mockImplementation(
+        async (cb: (tx: any) => Promise<any>) => cb(txMock),
+      );
 
       const result = await service.create(data);
 
