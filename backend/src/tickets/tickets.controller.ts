@@ -57,7 +57,7 @@ export class TicketsController {
   })
   async findAll(@Req() req: any, @Query('ownerId') ownerId?: string) {
     if (ownerId) {
-      return this.ticketsService.findAllByOwner(ownerId);
+      return this.ticketsService.findAllByOwner(ownerId, req['tenantId']);
     }
     return this.ticketsService.findAllByTenant(req['tenantId']);
   }
@@ -65,8 +65,8 @@ export class TicketsController {
   @Get('technician/:id')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver tickets asignados a un técnico' })
-  async findByTechnician(@Param('id') id: string) {
-    return this.ticketsService.findAllByTechnician(id);
+  async findByTechnician(@Req() req: any, @Param('id') id: string) {
+    return this.ticketsService.findAllByTechnician(id, req['tenantId']);
   }
 
   @Get(':id')

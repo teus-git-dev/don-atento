@@ -439,15 +439,18 @@ describe('TicketsService', () => {
   // ── findLatestByPhone ─────────────────────────────────────────────────────
 
   describe('findLatestByPhone()', () => {
-    it('queries by phone and returns the most recent ticket', async () => {
+    it('queries by phone and tenantId, returns most recent ticket', async () => {
       const ticket = makeTicket();
       prismaMock.ticket.findFirst.mockResolvedValue(ticket);
 
-      const result = await service.findLatestByPhone('3001234567');
+      const result = await service.findLatestByPhone('3001234567', 'tenant-1');
 
       expect(prismaMock.ticket.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { reportedByUserPhone: '3001234567' },
+          where: {
+            tenantId: 'tenant-1',
+            reportedByUserPhone: '3001234567',
+          },
           orderBy: { createdAt: 'desc' },
         }),
       );
@@ -456,7 +459,7 @@ describe('TicketsService', () => {
 
     it('returns null if no ticket found', async () => {
       prismaMock.ticket.findFirst.mockResolvedValue(null);
-      const result = await service.findLatestByPhone('9999999999');
+      const result = await service.findLatestByPhone('9999999999', 'tenant-1');
       expect(result).toBeNull();
     });
   });

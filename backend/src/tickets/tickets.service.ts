@@ -194,9 +194,12 @@ export class TicketsService {
     }
   }
 
-  async findLatestByPhone(phone: string): Promise<Ticket | null> {
+  async findLatestByPhone(
+    phone: string,
+    tenantId: string,
+  ): Promise<Ticket | null> {
     return this.prisma.ticket.findFirst({
-      where: { reportedByUserPhone: phone },
+      where: { tenantId, reportedByUserPhone: phone },
       orderBy: { createdAt: 'desc' },
       include: {
         currentState: true,
@@ -337,6 +340,7 @@ export class TicketsService {
         `[TicketsService] Ticket ${id} has no workflow. Auto-assigning default.`,
       );
       const defaultWf = await this.prisma.workflow.findFirst({
+        where: { tenantId },
         include: { states: { orderBy: { order: 'asc' } } },
       });
       if (defaultWf) {
@@ -409,6 +413,7 @@ export class TicketsService {
         `[TicketsService] Ticket ${ticketId} has no workflow. Auto-assigning default.`,
       );
       const defaultWf = await this.prisma.workflow.findFirst({
+        where: { tenantId },
         include: { states: { orderBy: { order: 'asc' } } },
       });
       if (defaultWf) {
@@ -728,9 +733,9 @@ export class TicketsService {
     });
   }
 
-  async findAllByTechnician(technicianId: string) {
+  async findAllByTechnician(technicianId: string, tenantId: string) {
     return this.prisma.ticket.findMany({
-      where: { assignedTechnicianId: technicianId },
+      where: { tenantId, assignedTechnicianId: technicianId },
       include: {
         property: {
           include: {
@@ -757,9 +762,10 @@ export class TicketsService {
     });
   }
 
-  async findAllByOwner(ownerId: string) {
+  async findAllByOwner(ownerId: string, tenantId: string) {
     return this.prisma.ticket.findMany({
       where: {
+        tenantId,
         property: {
           relations: {
             some: {

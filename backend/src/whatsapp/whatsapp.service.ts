@@ -430,8 +430,10 @@ export class WhatsappService {
 
     // 2. Logic Routing based on Intent & AI Action
     if (intent === Intent.PHOTO_SUBMISSION || mediaUrl) {
-      const latestTicket =
-        await this.ticketsService.findLatestByPhone(cleanPhone);
+      const latestTicket = await this.ticketsService.findLatestByPhone(
+        cleanPhone,
+        resolvedTenantId || user.tenantId || 'default',
+      );
       if (latestTicket && !latestTicket.resolvedAt) {
         finalResponse = `He recibido el archivo/evidencia y lo he anexado a tu reporte actual (Ticket #${(latestTicket as any).shortId || latestTicket.id.split('-')[0].toUpperCase()}).`;
       } else {
@@ -508,8 +510,10 @@ export class WhatsappService {
     } else {
       // GENERAL_REPLY
       if (intent === Intent.STATUS_QUERY) {
-        const latestTicket =
-          await this.ticketsService.findLatestByPhone(cleanPhone);
+        const latestTicket = await this.ticketsService.findLatestByPhone(
+          cleanPhone,
+          resolvedTenantId || user.tenantId || 'default',
+        );
         if (latestTicket) {
           const status =
             (latestTicket as any).currentState?.name ||
@@ -546,8 +550,10 @@ export class WhatsappService {
       intent === Intent.PHOTO_SUBMISSION ||
       text.length > 0
     ) {
-      const latestTicket =
-        await this.ticketsService.findLatestByPhone(cleanPhone);
+      const latestTicket = await this.ticketsService.findLatestByPhone(
+        cleanPhone,
+        resolvedTenantId || user.tenantId || 'default',
+      );
       if (latestTicket) {
         await this.cognitiveService.logInteraction(
           latestTicket.id,

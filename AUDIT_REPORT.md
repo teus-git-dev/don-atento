@@ -305,6 +305,64 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] tickets Block B (2026-05-13) — tenant scoping (findAllByTechnician / findAllByOwner / findLatestByPhone / auto-default-workflow)
+
+- **Resolved by**: this commit (second block of tickets remediation)
+- **What was wrong** (4 CRÍTICOs from the tickets audit):
+  - `findAllByTechnician(technicianId)` (service:703) and the
+    controller route `GET /tickets/technician/:id` (controller:62)
+    queried `Ticket` by `assignedTechnicianId` with **zero tenant
+    scoping**. Anyone authenticated could enumerate any technician
+    UUID and read tickets cross-tenant.
+  - `findAllByOwner(ownerId)` (service:726) similarly queried by
+    `property.relations.some.userId` without filtering `tenantId`.
+    Called from `GET /tickets?ownerId=...` (controller:55-60) which
+    blindly forwarded the query param.
+  - `findLatestByPhone(phone)` (service:182) had no tenant filter.
+    `whatsapp.service.ts` called it from three sites
+    (lines 434, 512, 550) using only `cleanPhone`; if two tenants
+    share a number (numbers collide across Colombian operators), one
+    tenant could read the other's most recent ticket title and
+    `currentState`. This is the same anti-pattern that auth audit
+    flagged as a cross-tenant inference vector.
+  - `resolveTicket` (service:319-343) and `completeStateTask`
+    (service:391-415) auto-asignaban un workflow por defecto vía
+    `prisma.workflow.findFirst()` **sin filtro `tenantId`**. Un
+    ticket del tenant A heredaba la máquina de estados del tenant B
+    (sus estados, sus SLAs, sus `assignedRole`), disparando
+    `notifyRoleAssignment` a usuarios del tenant equivocado.
+- **What was applied**:
+  - `findAllByTechnician(technicianId, tenantId)` — agregado
+    `tenantId: string` requerido; `where: { tenantId,
+    assignedTechnicianId }`.
+  - `findAllByOwner(ownerId, tenantId)` — agregado `tenantId`
+    requerido; `where: { tenantId, property: { relations: { some:
+    {...} } } }` (filtra a nivel ticket, no a nivel relation).
+  - `findLatestByPhone(phone, tenantId)` — agregado `tenantId`
+    requerido; `where: { tenantId, reportedByUserPhone }`.
+  - `resolveTicket` y `completeStateTask`: el
+    `workflow.findFirst()` de fallback ahora lleva
+    `where: { tenantId }`. Si no hay workflow en el tenant, lanza
+    explícitamente como antes.
+  - Controllers:
+    - `GET /tickets?ownerId=...` ahora pasa
+      `req['tenantId']` a `findAllByOwner`.
+    - `GET /tickets/technician/:id` ahora inyecta `@Req` y pasa
+      `req['tenantId']` a `findAllByTechnician`.
+  - `whatsapp.service.ts`: los 3 sites de `findLatestByPhone`
+    ahora pasan `resolvedTenantId || user.tenantId || 'default'`
+    (la misma cascada que ya usa el resto del orquestador).
+  - Tests: `findLatestByPhone` spec actualizado para pasar
+    `tenantId` y verificar el where; el resto de specs no
+    requieren cambios porque los demás métodos no estaban cubiertos.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npx jest tickets whatsapp` 29/29 across 4 suites
+  - `npm run build` clean
+- **Carryover**: identity-spoofing via `userId` en body (transition /
+  completeTask) → Block C. Survey hardening → Block D. DTO + Logger +
+  addAttachment URL whitelist + cleanup → Block E.
+
 ### [x] tickets Block A (2026-05-13) — passwordHash leak fix (USER_PUBLIC_SELECT) + RBAC dormante (@Roles per-handler)
 
 - **Resolved by**: this commit (first block of tickets remediation)
