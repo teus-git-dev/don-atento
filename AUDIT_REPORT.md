@@ -305,6 +305,71 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [ ] integrations — fuera de scope v1, requiere rediseño de modelo webhook antes de activar
+
+- **Owner**: backend team (re-audit owner TBD when integration is scheduled)
+- **Surfaced by**: audit chat session 2026-05-13
+- **Decision**: The `integrations` module is currently registered in
+  `app.module.ts:50` (live code, not dead), but it cannot be activated
+  for v1 production. The audit found 4 CRÍTICOs that together turn the
+  Finca Raiz webhook into either an inaccessible endpoint (current
+  state — `JwtAuthGuard` global blocks external callers since the
+  endpoint has no `@Public()`) or, if "fixed" by marking it public, a
+  wide-open data injection vector with zero origin verification.
+- **Open CRÍTICOs**:
+  - `integrations.controller.ts:7-26` — no `@UseGuards(TenantGuard)`;
+    accepts `@Query('tenantId')`. Same cross-tenant pattern that Block A
+    of invoicing closed. External callers (or any authenticated user)
+    can inject Properties/Prospects into another tenant.
+  - `integrations.controller.ts:12-25` — webhook has **zero signature/
+    HMAC verification**. No shared secret, no IP allowlist, no token.
+    Pattern to follow: `whatsapp.controller.ts` post-`07fe4ed`
+    (fail-closed HMAC validation).
+  - `integrations.controller.ts:21` — `@Body() payload: any` defeats
+    `ValidationPipe`. Stored-XSS / type-confusion / resource exhaustion
+    vectors via `propertyData.title`, `propertyData.address`,
+    `leadData.email`, etc. landing in DB unsanitized.
+  - `integrations.controller.ts:7` — auth model inconsistent. As a
+    webhook it should be `@Public()`, but currently it inherits the
+    global `JwtAuthGuard`. Either dead code (Finca Raiz can never
+    call it) or a future foot-gun if someone adds `@Public()` without
+    the other fixes.
+- **Open ALTOs** (from same audit):
+  - `integrations.service.ts:52-72` — `handleNewLead` accesses
+    `prisma.prospect.create` directly while `handleNewListing` goes
+    through `PropertiesService`. Layering inconsistency; prospects
+    skip any business logic in `CrmService`.
+  - `integrations.service.ts:15, 48, 74` — logs interpolate
+    caller-controlled `tenantId` and other payload fields without
+    sanitization. Log-injection risk for plain-text log sinks.
+- **Open MEDIOs**:
+  - `integrations.service.ts:42` — `propertyCode` fallback uses
+    `Date.now()`; concurrent webhooks collide on the unique constraint.
+  - `integrations.service.ts:14, 26, 52` — no `Tenant` existence check;
+    bad `tenantId` from query → Prisma FK violation → 500.
+  - `integrations.service.ts:78-87` — `mapPropertyType` silently
+    defaults unknown Finca Raiz types to `'APARTMENT'`. No warning.
+  - `integrations.service.ts:30-46` — numeric fields (`area`, `rooms`,
+    `rentAmount`) passed through without type validation. Source is
+    CRÍTICO #3 (no DTO) but surfaces in service layer too.
+- **Required redesign before activation**:
+  1. **Decide model**: webhook (external, `@Public`) or admin-internal
+     trigger (authenticated, gated by role). The current shape says
+     "webhook" but the wiring says "JWT-required".
+  2. **For the webhook model** (recommended): introduce a per-tenant
+     rotable secret stored encrypted (e.g., a new field
+     `Tenant.fincaRaizWebhookSecret` using the DIAN_ENCRYPTION_KEY
+     util from invoicing Block B). The route becomes
+     `POST /integrations/finca-raiz/:webhookToken` where the token
+     opaquely maps to a tenant; HMAC-SHA256 of the body validates
+     against the secret. Fail-closed on missing/invalid secret.
+  3. **DTOs**: `FincaRaizWebhookDto` discriminated by `type`, sub-DTOs
+     for listings vs leads with class-validator decorators.
+  4. **Layering**: `handleNewLead` calls `CrmService.createProspect`
+     (consistent with `handleNewListing` → `PropertiesService.create`).
+  5. **Logging hardening**: validate identifiers (cuid regex) before
+     log interpolation; never log raw payload fields.
+
 ### [ ] invoicing — fuera de scope v1, auditar antes de activar
 
 - **Owner**: backend team (re-audit owner TBD when invoicing is scheduled)
