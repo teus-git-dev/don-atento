@@ -87,15 +87,13 @@ export class DianXmlService {
       )
       .up();
 
-    // Extension 2: Firma Electrónica (Reservado para .p12)
-    ublExtensions
-      .ele('ext:UBLExtension')
-      .ele('ext:ExtensionContent')
-      .ele('ds:Signature', {
-        'xmlns:ds': 'http://www.w3.org/2000/09/xmldsig#',
-        Id: 'Signature-Invoice',
-      } as any)
-      .txt('<!-- AQUI VA EL BLOQUE XADES-EPES CUANDO SE FIRME CON EL .P12 -->');
+    // Extension 2: empty placeholder for the XADES-EPES signature.
+    // DianCryptoService.signXml appends the <ds:Signature> as a child of this
+    // ExtensionContent via xpath `(//*[local-name()='ExtensionContent'])[2]`.
+    // The element must remain empty here — any placeholder text (e.g., the
+    // old "<!-- AQUI VA... -->" comment) gets HTML-escaped by xmlbuilder2
+    // and would break the signature canonicalization.
+    ublExtensions.ele('ext:UBLExtension').ele('ext:ExtensionContent');
 
     // 3. Basic Document Data (UBLHeader)
     xmlDoc

@@ -335,6 +335,56 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] DIAN audit (2026-05-12) — Block E: fix XADES-EPES signature injection + drop `@ts-ignore` on crypto API
+
+- **Resolved by**: Block E of DIAN remediation (this commit)
+- **What was wrong** (combined CRÍTICO #7 + CRÍTICO #8 + INFORMATIVO #1):
+  - `dian-xml.service.ts:98` injected the signature placeholder as text:
+    `.txt('<!-- AQUI VA EL BLOQUE XADES-EPES CUANDO SE FIRME CON EL .P12 -->')`.
+    `xmlbuilder2` HTML-escapes text content → output had
+    `&lt;!-- ... --&gt;`. Then `dian-crypto.service.ts:91` did
+    `xmlString.replace('<!-- AQUI... -->', signatureXml)` looking for the
+    *un-escaped* comment, never matched, returned the XML **without the
+    signature inserted**. `sig.computeSignature(...)` ran but its output
+    was discarded.
+  - `dian-crypto.service.ts` had 3× `@ts-ignore` directives bypassing TS
+    safety on the cryptographic API surface (`sig.signingKey`,
+    `sig.keyInfoProvider`, custom `addReference`). The code used the
+    legacy positional API of older `xml-crypto`; current package is
+    v6.1.2 with a fully typed options-object API.
+  - Error logging: the original catch logged the full error object via
+    `this.logger.error(..., error)`. Forge surfaces parts of cert/passphrase
+    in some failure modes — leak risk.
+- **What was applied**:
+  - `dian-xml.service.ts`: removed the entire `<ds:Signature>` placeholder
+    construction. The second `<ext:ExtensionContent>` is now emitted empty;
+    xml-crypto inserts the `<Signature>` element there at sign time.
+  - `dian-crypto.service.ts`: complete rewrite against xml-crypto v6 typed
+    API. Zero `@ts-ignore`. Uses `SignedXmlOptions` constructor with
+    `privateKey`, `publicCert`, `signatureAlgorithm`, `canonicalizationAlgorithm`,
+    `getKeyInfoContent`. Calls `computeSignature(xml, { location: { reference: "(//*[local-name(.)='ExtensionContent'])[2]", action: 'append' } })`
+    and returns `getSignedXml()` — the full document with signature
+    inserted at the correct xpath. PEM extraction moved to a private
+    helper. Catch block now logs only `error.message` string (never the
+    object) and re-throws a sanitized `'XADES-EPES signing failed'`
+    error.
+  - `dian-crypto.service.spec.ts` (new): 5 tests with an in-memory self-signed
+    cert (1024-bit RSA for speed). Asserts (a) signature elements present,
+    (b) signature lives INSIDE the second ExtensionContent (not orphaned),
+    (c) sha256 used in algorithm + digest, (d) wrong password throws
+    sanitized error, (e) malformed XML throws sanitized error.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 119/119 across 17 suites (+5 new tests)
+  - `npm run build` clean
+- **Out of scope for this block** (full XADES-EPES compliance):
+  - Additional XADES properties (`SigningTime`, `SigningCertificate`,
+    `SignaturePolicyIdentifier`, `SignerRole`) required by DIAN Anexo
+    Técnico 1.8 for *certified production* are NOT added here. The audit
+    flagged "broken signature flow" — that's fixed. Full XADES-EPES
+    compliance is a separate ticket once a real DIAN test environment
+    is wired.
+
 ### [x] DIAN audit (2026-05-12) — Block D: reject thirdParty fabrication; require real ThirdParty record
 
 - **Resolved by**: Block D of DIAN remediation (this commit)
