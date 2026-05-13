@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class WorkflowsService {
     tenantId: string;
     name: string;
     description?: string;
-    states?: any[]; // Added support for complete flow creation
+    states?: any[];
   }) {
     const { states, ...workflowData } = data;
 
@@ -48,16 +48,25 @@ export class WorkflowsService {
     });
   }
 
-  async createState(data: {
-    workflowId: string;
-    name: string;
-    order: number;
-    assignedRole?: any;
-    assignedUserId?: string;
-    aiInstructions?: string;
-    slaHours?: number;
-    color?: string;
-  }) {
+  async createState(
+    tenantId: string,
+    data: {
+      workflowId: string;
+      name: string;
+      order: number;
+      assignedRole?: any;
+      assignedUserId?: string;
+      aiInstructions?: string;
+      slaHours?: number;
+      color?: string;
+    },
+  ) {
+    // Cross-tenant write guard: the workflow must belong to the caller's
+    // tenant before we attach a state to it. Without this, a caller from
+    // tenant A could inject states (and SLA / assignedRole) into a
+    // workflow of tenant B by just sending its workflowId in the body.
+    await this.assertWorkflowBelongsToTenant(data.workflowId, tenantId);
+
     return this.prisma.workflowState.create({
       data: {
         ...data,
@@ -74,21 +83,35 @@ export class WorkflowsService {
     return firstState;
   }
 
-  async update(id: string, data: { name?: string; description?: string }) {
-    return this.prisma.workflow.update({
-      where: { id },
+  async update(
+    id: string,
+    tenantId: string,
+    data: { name?: string; description?: string },
+  ) {
+    // updateMany with composite where prevents cross-tenant rename/defacement.
+    const result = await this.prisma.workflow.updateMany({
+      where: { id, tenantId },
       data,
     });
+    if (result.count === 0) {
+      throw new NotFoundException('Workflow no encontrado.');
+    }
+    return this.prisma.workflow.findUnique({ where: { id } });
   }
 
-  async deleteStatesByWorkflow(workflowId: string) {
+  async deleteStatesByWorkflow(workflowId: string, tenantId: string) {
+    await this.assertWorkflowBelongsToTenant(workflowId, tenantId);
+
     return this.prisma.workflowState.deleteMany({
       where: { workflowId },
     });
   }
 
-  async delete(id: string) {
-    // Delete associated states first to prevent foreign key constraint errors
+  async delete(id: string, tenantId: string) {
+    await this.assertWorkflowBelongsToTenant(id, tenantId);
+
+    // Delete associated states first to prevent foreign key constraint errors.
+    // Atomicidad real de esta secuencia se aborda en Block C ($transaction).
     await this.prisma.workflowState.deleteMany({
       where: { workflowId: id },
     });
@@ -96,5 +119,23 @@ export class WorkflowsService {
     return this.prisma.workflow.delete({
       where: { id },
     });
+  }
+
+  /**
+   * Throws NotFoundException if the workflow does not exist OR belongs
+   * to a different tenant. Returning the same status for both cases
+   * avoids leaking existence of cross-tenant workflows via enumeration.
+   */
+  private async assertWorkflowBelongsToTenant(
+    workflowId: string,
+    tenantId: string,
+  ): Promise<void> {
+    const wf = await this.prisma.workflow.findFirst({
+      where: { id: workflowId, tenantId },
+      select: { id: true },
+    });
+    if (!wf) {
+      throw new NotFoundException('Workflow no encontrado.');
+    }
   }
 }

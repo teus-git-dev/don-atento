@@ -305,6 +305,79 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] workflows Block A (2026-05-13) — tenant scoping + RBAC per-handler
+
+- **Resolved by**: this commit (first block of workflows remediation)
+- **What was wrong** (5 CRÍTICOs + 1 ALTO from the workflows audit):
+  - CRÍTICO #1: `WorkflowsController` had `@UseGuards(JwtAuthGuard,
+    TenantGuard)` but **no `RolesGuard`** at all, and zero `@Roles()`
+    decorators. Any authenticated user (incl. `TENANT_USER`,
+    `MAINTENANCE`) could create / mutate / delete workflows and
+    states.
+  - CRÍTICO #2: `POST /workflows/states` (`createState`) accepted
+    `workflowId` from the body and did **not** verify the workflow
+    belongs to the caller's tenant. Cross-tenant write injection:
+    any caller could insert states (including `assignedRole`,
+    `slaHours`, `aiInstructions`) into another tenant's workflow.
+    The injected `assignedRole` would later fan out
+    `notifyRoleAssignment` to the victim tenant's staff.
+  - CRÍTICO #3: `POST /workflows/:id/update` mutated any workflow
+    by id without a tenant filter. Cross-tenant rename / defacement
+    of `name` and `description`.
+  - CRÍTICO #4: `POST /workflows/:id/delete-states` blew away every
+    state of any workflow by id, with no tenant scoping. Catastrophic
+    — wipes the state machine; tickets with `currentStateId`
+    referring to deleted states end up in invalid state and the
+    tenant's maintenance pipeline stalls.
+  - CRÍTICO #5: `POST /workflows/:id/delete` deleted any workflow
+    in the cluster.
+  - ALTO #2: Controller read `req.user.tenantId` instead of
+    `req['tenantId']`. Functionally similar for non-SUPERADMIN, but
+    it silently bypasses the TenantGuard's documented SUPERADMIN
+    `?tenantId=` override — SUPERADMIN can't operate cross-tenant
+    here the way they can in properties/tickets.
+- **What was applied**:
+  - `WorkflowsController`:
+    - `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)` at class
+      level.
+    - `@Roles()` per handler:
+      - reads (`@Get()`) → `'AGENT','ADMIN_TENANT','SUPERADMIN'`.
+      - writes (`create`, `createState`, `update`,
+        `deleteStates`, `delete`) → `'ADMIN_TENANT','SUPERADMIN'`.
+    - All handlers now read tenant from `req['tenantId']` (set by
+      TenantGuard, honors SUPERADMIN override).
+    - `createState`, `update`, `deleteStates` and `delete` now
+      inject `@Req()` and forward `tenantId` to the service.
+  - `WorkflowsService`:
+    - New private helper `assertWorkflowBelongsToTenant(workflowId,
+      tenantId)` that does `findFirst({ where: { id, tenantId }
+      })` and throws `NotFoundException` if missing/foreign.
+      Returning a uniform 404 (never 403) prevents enumeration of
+      cross-tenant workflow ids.
+    - `createState(tenantId, data)`: calls the guard before
+      writing the state.
+    - `update(id, tenantId, data)`: uses `updateMany({ where: { id,
+      tenantId } })` so a foreign id is a no-op; throws
+      `NotFoundException` when `count === 0`, otherwise returns
+      the fresh row via `findUnique`.
+    - `deleteStatesByWorkflow(workflowId, tenantId)`: guard +
+      `deleteMany`.
+    - `delete(id, tenantId)`: guard + the existing `deleteMany`
+      states / `delete` workflow sequence (atomicity via
+      `$transaction` is Block C).
+  - The `getInitialState` method is preserved here (deletion is
+    Block D) — no tenant filter added because nobody calls it; the
+    signature change there would be dead-code surgery.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (no workflows specs exist —
+    coverage gap noted but out of scope for this security block)
+  - `npm run build` clean
+- **Carryover**: passwordHash leak via `responsible: true` →
+  Block B. DTOs + `$transaction` on delete + REST verb migration →
+  Block C. Swagger / Logger / pagination / `getInitialState` dead
+  code → Block D.
+
 ### [x] tickets Block E (2026-05-13) — DTO hardening + Logger + addAttachment URL allowlist + shortId entropy + fabricated-quote removal
 
 - **Resolved by**: this commit (fifth and final block of tickets remediation)

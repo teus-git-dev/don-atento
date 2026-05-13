@@ -3,37 +3,40 @@ import {
   Get,
   Post,
   Body,
-  Query,
   Param,
   UseGuards,
   Req,
 } from '@nestjs/common';
 import { WorkflowsService } from './workflows.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('workflows')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}
 
   @Get()
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   async findAll(@Req() req: any) {
-    const tenantId = req.user.tenantId;
-    return this.workflowsService.findAllByTenant(tenantId);
+    return this.workflowsService.findAllByTenant(req['tenantId']);
   }
 
   @Post()
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   async create(
     @Req() req: any,
     @Body() data: { name: string; description?: string; states?: any[] },
   ) {
-    const tenantId = req.user.tenantId;
-    return this.workflowsService.create({ ...data, tenantId });
+    return this.workflowsService.create({ ...data, tenantId: req['tenantId'] });
   }
 
   @Post('states')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   async createState(
+    @Req() req: any,
     @Body()
     data: {
       workflowId: string;
@@ -46,24 +49,28 @@ export class WorkflowsController {
       color?: string;
     },
   ) {
-    return this.workflowsService.createState(data);
+    return this.workflowsService.createState(req['tenantId'], data);
   }
 
   @Post(':id/update')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   async update(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() data: { name?: string; description?: string },
   ) {
-    return this.workflowsService.update(id, data);
+    return this.workflowsService.update(id, req['tenantId'], data);
   }
 
   @Post(':id/delete-states')
-  async deleteStates(@Param('id') id: string) {
-    return this.workflowsService.deleteStatesByWorkflow(id);
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  async deleteStates(@Req() req: any, @Param('id') id: string) {
+    return this.workflowsService.deleteStatesByWorkflow(id, req['tenantId']);
   }
 
   @Post(':id/delete')
-  async delete(@Param('id') id: string) {
-    return await this.workflowsService.delete(id);
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  async delete(@Req() req: any, @Param('id') id: string) {
+    return this.workflowsService.delete(id, req['tenantId']);
   }
 }
