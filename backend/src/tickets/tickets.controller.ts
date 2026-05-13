@@ -19,6 +19,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { TransitionStateDto } from './dto/transition-state.dto';
+import { ResolveTicketDto } from './dto/resolve-ticket.dto';
+import { CompleteTaskDto } from './dto/complete-task.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -82,12 +85,12 @@ export class TicketsController {
   async transition(
     @Req() req: any,
     @Param('id') id: string,
-    @Body() data: { userId: string; newStateId: string },
+    @Body() data: TransitionStateDto,
   ) {
     return this.ticketsService.transitionState(
       id,
       req['tenantId'],
-      data.userId,
+      req.user.id,
       data.newStateId,
     );
   }
@@ -98,18 +101,14 @@ export class TicketsController {
   async resolve(
     @Req() req: any,
     @Param('id') id: string,
-    @Body() data: { closureReason: string; signature?: string },
+    @Body() data: ResolveTicketDto,
   ) {
-    try {
-      return await this.ticketsService.resolveTicket(
-        id,
-        req['tenantId'],
-        data.closureReason,
-        data.signature,
-      );
-    } catch (e) {
-      throw e;
-    }
+    return this.ticketsService.resolveTicket(
+      id,
+      req['tenantId'],
+      data.closureReason,
+      data.signature,
+    );
   }
 
   @Patch(':id/complete-task')
@@ -118,19 +117,15 @@ export class TicketsController {
   async completeTask(
     @Req() req: any,
     @Param('id') id: string,
-    @Body() data: { userId: string; comment: string; attachments?: any[] },
+    @Body() data: CompleteTaskDto,
   ) {
-    try {
-      return await this.ticketsService.completeStateTask(
-        id,
-        req['tenantId'],
-        data.userId,
-        data.comment,
-        data.attachments,
-      );
-    } catch (e) {
-      throw e;
-    }
+    return this.ticketsService.completeStateTask(
+      id,
+      req['tenantId'],
+      req.user.id,
+      data.comment,
+      data.attachments,
+    );
   }
 
   @Post('upload')

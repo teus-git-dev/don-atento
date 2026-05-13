@@ -305,6 +305,67 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] tickets Block C (2026-05-13) — DTOs + identity-spoofing fix (userId leído de req.user)
+
+- **Resolved by**: this commit (third block of tickets remediation)
+- **What was wrong** (1 CRÍTICO + 2 ALTOs from the tickets audit):
+  - CRÍTICO #6: `PATCH /tickets/:id/status` y `PATCH /tickets/:id/
+    complete-task` aceptaban `userId` desde el body. Ese valor se
+    persistía como `completedByUserId` en `TicketStateLog` y se
+    reenviaba a `transitionState` para autoría de notificaciones —
+    identity spoofing puro. Cualquier usuario autenticado podía
+    firmar transiciones como otro técnico o como `'SYSTEM'`.
+  - ALTO #5: los 3 handlers (`transition`, `resolve`,
+    `completeTask`) tipaban su body como objetos inline en
+    TypeScript (`{ userId: string; newStateId: string }`, etc.).
+    `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`
+    no aplica a tipos estructurales — el body pasaba sin validar
+    en runtime (longitudes, tipos, campos arbitrarios).
+  - ALTO #8: `try { return await ... } catch (e) { throw e }` en
+    `resolve` y `completeTask` no aporta nada
+    (`no-useless-catch`); ruido sintáctico flagged por lint.
+- **What was applied**:
+  - Creados 3 DTOs nuevos con `class-validator`:
+    - `TransitionStateDto`: `newStateId @IsString @MinLength(1)
+      @MaxLength(64)`. **No** incluye `userId`.
+    - `ResolveTicketDto`: `closureReason @IsString @MinLength(1)
+      @MaxLength(2000)`; `signature @IsOptional @IsString
+      @MaxLength(65_536)`.
+    - `CompleteTaskDto`: `comment @IsString @MinLength(1)
+      @MaxLength(8000)`; `attachments @IsOptional @IsArray
+      @ArrayMaxSize(20)`. **No** incluye `userId`.
+    - Los DTOs llevan un comentario explícito de cabecera
+      explicando que `userId` se omite a propósito para evitar
+      identity spoofing.
+  - Controller:
+    - `transition()` ahora tipa body como `TransitionStateDto`
+      y pasa `req.user.id` (poblado por `JwtStrategy.validate`)
+      como actor.
+    - `resolve()` ahora tipa body como `ResolveTicketDto`; el
+      `transitionState` que dispara internamente sigue usando
+      `'SYSTEM'` para autoría del log resuelto (decisión de
+      negocio preservada — el cierre se atribuye al sistema, no
+      al operador, para encuestas).
+    - `completeTask()` ahora tipa body como `CompleteTaskDto`
+      y pasa `req.user.id` como actor del log.
+    - Eliminados los try/catch inútiles de `resolve` y
+      `completeTask`.
+  - El whitelist+forbidNonWhitelisted global rechaza cualquier
+    campo extra (incluído un `userId` legacy enviado por
+    clientes viejos) con 400 — comportamiento explícito y
+    audit-friendly.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npx jest tickets` 23/23 across 2 suites (existing transitionState
+    spec already used a literal `'user-2'`/`'tech-1'` userId at the
+    service-layer call site, so service-level tests didn't need to
+    change — only the controller→service wiring changed)
+  - `npm run build` clean
+- **Carryover**: Survey hardening (JWT_SECRET fail-fast +
+  timingSafeEqual length-check + findOnePublic) → Block D. DTO
+  hardening for CreateTicketDto + Logger + addAttachment URL
+  whitelist + cleanup → Block E.
+
 ### [x] tickets Block B (2026-05-13) — tenant scoping (findAllByTechnician / findAllByOwner / findLatestByPhone / auto-default-workflow)
 
 - **Resolved by**: this commit (second block of tickets remediation)
