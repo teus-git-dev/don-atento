@@ -10,7 +10,6 @@ import {
   UploadedFile,
   UseGuards,
   Req,
-  BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';

@@ -225,7 +225,9 @@ describe('TicketsService', () => {
       } as any);
 
       const createCall = prismaMock.ticket.create.mock.calls[0][0];
-      expect(createCall.data.shortId).toMatch(/^INC-\d{5}$/);
+      // 5 bytes of crypto.randomBytes → 10 uppercase hex chars (Block E
+      // replaced the old Math.random 5-digit numeric space).
+      expect(createCall.data.shortId).toMatch(/^INC-[0-9A-F]{10}$/);
     });
   });
 

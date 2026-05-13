@@ -1,4 +1,11 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  forwardRef,
+} from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { Ticket, TicketPriority, RelationType } from '@prisma/client';
@@ -25,6 +32,8 @@ const USER_PUBLIC_SELECT = {
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
+
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => WhatsappService))
@@ -36,9 +45,14 @@ export class TicketsService {
   ) {}
 
   async createTicket(data: CreateTicketDto): Promise<Ticket> {
-    console.log(
-      '[TicketsService] Creating ticket with data:',
-      JSON.stringify(data, null, 2),
+    // Controller is responsible for setting tenantId from req. Guard
+    // here so a misconfigured caller can't insert a tenantId-less row.
+    if (!data.tenantId) {
+      throw new BadRequestException('tenantId requerido.');
+    }
+    const tenantId = data.tenantId;
+    this.logger.log(
+      `Creating ticket for tenant=${tenantId} property=${data.propertyId} title="${data.title?.substring(0, 60)}"`,
     );
     try {
       // 1. Initial State from Workflow (if provided)
@@ -65,27 +79,32 @@ export class TicketsService {
         if (aiAnalysis.priority !== TicketPriority.MEDIUM || !data.priority) {
           finalPriority = aiAnalysis.priority;
           aiReason = aiAnalysis.reason;
-          console.log(
-            `[TicketsService] AI suggested priority: ${finalPriority} - Reason: ${aiReason}`,
+          this.logger.log(
+            `AI suggested priority=${finalPriority} reason="${aiReason}"`,
           );
         }
       }
 
       // Generate Short ID
       const tenant = await this.prisma.tenant.findUnique({
-        where: { id: data.tenantId },
+        where: { id: tenantId },
       });
       const prefix =
         tenant && tenant.name
           ? tenant.name.substring(0, 3).toUpperCase()
           : 'TKT';
-      const randomNum = Math.floor(10000 + Math.random() * 90000);
-      const generatedShortId = `${prefix}-${randomNum}`;
+      // 5 bytes of CSPRNG → 8 base32-style chars (~40 bits of entropy).
+      // 90,000 numeric combos per prefix (the old space) collided at ~370
+      // tickets per tenant by the birthday paradox; this widens the space
+      // to ~1e12 and uses crypto.randomBytes instead of Math.random.
+      const generatedShortId = `${prefix}-${randomBytes(5)
+        .toString('hex')
+        .toUpperCase()}`;
 
       // 2. Map DTO to Prisma data
       const ticket = await this.prisma.ticket.create({
         data: {
-          tenantId: data.tenantId,
+          tenantId,
           shortId: generatedShortId,
           propertyId: data.propertyId,
           reportedByUserId: data.reportedByUserId,
@@ -132,12 +151,12 @@ export class TicketsService {
       // 4. Automated Notifications (Phase 10)
       const ticketWithSla = { ...ticket, dueDate };
       this.sendTicketNotifications(ticketWithSla).catch((err) =>
-        console.error('Notification Error:', err),
+        this.logger.error('Notification dispatch failed', err as Error),
       );
 
       return ticket;
     } catch (error) {
-      console.error('[TicketsService] Error creating ticket:', error);
+      this.logger.error('Error creating ticket', error as Error);
       throw error;
     }
   }
@@ -309,11 +328,10 @@ export class TicketsService {
       if (user.phone) {
         await this.whatsappService
           .sendMessage(user.phone, message)
-          .catch((e) => console.error('WA Error:', e));
+          .catch((e) => this.logger.error('WhatsApp dispatch failed', e));
       }
       if (user.email) {
-        // Simple alert email
-        console.log(`Email Sent to ${user.email}: ${message}`);
+        this.logger.log(`Email alert queued for user=${user.id}`);
       }
     }
   }
@@ -332,8 +350,8 @@ export class TicketsService {
     if (!ticket) throw new Error('Ticket not found');
 
     if (!ticket.workflow) {
-      console.log(
-        `[TicketsService] Ticket ${id} has no workflow. Auto-assigning default.`,
+      this.logger.log(
+        `Ticket ${id} has no workflow. Auto-assigning default for tenant=${tenantId}.`,
       );
       const defaultWf = await this.prisma.workflow.findFirst({
         where: { tenantId },
@@ -405,8 +423,8 @@ export class TicketsService {
     if (!ticket) throw new Error('Ticket not found');
 
     if (!ticket.workflow) {
-      console.log(
-        `[TicketsService] Ticket ${ticketId} has no workflow. Auto-assigning default.`,
+      this.logger.log(
+        `Ticket ${ticketId} has no workflow. Auto-assigning default for tenant=${tenantId}.`,
       );
       const defaultWf = await this.prisma.workflow.findFirst({
         where: { tenantId },
@@ -434,51 +452,32 @@ export class TicketsService {
     // SPECIAL AI POLISH: Executive Quotation
     if (ticket.currentState?.name?.toLowerCase().includes('cotización')) {
       try {
-        let quoteItems = [];
+        let quoteItems: any[] = [];
         if (comment.startsWith('[{')) {
-          quoteItems = JSON.parse(comment);
+          try {
+            quoteItems = JSON.parse(comment);
+          } catch {
+            throw new BadRequestException(
+              'Comentario marcado como JSON de cotización pero no es JSON válido.',
+            );
+          }
           finalComment = await this.cognitiveService.generateExecutiveQuotation(
             ticket.tenantId,
             quoteItems,
           );
-        } else if (attachments && attachments.length > 0) {
-          const quoteFile = attachments.find(
-            (a) => a.type === 'image' || a.url.toLowerCase().endsWith('.pdf'),
-          );
-          if (quoteFile) {
-            console.log(
-              '[Smart Quotation] Document detected, triggering Vision...',
-            );
-            // In a real scenario, this would extract items. For now, we use simulated ones.
-            quoteItems = [
-              {
-                description:
-                  'Mano de obra especializada (reparación filtración)',
-                price: 150000,
-                quantity: 1,
-              },
-              {
-                description: 'Suministro de tubería PVC y accesorios presión',
-                price: 85000,
-                quantity: 1,
-              },
-              {
-                description: 'Sellado y acabado de superficie',
-                price: 45000,
-                quantity: 1,
-              },
-            ];
-            finalComment =
-              await this.cognitiveService.generateExecutiveQuotation(
-                ticket.tenantId,
-                quoteItems,
-              );
-          }
         }
+        // Note: previous code path detected an image/PDF attachment and
+        // injected three hardcoded quote line items (mano de obra
+        // 150 000, tubería PVC 85 000, sellado 45 000) — those then
+        // got written into a formal .docx / .pdf and sent to the
+        // client as a binding quote. Removed: fabricated quotes in
+        // production are not acceptable. Vision-driven extraction
+        // belongs in a separate, deliberately-built code path that
+        // the user has authorized.
 
         // GENERATE OFFICIAL DOCUMENTS (.docx & .pdf)
         if (quoteItems.length > 0) {
-          console.log('[Smart Quotation] Generating official documents...');
+          this.logger.log('Smart Quotation: generating official documents');
           const docxUrl = await this.cognitiveService.generateQuotationDocx(
             ticket.tenantId,
             ticket.id,
@@ -519,7 +518,8 @@ export class TicketsService {
           finalComment += `\n\n📎 **Cotizaciones Disponibles:** \n- [Descargar .PDF](${pdfUrl}) \n- [Descargar .DOCX](${docxUrl})`;
         }
       } catch (e) {
-        console.error('[TicketsService] Error polishing executive quote:', e);
+        if (e instanceof BadRequestException) throw e;
+        this.logger.error('Error polishing executive quote', e as Error);
       }
     }
 
@@ -535,8 +535,8 @@ export class TicketsService {
     });
 
     if (!ticket || !ticket.workflow) {
-      console.warn(
-        'Ticket or Workflow not found even after fallback. Aborting state transition but saving comment.',
+      this.logger.warn(
+        'Ticket or workflow not found even after fallback. Aborting state transition but saving comment.',
       );
       return ticket;
     }
@@ -546,8 +546,8 @@ export class TicketsService {
       finalComment.includes('Opciones de agendamiento propuestas') &&
       ticket.reportedByUser
     ) {
-      console.log(
-        `[Smart Scheduling] Triggering notification for Ticket ${ticketId}`,
+      this.logger.log(
+        `Smart Scheduling: triggering notification for ticket=${ticketId}`,
       );
       try {
         const clientName = ticket.reportedByUser.firstName || 'Cliente';
@@ -572,7 +572,10 @@ export class TicketsService {
           );
         }
       } catch (notifErr) {
-        console.error('[Smart Scheduling] Error sending proposal:', notifErr);
+        this.logger.error(
+          'Smart Scheduling: error sending proposal',
+          notifErr as Error,
+        );
       }
     }
 
@@ -676,11 +679,23 @@ export class TicketsService {
     });
   }
 
+  /**
+   * Adds an attachment URL to a ticket. The URL is validated against
+   * an https-only allowlist so callers can't inject arbitrary or
+   * `javascript:`-style URLs that would render in the frontend / be
+   * embedded in WhatsApp notifications to clients.
+   *
+   * Allowed hosts: the Supabase Storage bucket public host (derived
+   * from `SUPABASE_URL`) and the project's own `FRONTEND_URL`. Other
+   * hosts are rejected with `BadRequestException`.
+   */
   async addAttachment(
     id: string,
     tenantId: string,
     attachmentUrl: string,
   ): Promise<Ticket> {
+    this.assertAllowedAttachmentUrl(attachmentUrl);
+
     const ticket = await this.prisma.ticket.findUnique({
       where: { id, tenantId },
     });
@@ -693,6 +708,40 @@ export class TicketsService {
         attachments: [...currentAttachments, attachmentUrl],
       },
     });
+  }
+
+  private assertAllowedAttachmentUrl(raw: string): void {
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      throw new BadRequestException('attachmentUrl no es una URL válida.');
+    }
+    if (parsed.protocol !== 'https:') {
+      throw new BadRequestException('attachmentUrl debe usar https.');
+    }
+    const allowedHosts = new Set<string>();
+    const supabaseUrl = process.env.SUPABASE_URL;
+    if (supabaseUrl) {
+      try {
+        allowedHosts.add(new URL(supabaseUrl).host);
+      } catch {
+        // ignore malformed env var
+      }
+    }
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (frontendUrl) {
+      try {
+        allowedHosts.add(new URL(frontendUrl).host);
+      } catch {
+        // ignore malformed env var
+      }
+    }
+    if (allowedHosts.size === 0 || !allowedHosts.has(parsed.host)) {
+      throw new BadRequestException(
+        'Dominio de attachmentUrl no permitido.',
+      );
+    }
   }
 
   async findAllByTenant(tenantId: string) {

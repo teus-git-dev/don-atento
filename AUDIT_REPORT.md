@@ -305,6 +305,103 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] tickets Block E (2026-05-13) — DTO hardening + Logger + addAttachment URL allowlist + shortId entropy + fabricated-quote removal
+
+- **Resolved by**: this commit (fifth and final block of tickets remediation)
+- **What was wrong** (1 CRÍTICO + 4 ALTOs + 3 MEDIOs from the audit):
+  - CRÍTICO #14: `addAttachment(id, tenantId, attachmentUrl)` aceptaba
+    una URL arbitraria del caller y la persistía sin validar
+    protocolo ni dominio. Vector de stored URL injection — payloads
+    `javascript:...` o links de phishing renderizados al cliente en
+    frontend y reenviados via WhatsApp.
+  - ALTO #1: 13+ sitios de `console.log/error/warn` en
+    `tickets.service.ts`, uno de ellos serializando el body completo
+    del DTO (`JSON.stringify(data, null, 2)` con teléfono, dirección
+    y attachments en stdout).
+  - ALTO #2: `shortId = ${prefix}-${Math.floor(10000 + Math.random()
+    * 90000)}` — 90 000 combinaciones por prefix de 3 letras,
+    `Math.random` no-CSPRNG, sin chequeo de unicidad. Colisión
+    probabilística por el birthday paradox a ~370 tickets por
+    tenant.
+  - ALTO #4: Quote items hardcodeados en
+    `completeStateTask`. Cuando se detectaba una imagen/PDF como
+    attachment y el estado era "Cotización", el código inyectaba
+    tres líneas ficticias (mano de obra 150 000 COP, tubería PVC
+    85 000 COP, sellado 45 000 COP) que terminaban en `.docx` y
+    `.pdf` firmados como cotización formal y enviados al cliente.
+  - ALTO #6: `JSON.parse(comment)` sin try/catch propio dentro del
+    try general, swallow al `catch (e)`.
+  - ALTO #14: `title`/`description` en `CreateTicketDto` sin
+    `@MaxLength`; payloads ilimitados permitían DoS de DB y 500s
+    downstream en Cognitive/WhatsApp.
+  - ALTO #15: `attachments?: any` sin `@IsArray` ni `@ArrayMaxSize`.
+  - ALTO #13: `tenantId: string` ambiguo en el DTO — required pero
+    sobrescrito por el controller; los clientes podían enviarlo y el
+    comportamiento dependía del orden de evaluación.
+  - INFO: `BadRequestException` y `try { } catch { throw e }` del
+    controller — limpieza de imports y patrones inútiles.
+- **What was applied**:
+  - **CreateTicketDto** (rewritten):
+    - `tenantId @ApiHideProperty @IsOptional @IsString` con
+      docstring explicando que el controller lo inyecta.
+    - `propertyId`, `reportedByUserId`, `workflowId`,
+      `assignedTechnicianId`: `@MinLength(1) @MaxLength(64)`.
+    - `title @MaxLength(255)`, `description @MaxLength(5000)`.
+    - `reportedByUserPhone @MaxLength(32)`.
+    - `attachments @IsArray @ArrayMaxSize(20)` con doc sobre por qué
+      el elemento queda `any`.
+  - **Logger migration** (`tickets.service.ts`):
+    - Añadido `private readonly logger = new Logger(TicketsService
+      .name)`.
+    - Reemplazados los 13 `console.*`. El log de "Creating ticket"
+      ya no serializa el DTO entero — sólo `tenantId`, `propertyId`
+      y los primeros 60 chars del `title`.
+  - **shortId entropy** (`createTicket`):
+    - `randomBytes(5).toString('hex').toUpperCase()` → 10 chars hex
+      (~40 bits, ~1e12 combos) reemplaza el `Math.floor(10000 +
+      Math.random()*90000)` (5 dígitos, ~16 bits).
+    - Spec test actualizado a `/^INC-[0-9A-F]{10}$/`.
+  - **Fabricated quote removal** (`completeStateTask`):
+    - Eliminado el bloque que sintetizaba 3 ítems ficticios cuando
+      había attachment. La detección Vision queda pendiente de un
+      flujo explícito autorizado por el usuario.
+    - `JSON.parse(comment)` ahora envuelto en try/catch local que
+      lanza `BadRequestException('Comentario marcado como JSON …
+      pero no es JSON válido.')` — el resto del flujo no lo absorbe.
+  - **addAttachment URL allowlist**:
+    - Nuevo helper `assertAllowedAttachmentUrl(raw)` que:
+      - Parsea con `new URL()` (rechaza si no es URL válida).
+      - Exige `protocol === 'https:'`.
+      - Sólo permite hosts derivados de `SUPABASE_URL` y
+        `FRONTEND_URL` (vía `new URL().host`).
+      - Si no hay hosts permitidos (env vars no set) o el dominio
+        no está en el set, lanza `BadRequestException`.
+    - Invocado al inicio de `addAttachment` antes del `findUnique`.
+  - **Controller cleanup**:
+    - Eliminado `BadRequestException` no usado.
+    - (Try/catch inútiles ya removidos en Block C.)
+  - **tenantId hardening en createTicket**:
+    - Como ahora `tenantId?: string`, agregué un guard runtime
+      explícito: `if (!data.tenantId) throw new
+      BadRequestException('tenantId requerido.')` al inicio.
+      Defensa en profundidad: el controller siempre lo setea, pero
+      si un caller futuro olvida la sobrescritura no insertamos un
+      ticket huérfano.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover** (no aplicado, queda como backlog/INFO en el reporte
+  original — fuera de scope de un Block dedicado a seguridad):
+  - WhatsApp fan-out throttling (ALTO #3) — requiere wireup de
+    BullMQ.
+  - Refactor de longitud (`createTicket` 105 LOC, `completeStateTask`
+    203 LOC — MEDIOs #3, #4) — separar de cambios de seguridad.
+  - `suggestTransition` mock (MEDIO #9) — implementar o eliminar.
+  - SLA magic numbers (MEDIO #1) — extraer a constantes nombradas.
+  - Migrar `survey-info`/`satisfaction` a un `SurveyModule`
+    separado (INFO).
+
 ### [x] tickets Block D (2026-05-13) — survey hardening: SurveyTokenService + fail-fast JWT_SECRET + findOnePublic
 
 - **Resolved by**: this commit (fourth block of tickets remediation)
