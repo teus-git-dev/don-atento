@@ -305,6 +305,77 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] workflows Block C (2026-05-13) — DTOs + `$transaction` on delete + DELETE/PATCH verbs
+
+- **Resolved by**: this commit (third block of workflows remediation)
+- **What was wrong** (4 ALTOs + 3 MEDIOs from the workflows audit):
+  - ALTO #1: The three writing handlers (`create`, `createState`,
+    `update`) tipaban su body como objetos inline en TypeScript.
+    `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true
+    })` no aplica a tipos estructurales — los bodies pasaban sin
+    validar en runtime.
+  - ALTO #3: `assignedRole?: any` se mandaba directo a Prisma; un
+    valor fuera de los 6 valores de `UserRole` producía P2009 ⇒
+    HTTP 500 en lugar de 400.
+  - ALTO #4: `delete()` en service hacía `deleteMany(states)` +
+    `delete(workflow)` sin `$transaction`. Si la segunda fallaba
+    por FK con tickets, los estados quedaban eliminados pero el
+    workflow huérfano persistía.
+  - ALTO #5: Endpoints destructivos modelados como
+    `POST :id/delete` y `POST :id/delete-states` — anti-REST,
+    audit trail confuso, no aprovecha la semántica HTTP.
+  - MEDIOs #5, #8, #9: `slaHours` sin bounds (acepta negativos,
+    NaN-prone vía string); `name`/`description`/`aiInstructions`
+    sin `@MaxLength` (`aiInstructions` se envía al LLM downstream
+    — un prompt de 100KB satura tokens y eleva costos); `color`
+    sin validación de formato.
+- **What was applied**:
+  - **Nuevos DTOs** en `src/workflows/dto/`:
+    - `WorkflowStateDto`: `name @MinLength(1) @MaxLength(120)`,
+      `order @IsInt @Min(1) @Max(100)`, `assignedRole @IsEnum(
+      UserRole)`, `assignedUserId @MaxLength(64)`,
+      `aiInstructions @MaxLength(4000)`, `slaHours @IsInt @Min(1)
+      @Max(168)`, `color @MaxLength(32) @Matches(/^(#[0-9A-Fa-f]
+      {6}|[a-z]{1,32})$/)`. El regex de color admite tanto hex
+      (`#FF8800`) como keywords del paleta Tailwind que el
+      frontend usa (`cyan`, `blue`, ...) — el frontend de
+      `configuracion/page.tsx` envía keywords por defecto y no se
+      rompe.
+    - `CreateWorkflowDto`: `name`, `description`, `states?:
+      WorkflowStateDto[]` con `@ValidateNested({ each: true })`,
+      `@ArrayMaxSize(30)`, `@Type(() => WorkflowStateDto)`.
+    - `UpdateWorkflowDto`: `name?`, `description?` con los mismos
+      bounds del create.
+    - `CreateWorkflowStateDto extends WorkflowStateDto` agrega
+      `workflowId: @IsString @MinLength(1) @MaxLength(64)`.
+  - **REST verb migration** en el controller:
+    - `POST :id/update` → `PATCH :id`.
+    - `POST :id/delete` → `DELETE :id`.
+    - `POST :id/delete-states` → `DELETE :id/states`.
+    - `POST states` y `POST /` (create) se preservan — ambos son
+      legítimamente POST por crear recursos nuevos.
+  - **`$transaction` en `delete`**:
+    - `this.prisma.$transaction(async (tx) => { await
+      tx.workflowState.deleteMany(...); return tx.workflow.delete(
+      ...); })`. Si la segunda falla, los estados rollback.
+  - **Frontend migration**:
+    - `frontend/src/app/(dashboard)/configuracion/page.tsx` ya
+      llamaba a estos endpoints; actualizado en el mismo commit:
+      - `apiClient.post('/workflows/:id/update', …)` →
+        `apiClient.patch('/workflows/:id', …)`
+      - `apiClient.post('/workflows/:id/delete-states', {})` →
+        `apiClient.delete('/workflows/:id/states')`
+      - `apiClient.post('/workflows/:id/delete', {})` →
+        `apiClient.delete('/workflows/:id')`
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean (backend)
+  - `next build` clean (frontend)
+- **Carryover**: Swagger annotations / Logger / pagination /
+  orderBy / `getInitialState` dead-code removal / explicit
+  `PrismaModule` import → Block D.
+
 ### [x] workflows Block B (2026-05-13) — passwordHash leak fix (USER_PUBLIC_SELECT on `responsible`)
 
 - **Resolved by**: this commit (second block of workflows remediation)

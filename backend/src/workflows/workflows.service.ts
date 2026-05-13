@@ -126,14 +126,14 @@ export class WorkflowsService {
   async delete(id: string, tenantId: string) {
     await this.assertWorkflowBelongsToTenant(id, tenantId);
 
-    // Delete associated states first to prevent foreign key constraint errors.
-    // Atomicidad real de esta secuencia se aborda en Block C ($transaction).
-    await this.prisma.workflowState.deleteMany({
-      where: { workflowId: id },
-    });
-
-    return this.prisma.workflow.delete({
-      where: { id },
+    // Both the state cleanup and the workflow delete run inside a single
+    // interactive transaction: if the workflow delete fails (e.g. tickets
+    // still reference workflowId), the state deletions roll back and the
+    // workflow stays consistent. Without this we'd leave a stateless
+    // workflow row referenced by orphaned tickets.
+    return this.prisma.$transaction(async (tx) => {
+      await tx.workflowState.deleteMany({ where: { workflowId: id } });
+      return tx.workflow.delete({ where: { id } });
     });
   }
 

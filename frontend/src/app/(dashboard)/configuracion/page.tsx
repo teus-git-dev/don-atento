@@ -69,13 +69,13 @@ export default function ConfiguracionPage() {
 
       if (editingFlowId) {
         // Update Workflow
-        await apiClient.post(`/workflows/${editingFlowId}/update`, {
+        await apiClient.patch(`/workflows/${editingFlowId}`, {
           name: newFlow.name,
           description: newFlow.description
         });
 
         // Delete old states to recreate them
-        await apiClient.post(`/workflows/${editingFlowId}/delete-states`, {});
+        await apiClient.delete(`/workflows/${editingFlowId}/states`);
       } else {
         // Create Workflow — tenantId is injected by the server from JWT
         const flow = await apiClient.post<any>('/workflows', {
@@ -118,7 +118,7 @@ export default function ConfiguracionPage() {
   const handleDeleteFlow = async (id: string) => {
     if (!confirm("¿Está seguro de eliminar este flujo y todos sus estados?")) return;
     try {
-      await apiClient.post(`/workflows/${id}/delete`, {});
+      await apiClient.delete(`/workflows/${id}`);
       fetchWorkflows();
     } catch (e) {
       console.error("Delete flow error", e);
