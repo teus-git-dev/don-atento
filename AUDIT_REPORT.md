@@ -335,6 +335,74 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] DIAN audit (2026-05-12) — Block A: controller security, DTOs, remove hardcoded p12 password
+
+- **Resolved by**: Block A of DIAN remediation (this commit)
+- **Surfaced by**: full audit of invoicing/DIAN module (chat session 2026-05-12);
+  10 CRÍTICOs total, 3 closed in this block
+- **What was wrong**:
+  - `invoicing.controller.ts` had **no `TenantGuard`** and accepted
+    `@Query('tenantId')` on all 6 handlers. Any authenticated user could
+    `GET /invoicing/resolutions?tenantId=<otherTenant>` or
+    `POST /invoicing/invoices?tenantId=<otherTenant>` and emit official DIAN
+    invoices against another tenant's resolution, NIT, and authorized range.
+    Direct violation of CLAUDE.md "Controllers MUST do `req['tenantId']`".
+  - `@Body() body: any` on all write handlers neutralized the global
+    `ValidationPipe({ whitelist, forbidNonWhitelisted, transform })` —
+    `softwarePin`, `technicalKey`, `startNumber`, `validFrom`, etc. passed
+    through with zero type or range validation.
+  - `invoicing.service.ts:244` loaded `test-cert/dummy.p12` with the literal
+    passphrase `'gemini2026'` hardcoded in source. Cert file itself was
+    never in git (verified via `git log --all -- backend/test-cert/`), but
+    the literal passphrase has been in the repo since `19877b4`
+    (2026-04-06) and is reachable from `master`, `main`, and
+    `feature/whatsapp-ticketing-v2`.
+- **What was applied**:
+  - `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)` +
+    `@Roles('ADMIN_TENANT', 'SUPERADMIN')` at controller level.
+    `@ApiTags` + `@ApiBearerAuth` added.
+  - All 6 handlers refactored to `@Req() req: Request` + `req.tenantId!`.
+    `@Query('tenantId')` removed.
+  - 3 new DTOs under `backend/src/invoicing/dto/`:
+    - `CreateResolutionDto` — prefix regex, int ranges, date validation
+    - `CreateBillingItemDto` — code, name, basePrice, taxRate (0-100),
+      accountId required
+    - `CreateInvoiceDto` + nested `InvoiceLineDto` with `@ValidateNested`
+  - `invoicing.service.ts`: dropped `fs`/`path` imports, removed the
+    `dummy.p12 + 'gemini2026'` block entirely, added
+    `loadTenantCertificate(tenantId)` that pulls from
+    `prisma.digitalCertificate.findFirst({ where: { tenantId } })`. If no
+    certificate is registered for the tenant, the invoice persists as
+    `DRAFT` without XADES; `Logger.warn` notes the missing cert.
+  - Added `validFrom < validTo` validation to `createResolution`.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 107/107 across 15 suites (no invoicing specs exist yet —
+    specs are planned for a follow-up block)
+  - `npm run build` clean
+  - ESLint on `src/invoicing/**`: 177 → 129 problems (net **-48 errors**,
+    from removing `any` types and `@Query` patterns)
+- **Frontend impact**: `frontend/src/services/invoicingService.ts` keeps
+  sending `?tenantId=${TENANT_ID}`. `TenantGuard` overrides
+  `request.query.tenantId` with the JWT's tenantId by design — frontend
+  continues to work; its `?tenantId=` is now defensively ignored.
+- **Re: hardcoded password in history**: `dummy.p12` file itself was
+  never committed (only the passphrase string). The block removed the
+  literal from `HEAD`; history rewrite to remove the string from prior
+  commits is **deferred** — the leak is already public/reachable in 3
+  branches and rotation of the actual cert (if real) is the
+  authoritative fix, not history cleanup. Tracked as a separate
+  follow-up.
+- **Remaining DIAN audit items** (open, addressed in later blocks):
+  - Block B: encrypt `softwarePin`/`technicalKey` at rest
+  - Block C: `BillingItem.code` schema `@unique` → `@@unique([tenantId, code])`
+  - Block D: reject `useInlineThirdParty` fabrication
+  - Block E: fix XADES signature placeholder injection + drop `@ts-ignore`
+    in `dian-crypto.service.ts`
+  - Block F: XML-build the SOAP envelope, replace mock with feature flag
+
+
+
 ### [x] WhatsApp webhook fail-closed — defense-in-depth (no active Meta tenants in prod)
 
 - **Resolved by**: 07fe4ed (`security(whatsapp): fail-closed on webhook signature validation`)

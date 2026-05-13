@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -8,11 +9,14 @@ import { DianXmlService } from './dian-xml.service';
 import { DianCryptoService } from './dian-crypto.service';
 import { DianSoapService } from './dian-soap.service';
 import { Prisma } from '@prisma/client';
-import * as fs from 'fs';
-import * as path from 'path';
+import { CreateResolutionDto } from './dto/create-resolution.dto';
+import { CreateBillingItemDto } from './dto/create-billing-item.dto';
+import { CreateInvoiceDto } from './dto/create-invoice.dto';
 
 @Injectable()
 export class InvoicingService {
+  private readonly logger = new Logger(InvoicingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly dianXml: DianXmlService,
@@ -31,10 +35,15 @@ export class InvoicingService {
     });
   }
 
-  async createResolution(tenantId: string, data: any) {
+  async createResolution(tenantId: string, data: CreateResolutionDto) {
     if (data.startNumber >= data.endNumber) {
       throw new UnprocessableEntityException(
         'El número inicial debe ser menor al final.',
+      );
+    }
+    if (new Date(data.validFrom) >= new Date(data.validTo)) {
+      throw new UnprocessableEntityException(
+        'La fecha de inicio debe ser anterior a la fecha de fin.',
       );
     }
 
@@ -43,9 +52,9 @@ export class InvoicingService {
         tenantId,
         prefix: data.prefix,
         resolutionNumber: data.resolutionNumber,
-        startNumber: Number(data.startNumber),
-        endNumber: Number(data.endNumber),
-        currentNumber: Number(data.startNumber), // El proximo a utilizar
+        startNumber: data.startNumber,
+        endNumber: data.endNumber,
+        currentNumber: data.startNumber, // El próximo a utilizar
         validFrom: new Date(data.validFrom),
         validTo: new Date(data.validTo),
         technicalKey: data.technicalKey,
@@ -56,21 +65,23 @@ export class InvoicingService {
   }
 
   // ============================================
-  // BILLING ITEMS (CATALOGO MESTRO)
+  // BILLING ITEMS (CATALOGO MAESTRO)
   // ============================================
 
   async getBillingItems(tenantId: string) {
     return this.prisma.billingItem.findMany({
       where: { tenantId, isActive: true },
       include: {
-        account: true, // Join con el PUC
+        account: true,
       },
       orderBy: { code: 'asc' },
     });
   }
 
-  async createBillingItem(tenantId: string, data: any) {
-    // Verificar si el codigo ya existe para la inmobiliaria para evitar colisiones
+  async createBillingItem(tenantId: string, data: CreateBillingItemDto) {
+    // Note: BillingItem.code is currently `@unique` globally (schema). Block C
+    // of the remediation will convert this to `@@unique([tenantId, code])` so
+    // the lookup below can be tenant-scoped. Until then, accept the constraint.
     const existing = await this.prisma.billingItem.findUnique({
       where: { code: data.code },
     });
@@ -86,9 +97,9 @@ export class InvoicingService {
         tenantId,
         code: data.code,
         name: data.name,
-        basePrice: data.basePrice || 0, // Precio base asume $0.00 dinamico por defecto
-        taxRate: data.taxRate || 0, // Ej. 19 para IVA
-        accountId: data.accountId, // Puntero al PUC
+        basePrice: data.basePrice,
+        taxRate: data.taxRate,
+        accountId: data.accountId,
       },
     });
   }
@@ -112,7 +123,28 @@ export class InvoicingService {
   // INVOICE ENGINE (XML BUILDER)
   // ============================================
 
-  async createDraftInvoice(tenantId: string, data: any) {
+  /**
+   * Load the tenant's signing certificate (XADES-EPES) from the DB. Returns
+   * null if no certificate is registered — caller should skip signing and
+   * persist the invoice as DRAFT.
+   *
+   * The `passwordHash` field is read as the certificate password. Block B of
+   * this remediation will encrypt this at rest; for now it's used as stored.
+   */
+  private async loadTenantCertificate(
+    tenantId: string,
+  ): Promise<{ buffer: Buffer; password: string } | null> {
+    const cert = await this.prisma.digitalCertificate.findFirst({
+      where: { tenantId },
+    });
+    if (!cert || !cert.fileBuffer || !cert.passwordHash) return null;
+    return {
+      buffer: Buffer.from(cert.fileBuffer),
+      password: cert.passwordHash,
+    };
+  }
+
+  async createDraftInvoice(tenantId: string, data: CreateInvoiceDto) {
     // 1. Validar Resolución DIAN Activa
     const resolution = await this.prisma.dianResolution.findFirst({
       where: { tenantId, isActive: true },
@@ -136,12 +168,12 @@ export class InvoicingService {
       where: { id: tenantId },
     });
 
-    // Si thirdPartyId es un string arbitrario (placeholder), crearemos un dummy data para UBL
     let thirdParty = await this.prisma.accountingThirdParty.findFirst({
       where: { tenantId, AND: [{ documentNumber: data.clientId }] },
     });
     // 3.b If thirdParty not found, use inline data without FK reference (to avoid FK violation)
     // In production, the ThirdParty record must exist before invoicing.
+    // Block D of the remediation will replace this fallback with a hard reject.
     const useInlineThirdParty = !thirdParty || !thirdParty.id;
     if (!thirdParty) {
       thirdParty = {
@@ -159,7 +191,7 @@ export class InvoicingService {
     const linesToCreate: any[] = [];
     const populatedLinesForXml: any[] = [];
 
-    for (const line of data.lines as any[]) {
+    for (const line of data.lines) {
       const billingItem = await this.prisma.billingItem.findUnique({
         where: { id: line.itemId },
       });
@@ -196,13 +228,11 @@ export class InvoicingService {
 
     // 4. Update Resolution and create Invoice in DB via Prisma Transaction
     const result = await this.prisma.$transaction(async (tx) => {
-      // Avanzar el consecutivo
       await tx.dianResolution.update({
         where: { id: resolution.id },
         data: { currentNumber: { increment: 1 } },
       });
 
-      // Crear factura — only link thirdPartyId if we have a validated DB record
       const invoice = await tx.invoice.create({
         data: {
           tenantId,
@@ -212,7 +242,6 @@ export class InvoicingService {
           subtotal: invoiceSubtotal,
           taxAmount: invoiceTaxAmount,
           total: invoiceTotal,
-          // Only attach real FK if the record was found in DB
           ...(thirdParty?.id && !useInlineThirdParty
             ? { thirdPartyId: thirdParty.id }
             : {}),
@@ -234,27 +263,32 @@ export class InvoicingService {
       populatedLinesForXml,
     );
 
-    // 6. Firma Criptográfica XADES-EPES
-    // En producción: cargar desde await this.prisma.digitalCertificate.findFirst({ where: { tenantId } })
+    // 6. Firma Criptográfica XADES-EPES — load from DB (no more hardcoded
+    // dummy.p12 with literal password). If no certificate is registered for
+    // this tenant, skip signing — the invoice persists as DRAFT until a
+    // certificate is uploaded via the tenant admin flow.
     let signedXml = rawXml;
-    const testCertPath = path.join(process.cwd(), 'test-cert', 'dummy.p12');
-
-    if (fs.existsSync(testCertPath)) {
-      const p12Buffer = fs.readFileSync(testCertPath);
-      signedXml = this.dianCrypto.signXml(rawXml, p12Buffer, 'gemini2026');
+    const certData = await this.loadTenantCertificate(tenantId);
+    if (certData) {
+      signedXml = this.dianCrypto.signXml(
+        rawXml,
+        certData.buffer,
+        certData.password,
+      );
+    } else {
+      this.logger.warn(
+        `No digital certificate registered for tenant=${tenantId}; invoice ${result.sequence} persisted as DRAFT without XADES-EPES signature.`,
+      );
     }
 
     // 7. V1 Launch: XML Generation Only (no SOAP transmission to DIAN Muisca)
-    // The SOAP transmission is disabled until a valid .p12 certificate and DIAN habilitación credentials are configured.
-    // Uncomment the block below and configure DianSoapService when ready for production.
+    // The SOAP transmission stays disabled until Block F of the remediation
+    // wires a real DIAN client behind a feature flag.
     const finalStatus = 'DRAFT';
     const zipKey = null;
-    const soapMessage =
-      'Factura generada en modo DRAFT. La transmisión a DIAN está pendiente de configuración del certificado digital.';
-
-    // [PRODUCTION] Uncomment when .p12 certificate is ready:
-    // const soapResult = await this.dianSoap.sendSignedXmlToDian(signedXml, result.sequence, softwareId);
-    // if (soapResult.success) { finalStatus = 'SENT_TO_DIAN'; zipKey = soapResult.zipKey; }
+    const soapMessage = certData
+      ? 'Factura generada y firmada en modo DRAFT. La transmisión a DIAN está pendiente de configuración.'
+      : 'Factura generada en modo DRAFT sin firma digital. Cargue el certificado del tenant para habilitar XADES-EPES.';
 
     // 8. Save updated invoice
     await this.prisma.invoice.update({
