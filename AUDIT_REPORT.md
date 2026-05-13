@@ -305,6 +305,44 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] properties Block C (2026-05-13) — temp-password refactor: high-entropy + mustChangePassword
+
+- **Resolved by**: this commit
+- **What was wrong** (CRÍTICO #4 from the properties audit):
+  - Three sites generated temp passwords as `\`TempOwner_${Date.now()}!\``
+    or `\`TempTenant_${Date.now()}!\`` (in `create()` for owner, `create()`
+    for tenant, and `update()` for owner). Effective entropy ≈ 13 bits
+    if the attacker knows the day. Bcrypt-12 brute force is feasible:
+    ~10k attempts in ~17 min, since the attacker can derive the
+    creation timestamp from log lines.
+  - Auto-generated emails were also predictable
+    (`owner_${Date.now()}@teus.com` /
+    `tenant_${Date.now()}@teus.com`). Combined with the temp password
+    derived from the same `Date.now()`, an account takeover vector
+    against silently-created owners/tenants was open.
+  - Users were created **without** `mustChangePassword: true` —
+    nothing would force them to change the placeholder later.
+- **What was applied**:
+  - Two new helpers at module level:
+    - `generateTempPassword()` → `crypto.randomBytes(32).toString('hex')`
+      = 256 bits of entropy. Bcrypt-12 brute force is computationally
+      infeasible.
+    - `randomEmailSuffix()` → `crypto.randomBytes(8).toString('hex')`
+      = avoids both predictability and same-millisecond collisions in
+      bulk imports.
+  - All three sites now use these helpers and set
+    `mustChangePassword: true` on the new `user.create`. The
+    placeholder password is never returned to the caller; the user must
+    complete a real password setup flow ("olvidé contraseña" / admin
+    reset) before it becomes a usable credential.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+- **Note**: `mustChangePassword` is read by the login flow per the
+  existing auth audit pattern; this commit only changes how the field
+  is *set*. Login enforcement is in the auth module and already in
+  place.
+
 ### [x] properties Block B (2026-05-13) — transferProperty cross-tenant validation + $transaction + DTO
 
 - **Resolved by**: this commit
