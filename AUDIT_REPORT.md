@@ -305,6 +305,42 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] properties Block A (2026-05-13) — passwordHash leak fix + tenant filter on inventoryTemplate lookup
+
+- **Resolved by**: this commit
+- **What was wrong** (2 CRÍTICOs from the properties audit):
+  - `findOne`/`findOneDetail`/`findByPropertyCode` used
+    `include: { relations: { include: { user: true } } }` with no
+    `select` → Prisma returned the FULL `User` object on every property
+    detail fetch, including `passwordHash`, `mustChangePassword`,
+    `governmentId`, `email`, `phone`. Bcrypt hashes and PII landing in
+    HTTP response bodies on every render of the property detail page.
+  - `create()` instantiated `inventoryTemplate.findUnique({ id })`
+    WITHOUT a `tenantId` filter — bypass of the
+    `inventory-templates` Block patch from 2026-05-13. A user from
+    Tenant A who knows or guesses a template id from Tenant B could
+    instantiate B's zones/items into A's property (cross-tenant data
+    exfiltration via template-instantiation).
+- **What was applied**:
+  - New module-level constant `USER_PUBLIC_SELECT` whitelisting
+    `{ id, firstName, lastName, email, phone, role, governmentId, personType }`.
+    Excludes `passwordHash`, `mustChangePassword`, internal flags.
+  - `findOne`, `findOneDetail`, `findByPropertyCode` updated to use
+    `user: { select: USER_PUBLIC_SELECT }`.
+  - `findAllByTenant` already had a narrower `select` and is left
+    untouched.
+  - `create()` template lookup changed from `findUnique({ where: { id } })`
+    to `findFirst({ where: { id, tenantId: propertyFields.tenantId } })`.
+    Closes the bypass.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (no regressions)
+  - `npm run build` (deferred to end of remediation per multi-block
+    workflow)
+- **Remaining properties audit items**: Blocks B-E (transferProperty
+  validation, temp-password refactor, RBAC + transactions + DRY +
+  caps + bulk DTO, dead routes + DTO hardening).
+
 ### [x] cognitive Block 3 (2026-05-13) — brand-brain + property/summary hybrid; dead endpoints gated
 
 - **Resolved by**: this commit

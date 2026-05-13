@@ -7,6 +7,22 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
+/**
+ * Whitelist of User fields safe to expose in property responses. Excludes
+ * `passwordHash`, `mustChangePassword`, `isActive`, and any internal flags.
+ * Used across findOne / findOneDetail / findByPropertyCode includes.
+ */
+const USER_PUBLIC_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  role: true,
+  governmentId: true,
+  personType: true,
+} as const;
+
 @Injectable()
 export class PropertiesService {
   private readonly logger = new Logger(PropertiesService.name);
@@ -206,9 +222,15 @@ export class PropertiesService {
         }
 
         // 4. Inventory Template Application — batched to avoid N+1 zone creates
+        // Tenant filter is required here: a caller could otherwise pass a
+        // template id from another tenant and instantiate its zones/items
+        // into their own property (cross-tenant data exfiltration).
         if (data.inventoryTemplateId) {
-          const template = await tx.inventoryTemplate.findUnique({
-            where: { id: data.inventoryTemplateId },
+          const template = await tx.inventoryTemplate.findFirst({
+            where: {
+              id: data.inventoryTemplateId,
+              tenantId: propertyFields.tenantId,
+            },
             include: {
               items: true,
               zones: { include: { items: true } },
@@ -321,7 +343,7 @@ export class PropertiesService {
       where: { id, tenantId },
       include: {
         relations: {
-          include: { user: true },
+          include: { user: { select: USER_PUBLIC_SELECT } },
         },
       },
     });
@@ -339,7 +361,7 @@ export class PropertiesService {
       where: { tenantId, propertyCode },
       include: {
         relations: {
-          include: { user: true },
+          include: { user: { select: USER_PUBLIC_SELECT } },
         },
       },
     });
@@ -350,7 +372,7 @@ export class PropertiesService {
       where: { id, tenantId },
       include: {
         relations: {
-          include: { user: true },
+          include: { user: { select: USER_PUBLIC_SELECT } },
         },
       },
     });
