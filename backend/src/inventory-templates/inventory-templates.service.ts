@@ -49,7 +49,7 @@ export class InventoryTemplatesService {
 
   async findAll(tenantId: string) {
     return this.prisma.inventoryTemplate.findMany({
-      where: tenantId ? { tenantId } : {},
+      where: { tenantId },
       include: {
         zones: {
           include: { templateItems: true },
@@ -62,9 +62,9 @@ export class InventoryTemplatesService {
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.inventoryTemplate.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId: string) {
+    return this.prisma.inventoryTemplate.findFirst({
+      where: { id, tenantId },
       include: {
         zones: {
           include: { templateItems: true },

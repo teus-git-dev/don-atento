@@ -103,8 +103,12 @@ export class InventoryMasterService {
     });
   }
 
-  async instantiateFromTemplate(propertyId: string, templateId: string) {
-    const template = await this.templatesService.findOne(templateId);
+  async instantiateFromTemplate(
+    propertyId: string,
+    templateId: string,
+    tenantId: string,
+  ) {
+    const template = await this.templatesService.findOne(templateId, tenantId);
     if (!template) throw new Error('Template not found');
 
     const property = await this.prisma.property.findUnique({

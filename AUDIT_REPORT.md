@@ -305,6 +305,68 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [ ] inventory-templates: read-only habilitado para v1, CRUD completo fuera de scope — remediación post-v1
+
+- **Owner**: backend team (re-audit owner TBD when CRUD is scheduled)
+- **Surfaced by**: audit chat session 2026-05-13
+- **Decision**: Frontend depends on this module to populate plantillas
+  selectors when creating/editing inmuebles. Killing it entirely
+  degrades UX; remediating the full CRUD now is large-scope (4 CRÍTICOs).
+  Hybrid v1 fix applied: **read endpoints work with proper auth; write
+  endpoints return 403 with a v2-availability message.**
+- **What was applied** (hybrid v1 patch):
+  - `inventory-templates.controller.ts`: added
+    `@UseGuards(JwtAuthGuard, TenantGuard)` at class level. `findAll` and
+    `findOne` refactored to use `req.tenantId` from JWT (no more
+    `@Query('tenantId')` trust). Frontend keeps sending the query param;
+    `TenantGuard` overrides it transparently.
+  - `inventory-templates.service.findAll(tenantId)`: dropped the
+    `tenantId ? where : {}` empty-as-all fallback. Now always
+    tenant-scoped.
+  - `inventory-templates.service.findOne(id, tenantId)`: signature change.
+    Uses `findFirst({ where: { id, tenantId } })` for tenant-scoped lookup.
+  - Write endpoints (`POST /`, `PATCH /:id`, `PATCH /:id/toggle-status`,
+    `DELETE /:id`) each have `@UseGuards(FeatureDisabledGuard)`. The new
+    `feature-disabled.guard.ts` throws `ForbiddenException` with message
+    "Feature en desarrollo — disponible en v2".
+  - 4 new tests (`inventory-templates.controller.spec.ts`): cover happy
+    paths for read endpoints + guard rejection for writes.
+- **Cross-module touch (forced by signature change, scope-flagged)**:
+  - `inventory-master.service.instantiateFromTemplate(propertyId, templateId)`
+    → `(..., templateId, tenantId)` to accommodate the new `findOne`
+    signature. The method is dead code (the `/inventory-master/instantiate/:id`
+    endpoint the frontend references doesn't exist in the controller),
+    so the only impact is keeping `tsc` clean.
+- **Open issues from the original audit** (CRUD endpoints — to address
+  before v2 release):
+  - CRÍTICO: `POST /inventory-templates` body had `tenantId` field.
+    Currently 403 via guard; remediation = drop `tenantId` from DTO,
+    use `req.tenantId`.
+  - CRÍTICO: `update`, `toggleStatus`, `remove` had no tenant scoping
+    at service level. Currently 403; remediation = service signatures
+    must take `tenantId` and filter via `where: { id, tenantId }`.
+  - CRÍTICO: `update(@Body() data: any)` had no DTO. Currently 403;
+    remediation = `UpdateInventoryTemplateDto` with class-validator.
+  - ALTO: `remove` cascade is 3 non-atomic Prisma calls. Wrap in
+    `$transaction` or add `onDelete: Cascade` to the schema for
+    `Zone.templateId` and `InventoryTemplateItem.templateId`.
+  - ALTO: `toggleStatus` throws raw `new Error('Template not found')`
+    (500 instead of 404). Switch to `NotFoundException`.
+  - ALTO: DTO declares `items` but service expects `zones` too; with
+    `forbidNonWhitelisted: true` the `zones` branch of `create` is
+    dead. Either extend DTO with `zones` + sub-DTO or remove the
+    service branch.
+  - MEDIO: DTO `category` uses `@IsString()` instead of `@IsEnum(InventoryCategory)`.
+  - MEDIO: `update()` silently ignores fields outside `{ name, description, status }`.
+  - MEDIO: magic-string enum fallbacks (`'GENERAL'`, `'ZONAS_COMUNES'`)
+    in `create()` — frágiles al rename.
+- **Frontend impact note**: Admin pages
+  (`configuracion/plantillas/page.tsx`, `configuracion/page.tsx`,
+  `inventory-master/page.tsx`) will now receive 403 on write attempts.
+  They should either be hidden in v1 or display the v2-availability
+  message gracefully. Read endpoints continue to work; the inmueble
+  template selector remains functional.
+
 ### [ ] integrations — fuera de scope v1, requiere rediseño de modelo webhook antes de activar
 
 - **Owner**: backend team (re-audit owner TBD when integration is scheduled)
