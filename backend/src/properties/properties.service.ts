@@ -507,18 +507,13 @@ export class PropertiesService {
         }
       }
 
-      if (propertyFields.propertyCode) {
-        const activeTenantRel = await tx.propertyRelation.findFirst({
-          where: { propertyId: id, relationType: 'TENANT', status: 'ACTIVE' },
-        });
-
-        if (activeTenantRel) {
-          await tx.propertyRelation.update({
-            where: { id: activeTenantRel.id },
-            data: { contractNumber: propertyFields.propertyCode },
-          });
-        }
-      }
+      // (Removed: previously this block auto-rewrote the active tenant's
+      // `contractNumber` to the property's `propertyCode` whenever a
+      // property update included propertyCode. The two fields model
+      // distinct entities — internal property code vs. legal rental
+      // contract number — and conflating them corrupted accounting
+      // references. Use transferProperty / a future contract-update
+      // endpoint to change contractNumber explicitly.)
 
       return property;
     });

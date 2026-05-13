@@ -305,6 +305,63 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] properties Block E (2026-05-13) — contractNumber-bug fix + DTO hardening
+
+- **Resolved by**: this commit (final block of properties remediation)
+- **What was wrong** (1 ALTO + 4 MEDIOs from the properties audit):
+  - `update()` had a side-effect block that overwrote the active TENANT
+    relation's `contractNumber` with the property's `propertyCode`
+    whenever an update payload included `propertyCode`. The two
+    fields model distinct entities (internal property code vs. legal
+    rental contract number); conflating them corrupted accounting
+    references whenever an admin renamed the property code.
+  - `CreatePropertyDto` had `status?: any` instead of the
+    `PropertyStatus` enum; was missing `areaM2`, `rooms`, `bathrooms`
+    entirely (service used them but DTO didn't validate them); had
+    no `@MaxLength` on any string field and no `@Min(0)` on
+    numeric / monetary fields; `latitude`/`longitude` had no range
+    bounds.
+- **What was applied**:
+  - `properties.service.update()`: removed the
+    propertyCode→contractNumber block. Replaced with an explanatory
+    comment pointing to `transferProperty` (and a future
+    contract-update endpoint) as the proper place to mutate
+    contractNumber explicitly.
+  - `CreatePropertyDto` rewritten with tightened validation:
+    - `status: @IsEnum(PropertyStatus) @IsOptional`
+    - Added `areaM2`, `rooms`, `bathrooms` with `@IsNumber/@IsInt`,
+      `@Min(0)`, `@Max(1_000_000/999/999)`.
+    - `@MaxLength` on all string fields (`title:255`, `description:4000`,
+      `address:255`, `city/department/country:120`,
+      `propertyCode:64`, `managementNit/managementPhone:32`,
+      `managementName/managementEmail/insuranceCompany:255`,
+      `splatUrl:1024`).
+    - `@Min(0)` on `rentAmount`, `adminAmount`, `taxAmount`.
+    - `@Min(-90)/@Max(90)` on `latitude`,
+      `@Min(-180)/@Max(180)` on `longitude`.
+    - `propertyCode` also gets `@MinLength(1)` so empty strings are
+      rejected.
+    - `visionVideoUrl`, `visionAnalysis`, `attachments`, `ownerInfo`,
+      `tenantInfo` intentionally stay as `any` (with a doc comment) —
+      they accept heterogeneous JSON from vision pipelines, file
+      upload responses, and bulk CSV imports. Nested DTOs are a
+      future refactor.
+  - `UpdatePropertyDto` (via `PartialType`) inherits the new
+    decorators with all fields optional. No further changes there.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover note**: the `data: any` typing inside
+  `properties.service.create()` and `properties.service.update()`
+  is a separate, larger refactor. The service still accepts `any`
+  but the DTO at the controller boundary now validates. To eliminate
+  the `Unsafe member access` lint warnings on the service side, the
+  service signatures need to be tightened to `CreatePropertyDto` /
+  `UpdatePropertyDto` and the ownerInfo / tenantInfo / attachments
+  fields need nested DTOs. Tracked but not in v1 scope; the
+  validation security gates are now closed at the API boundary.
+
 ### [x] properties Block D (2026-05-13) — RBAC + update() transaction + DRY + limit caps + bulk size check + dead-route cleanup
 
 - **Resolved by**: this commit
