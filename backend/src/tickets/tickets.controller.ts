@@ -18,6 +18,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { TicketsService } from './tickets.service';
+import { SurveyTokenService } from './survey-token.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TransitionStateDto } from './dto/transition-state.dto';
 import { ResolveTicketDto } from './dto/resolve-ticket.dto';
@@ -43,6 +44,7 @@ export class TicketsController {
   constructor(
     private readonly ticketsService: TicketsService,
     private readonly fileUpload: FileUploadService,
+    private readonly surveyToken: SurveyTokenService,
   ) {}
 
   @Post()
@@ -183,32 +185,14 @@ export class TicketsController {
     };
   }
 
-  // ── HMAC helper for survey token validation ──
-  private validateSurveyToken(
-    ticketId: string,
-    token: string | undefined,
-  ): boolean {
-    if (!token) return false;
-    const secret = process.env.JWT_SECRET || 'MISSING';
-    const crypto = require('crypto');
-    const expected = crypto
-      .createHmac('sha256', secret)
-      .update(ticketId)
-      .digest('hex')
-      .substring(0, 16);
-    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
-  }
-
   @Public()
   @Get(':id/survey-info')
   @ApiOperation({ summary: 'Obtener info pública del ticket para la encuesta' })
   async getSurveyInfo(@Param('id') id: string, @Query('token') token?: string) {
-    if (!this.validateSurveyToken(id, token)) {
+    if (!this.surveyToken.verify(id, token)) {
       throw new ForbiddenException('Token de encuesta inválido.');
     }
-    const ticket = await this.ticketsService
-      .findOne(id, undefined as any)
-      .catch(() => null);
+    const ticket = await this.ticketsService.findOnePublicForSurvey(id);
     if (!ticket) return { title: 'Ticket no encontrado' };
     return { title: ticket.title };
   }
@@ -221,12 +205,11 @@ export class TicketsController {
     @Query('token') token: string,
     @Body() data: { stars: number; comment?: string },
   ) {
-    if (!this.validateSurveyToken(id, token)) {
+    if (!this.surveyToken.verify(id, token)) {
       throw new ForbiddenException('Token de encuesta inválido.');
     }
-    return this.ticketsService.updateSatisfaction(
+    return this.ticketsService.updateSatisfactionPublic(
       id,
-      undefined as any,
       data.stars,
       data.comment,
     );

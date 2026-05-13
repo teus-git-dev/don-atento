@@ -305,6 +305,77 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] tickets Block D (2026-05-13) — survey hardening: SurveyTokenService + fail-fast JWT_SECRET + findOnePublic
+
+- **Resolved by**: this commit (fourth block of tickets remediation)
+- **What was wrong** (4 CRÍTICOs from the tickets audit):
+  - CRÍTICO #10: `process.env.JWT_SECRET || 'MISSING'` fallback en
+    dos sitios (`tickets.controller.validateSurveyToken` y
+    `tickets.service.transitionState` para el link de encuesta). Si
+    `JWT_SECRET` no estaba en env, el secreto del HMAC era el literal
+    `'MISSING'` — predecible, replicable, tokens forjables.
+  - CRÍTICO #11: `crypto.timingSafeEqual(Buffer.from(token),
+    Buffer.from(expected))` lanza `RangeError` cuando las longitudes
+    difieren — no devuelve `false`. Un token con longitud distinta a
+    16 producía HTTP 500 (oracle de longitud + DoS trivial).
+  - CRÍTICO #12: los endpoints `@Public()` `survey-info` y
+    `satisfaction` llamaban `ticketsService.findOne(id, undefined as
+    any)` / `updateSatisfaction(id, undefined as any, ...)`. El
+    `where: { id, tenantId: undefined }` se traducía como
+    "tenantId IS NULL or any" — bypass de tenant guard. Sumado al
+    CRÍTICO #10, leaks cross-tenant si un atacante adivinaba o
+    forjaba el token.
+  - CRÍTICO #13: `const crypto = require('crypto')` en runtime
+    dentro de un método del controller, repetido en el service.
+    Evitaba el chequeo estático de TS y el análisis de superficie
+    criptográfica.
+- **What was applied**:
+  - **Nuevo `SurveyTokenService`** (`survey-token.service.ts`)
+    - `onModuleInit`: lanza si `JWT_SECRET` no está set (fail-fast,
+      mirror del patrón de `JwtStrategy`).
+    - `generate(ticketId)`: HMAC-SHA256 truncado a 16 chars hex.
+    - `verify(ticketId, token)`: chequeo previo de longitud
+      (`token.length !== 16` ⇒ `false` directo), envoltura
+      try/catch sobre `timingSafeEqual` por seguridad belt-and-suspenders.
+    - Imports ESM (`import { createHmac, timingSafeEqual } from
+      'crypto'`) en lugar de `require('crypto')`.
+    - Registrado como provider + export en `tickets.module.ts`.
+  - **Controller (`tickets.controller.ts`)**:
+    - Inyectado `SurveyTokenService`.
+    - Eliminado el método privado `validateSurveyToken` (16 LOC) y
+      todas las llamadas a `require('crypto')`.
+    - `getSurveyInfo` y `updateSatisfaction` ahora llaman
+      `this.surveyToken.verify(id, token)`.
+  - **Service (`tickets.service.ts`)**:
+    - Inyectado `SurveyTokenService` en el constructor.
+    - El bloque de generación del survey link en `transitionState`
+      ahora llama `this.surveyToken.generate(ticket.id)` — un
+      único sitio canónico para el HMAC del módulo.
+    - **Nuevo `findOnePublicForSurvey(ticketId)`**: devuelve sólo
+      `{ id, title, resolvedAt, tenantId }` vía
+      `prisma.ticket.findFirst({ where: { id } })`. No incluye
+      relaciones de usuario (cero leak de credenciales) y no
+      requiere `tenantId` — la autorización es la posesión del
+      token HMAC verificado al borde del controller.
+    - **Nuevo `updateSatisfactionPublic(ticketId, stars, comment)`**:
+      `prisma.ticket.update({ where: { id } })` directo —
+      sin `tenantId` porque la autorización ya pasó el HMAC.
+    - El `updateSatisfaction(id, tenantId, stars, comment)` original
+      se preserva para los flows internos autenticados (p.ej.
+      `whatsapp.service.processIncomingMessage` cuando un cliente
+      responde la encuesta por WA — ese flujo sí tiene tenantId
+      resuelto).
+  - Eliminados los dos `undefined as any` del controller.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npx jest tickets whatsapp` 29/29 across 4 suites (spec mocks
+    extendidos con `mockSurveyToken = { generate, verify }`)
+  - `npm run build` clean
+- **Carryover**: DTO hardening (CreateTicketDto `@MaxLength` /
+  `AttachmentDto`), Logger migration, `addAttachment` URL whitelist,
+  Math.random shortId entropy, hardcoded quote items removal, and
+  WhatsApp fan-out throttling concerns → Block E.
+
 ### [x] tickets Block C (2026-05-13) — DTOs + identity-spoofing fix (userId leído de req.user)
 
 - **Resolved by**: this commit (third block of tickets remediation)

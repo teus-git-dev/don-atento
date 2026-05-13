@@ -6,6 +6,7 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { EmailService } from '../cognitive/email.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { SlaMatrixService } from './sla-matrix.service';
+import { SurveyTokenService } from './survey-token.service';
 
 /**
  * Whitelist of User fields safe to expose in ticket responses. Excludes
@@ -31,6 +32,7 @@ export class TicketsService {
     private slaMatrix: SlaMatrixService,
     private emailService: EmailService,
     private cognitiveService: CognitiveService,
+    private surveyToken: SurveyTokenService,
   ) {}
 
   async createTicket(data: CreateTicketDto): Promise<Ticket> {
@@ -268,13 +270,7 @@ export class TicketsService {
     // 3. Closure Survey Trigger
     if (isResolved && target) {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const crypto = require('crypto');
-      const secret = process.env.JWT_SECRET || 'MISSING';
-      const token = crypto
-        .createHmac('sha256', secret)
-        .update(ticket.id)
-        .digest('hex')
-        .substring(0, 16);
+      const token = this.surveyToken.generate(ticket.id);
       const surveyLink = `${baseUrl}/tickets/${ticket.id}/survey?token=${token}`;
       const surveyMessage = `¡Hola! Don Atento informa: Tu requerimiento "${ticket.title}" ha sido marcado como RESUELTO. \n\nPor favor, califica nuestro servicio aquí: ${surveyLink} \n\no responde con un número del 1 al 5.`;
       await this.whatsappService.sendMessage(
@@ -639,6 +635,40 @@ export class TicketsService {
   ): Promise<Ticket> {
     return this.prisma.ticket.update({
       where: { id, tenantId },
+      data: {
+        satisfactionStars: stars,
+        satisfactionComment: comment,
+      },
+    });
+  }
+
+  /**
+   * Token-authorized variant for the public satisfaction-survey flow.
+   * The caller has already verified the HMAC token via
+   * `SurveyTokenService.verify`, so we no longer need a tenant filter
+   * — token possession is the authorization. `findFirst` is used
+   * instead of `findUnique` so we can return null on missing instead
+   * of throwing P2025.
+   */
+  async findOnePublicForSurvey(ticketId: string) {
+    return this.prisma.ticket.findFirst({
+      where: { id: ticketId },
+      select: { id: true, title: true, resolvedAt: true, tenantId: true },
+    });
+  }
+
+  /**
+   * Token-authorized satisfaction update. Like `findOnePublicForSurvey`,
+   * the HMAC token is the sole authorization gate (verified at the
+   * controller before this is called).
+   */
+  async updateSatisfactionPublic(
+    ticketId: string,
+    stars: number,
+    comment?: string,
+  ): Promise<Ticket> {
+    return this.prisma.ticket.update({
+      where: { id: ticketId },
       data: {
         satisfactionStars: stars,
         satisfactionComment: comment,

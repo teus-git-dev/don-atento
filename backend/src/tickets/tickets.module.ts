@@ -5,6 +5,7 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { CognitiveModule } from '../cognitive/cognitive.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SlaMatrixService } from './sla-matrix.service';
+import { SurveyTokenService } from './survey-token.service';
 import { StorageModule } from '../storage/storage.module';
 
 @Module({
@@ -15,7 +16,7 @@ import { StorageModule } from '../storage/storage.module';
     StorageModule,
   ],
   controllers: [TicketsController],
-  providers: [TicketsService, SlaMatrixService],
-  exports: [TicketsService, SlaMatrixService],
+  providers: [TicketsService, SlaMatrixService, SurveyTokenService],
+  exports: [TicketsService, SlaMatrixService, SurveyTokenService],
 })
 export class TicketsModule {}

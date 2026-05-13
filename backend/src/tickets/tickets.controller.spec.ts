@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
+import { SurveyTokenService } from './survey-token.service';
 import { FileUploadService } from '../storage/file-upload.service';
 import type { Request } from 'express';
 
@@ -9,6 +10,10 @@ describe('TicketsController', () => {
 
   const mockTicketsService = {};
   const mockFileUpload = { upload: jest.fn() };
+  const mockSurveyToken = {
+    generate: jest.fn().mockReturnValue('deadbeefdeadbeef'),
+    verify: jest.fn().mockReturnValue(true),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -17,6 +22,7 @@ describe('TicketsController', () => {
       providers: [
         { provide: TicketsService, useValue: mockTicketsService },
         { provide: FileUploadService, useValue: mockFileUpload },
+        { provide: SurveyTokenService, useValue: mockSurveyToken },
       ],
     }).compile();
 

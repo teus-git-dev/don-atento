@@ -5,6 +5,7 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { EmailService } from '../cognitive/email.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { SlaMatrixService } from './sla-matrix.service';
+import { SurveyTokenService } from './survey-token.service';
 import { TicketPriority } from '@prisma/client';
 
 // ─── Minimal mock factory ────────────────────────────────────────────────────
@@ -110,6 +111,11 @@ const makeEmailMock = () => ({
   sendEmail: jest.fn().mockResolvedValue(undefined),
 });
 
+const makeSurveyTokenMock = () => ({
+  generate: jest.fn().mockReturnValue('deadbeefdeadbeef'),
+  verify: jest.fn().mockReturnValue(true),
+});
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('TicketsService', () => {
@@ -129,6 +135,7 @@ describe('TicketsService', () => {
         { provide: EmailService, useValue: makeEmailMock() },
         { provide: CognitiveService, useValue: cognitiveMock },
         { provide: SlaMatrixService, useValue: makeSlaMock() },
+        { provide: SurveyTokenService, useValue: makeSurveyTokenMock() },
       ],
     }).compile();
 
