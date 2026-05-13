@@ -305,6 +305,79 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [ ] invoicing — fuera de scope v1, auditar antes de activar
+
+- **Owner**: backend team (re-audit owner TBD when invoicing is scheduled)
+- **Decision**: The invoicing/DIAN module is not part of the v1 production
+  scope. Remediation Blocks A-F (commits `5eb5edd`..`e02d313`) closed all
+  10 CRÍTICOs from the 2026-05-12 chat audit so the module no longer blocks
+  unrelated work, but the items below remain open. **They MUST be reviewed
+  and addressed before any tenant flips on DIAN invoicing in production.**
+- **Operational reminders before activation**:
+  - `npx prisma db push` against prod Supabase to apply
+    `@@unique([tenantId, code])` on `BillingItem` (verify no
+    duplicate `(tenantId, code)` rows exist first).
+  - Set `DIAN_ENCRYPTION_KEY` (`openssl rand -hex 32`) in Render dashboard.
+  - Add a real ZIP library (e.g., `jszip`) and replace
+    `Buffer.from(xml).toString('base64')` in `DianSoapService.buildSoapEnvelope`
+    with `base64(zip(xml))` — DIAN expects a ZIP container.
+  - Implement the SOAP response parser that extracts the real ZipKey from
+    `SendTestSetAsyncResponse`. Without it the transmission throws even
+    after a successful POST.
+  - Set `DIAN_TRANSMISSION_ENABLED=true` + `DIAN_WSDL_URL` (production)
+    in Render dashboard. Default stays `false`; only flip after the items
+    above are done.
+- **Open ALTOs** (from the 2026-05-12 audit, not closed in Blocks A-F):
+  - `dian-xml.service.ts:10-350` — `buildDianXml` is a 340-line method
+    with all parameters typed `any`. Needs split into helpers
+    (`buildHeader`, `buildSupplier`, `buildCustomer`, `buildTaxTotal`,
+    `buildLegalTotal`, `buildLines`) and typed against Prisma types.
+  - `dian-xml.service.ts:241-242` — Invoice-level `TaxTotal` hardcoded to
+    19% IVA. Comment in code admits the bug. Multi-rate invoices (5% / 0%
+    / exentas) report wrong aggregate — DIAN rejects on cross-validation.
+    Needs grouping by `taxRate` and one `<cac:TaxSubtotal>` per distinct
+    rate.
+  - `invoicing.service.ts:115-277` — `createDraftInvoice` is 163 lines.
+    Should split into `validateActiveResolution`, `resolveThirdParty`,
+    `calculateTotals`, `persistInvoiceTransaction`, `generateAndSignXml`,
+    `transmitToDian`.
+  - `invoicing.service.ts:162-191` — N+1 queries: `findUnique` per line
+    item. Replace with a single `findMany({ where: { id: { in: [...] }, tenantId } })`
+    inside the transaction.
+  - `invoicing.service.ts:117-126` — Resolution lookup via
+    `findFirst({ tenantId, isActive: true })` doesn't distinguish FE vs
+    NC/ND vs other document types. Add `documentType` field to
+    `DianResolution` and filter by it, OR require explicit `resolutionId`
+    in the invoice request.
+  - `dian-soap.service.ts` — `simulatedZipBuffer` (base64 of raw XML) is
+    NOT a ZIP. Tracked as TODO in Block F.
+- **Open MEDIOs**:
+  - `invoicing.service.ts:128-132` — Race condition: `currentNumber >
+    endNumber` read is OUTSIDE the `$transaction`. Two concurrent invoice
+    emissions can both pass the guard and produce duplicate consecutivos.
+    Move the read inside the transaction with `SELECT ... FOR UPDATE` (raw
+    query) and add `@@unique([tenantId, sequence])` on Invoice as defense.
+  - `dian-xml.service.ts:148-149, 191-194` — `taxLevelCode` hardcoded
+    magic strings (`'O-47'` supplier, `'R-99-PN'` customer fallback).
+    Should come from `Tenant.taxLevelCode` and
+    `AccountingThirdParty.taxLevelCode` (add fields to schema).
+  - `dian-xml.service.ts:113` — `CUFE` fallback string
+    `'CUFE-PENDING-GENERATION'`. Real CUFE is SHA-384 of specific fields
+    per DIAN spec. Calculate before XML build; throw if cannot generate.
+  - `dian-xml.service.ts:123` — Timezone `-05:00` hardcoded. Move to a
+    named constant or `process.env.TZ`.
+  - `invoicing.service.ts:34-38` — `createResolution` validation
+    incomplete. Block A added `validFrom < validTo`; still missing
+    `startNumber > 0` enforcement at DTO level (the `@Min(1)` is there
+    but documentation noted other rules like `validFrom > today`).
+    Mostly cosmetic.
+  - `invoicing.module.ts:8` — Does not explicitly import `PrismaModule`.
+    Works today via global DI; refactor of Prisma scoping would break it
+    silently.
+- **Open INFOs**:
+  - `invoicing.module.ts:16-21` — Exports 4 services that no external
+    module consumes. Could trim `exports` to reduce surface area.
+
 ### [ ] 🔵 INFORMATIVO: generateInventoryPDF produces a Buffer that no caller consumes
 
 - **Owner**: backend team
