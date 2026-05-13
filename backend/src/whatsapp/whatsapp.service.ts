@@ -29,6 +29,27 @@ export enum Intent {
 /** Seconds a conversation state entry lives in Redis before auto-expiry */
 const CONVERSATION_TTL_SECONDS = 900; // 15 minutes
 
+/**
+ * Max chars of inbound user text that are forwarded to the LLM. Hard
+ * cap to bound token cost AND to limit the surface for prompt
+ * injection. Anything longer is truncated with an ellipsis marker.
+ */
+const MAX_LLM_INPUT_CHARS = 1000;
+
+/**
+ * Allowlist for the `Action:` field the LLM emits in its
+ * [METADATA] block. Any other value is coerced to GENERAL_REPLY
+ * because that field directly controls business routing
+ * (create-ticket vs de-escalate vs noop), and a jailbroken LLM could
+ * otherwise force the worst-case path.
+ */
+const ALLOWED_AI_ACTIONS = new Set([
+  'CREATE_TICKET',
+  'DE_ESCALATE',
+  'GENERAL_REPLY',
+  'OFFLINE_FALLBACK',
+]);
+
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -383,17 +404,28 @@ export class WhatsappService {
 
     // 1. Process with AI FIRST to get Sentiment and Action
     let aiResponse = '';
-    const parsedMetadata: any = {};
+    const parsedMetadata: {
+      sentiment?: string;
+      intensity?: number;
+      action?: string;
+    } = {};
     let finalCleanResponse = '';
 
     try {
       this.logger.log(
         `[WhatsApp Hybrid] Sending intent resolution to Cognitive AI...`,
       );
-      const aiTenantId = resolvedTenantId || user?.tenantId || 'default';
+      // Truncate inbound text before forwarding to the LLM. Bounds
+      // token cost and limits prompt-injection surface (a 50 KB
+      // adversarial prompt has less leverage than the same content
+      // truncated to 1000 chars).
+      const safeText =
+        text.length > MAX_LLM_INPUT_CHARS
+          ? text.substring(0, MAX_LLM_INPUT_CHARS) + '…[truncated]'
+          : text;
       aiResponse = await this.cognitiveService.processWhatsappWithAi(
-        aiTenantId,
-        text,
+        resolvedTenantId,
+        safeText,
         {
           name: user.firstName,
           address: propertyName,
@@ -413,13 +445,24 @@ export class WhatsappService {
         if (sentimentMatch) parsedMetadata.sentiment = sentimentMatch[1].trim();
         if (intensityMatch)
           parsedMetadata.intensity = parseInt(intensityMatch[1].trim(), 10);
-        if (actionMatch) parsedMetadata.action = actionMatch[1].trim();
+        if (actionMatch) {
+          const candidate = actionMatch[1].trim();
+          // Validate the LLM-emitted Action against the allowlist.
+          // Anything else (a jailbroken model output, a typo) collapses
+          // to GENERAL_REPLY — the safe path that neither creates a
+          // ticket nor suppresses one.
+          parsedMetadata.action = ALLOWED_AI_ACTIONS.has(candidate)
+            ? candidate
+            : 'GENERAL_REPLY';
+        }
       } else {
         finalCleanResponse = aiResponse;
       }
     } catch (aiError) {
       this.logger.error('Error generating AI Response:', aiError);
-      finalCleanResponse = `Lo siento ${user.firstName}, en este momento presento una breve demora en mi sistema de procesamiento de lenguaje. He registrado tu mensaje de todos modos.`;
+      // Generic message — do NOT expose internal subsystem names
+      // ("sistema de procesamiento de lenguaje") to the end user.
+      finalCleanResponse = `Hola ${user.firstName}, estoy procesando tu mensaje. Te respondo en un momento.`;
     }
 
     // Map Sentiment
@@ -567,14 +610,22 @@ export class WhatsappService {
           orderBy: { resolvedAt: 'desc' },
         });
         if (lastResolvedTicket) {
-          const stars = parseInt(text.trim().charAt(0));
-          await this.ticketsService.updateSatisfaction(
-            lastResolvedTicket.id,
-            lastResolvedTicket.tenantId,
-            stars,
-            text,
-          );
-          finalResponse = `¡Muchas gracias por calificar con ${stars} estrellas! En Incasa valoramos tu retroalimentación.`;
+          // Validate 1..5 range. parseInt of an empty/non-digit char
+          // is NaN; out-of-range values must not land in the DB.
+          const stars = parseInt(text.trim().charAt(0), 10);
+          if (!Number.isNaN(stars) && stars >= 1 && stars <= 5) {
+            await this.ticketsService.updateSatisfaction(
+              lastResolvedTicket.id,
+              lastResolvedTicket.tenantId,
+              stars,
+              text,
+            );
+            finalResponse = `¡Muchas gracias por calificar con ${stars} estrellas! En Incasa valoramos tu retroalimentación.`;
+          } else {
+            this.logger.warn(
+              `[WA SURVEY_RESPONSE] Ignoring out-of-range rating "${text.trim().charAt(0)}" for ticket=${lastResolvedTicket.id}`,
+            );
+          }
         }
       }
     }

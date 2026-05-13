@@ -305,6 +305,73 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] whatsapp Block D (2026-05-13) — Meta webhook DTO + LLM sanitization + validations
+
+- **Resolved by**: this commit (fourth block of whatsapp remediation)
+- **What was wrong** (3 ALTOs + 2 MEDIOs from the whatsapp audit):
+  - ALTO #1: `@Body() body: any` en `handleIncomingMessage` + drill
+    de 7 niveles con `&&` mezclado con `?.` — un payload malformado
+    en cualquier nivel excepto el outer `object` producía TypeError
+    ⇒ 500.
+  - ALTO #2: `mediaUrl = message[type]?.id || 'MEDIA_ID_PLACEHOLDER'`
+    — el literal `'MEDIA_ID_PLACEHOLDER'` aterrizaba en
+    `attachments` downstream, contaminando audit trails.
+  - ALTO #11 (prompt injection): el `text` del cliente se enviaba
+    directo al LLM sin truncar; la respuesta del LLM controlaba
+    `parsedMetadata.action` sin validación contra enum, permitiendo
+    a un LLM jailbroken forzar `CREATE_TICKET`/`DE_ESCALATE`
+    arbitrariamente.
+  - ALTO (stars): `parseInt(text.trim().charAt(0))` sin chequeo de
+    rango — `'0'`, `'9'`, NaN llegaban a la DB en
+    `satisfactionStars`.
+  - MEDIO (user-facing leak): mensaje de error genérico al fallar
+    Gemini exponía "mi sistema de procesamiento de lenguaje" — leak
+    de subsystem.
+- **What was applied**:
+  - **`src/whatsapp/dto/meta-webhook.dto.ts`**: interfaces
+    `MetaWebhookBody`, `MetaWebhookEntry`, `MetaWebhookChangeValue`,
+    `MetaWebhookMessage` (tipo, no class-validator — la firma HMAC
+    se valida antes de llegar acá). Toda anidación opcional.
+  - **`whatsapp.controller.ts:handleIncomingMessage`** reescrito:
+    `@Body() body: MetaWebhookBody`; chain con `?.` uniforme;
+    early-return `'NOT_A_WHATSAPP_EVENT'` si no hay `body?.object`;
+    `'EVENT_RECEIVED'` si falta change o message. Eliminada la
+    asignación de `'MEDIA_ID_PLACEHOLDER'` — si `message?.[type]?.id`
+    no es string no-vacío, simplemente no se forwarda `mediaUrl`.
+  - **`whatsapp.service.ts`**:
+    - Nuevas constantes:
+      - `MAX_LLM_INPUT_CHARS = 1000` — cap de chars del texto del
+        cliente que se forwarda al LLM. `safeText = text.substring(
+        0, 1000) + '…[truncated]'` cuando excede.
+      - `ALLOWED_AI_ACTIONS = Set(['CREATE_TICKET', 'DE_ESCALATE',
+        'GENERAL_REPLY', 'OFFLINE_FALLBACK'])` — allowlist contra
+        la cual se valida `actionMatch[1].trim()` del LLM. Si no
+        está, colapsa a `'GENERAL_REPLY'` (el path seguro: ni crea
+        ticket ni lo suprime).
+    - `parsedMetadata` ahora con tipo explícito
+      `{ sentiment?, intensity?, action? }` en vez de `any` —
+      defense-in-depth contra el lint warning de unsafe-any access.
+    - Mensaje de error AI cambiado a `"Hola ${user.firstName},
+      estoy procesando tu mensaje. Te respondo en un momento."` —
+      genérico, sin nombres de subsistemas internos.
+    - `processWhatsappWithAi(resolvedTenantId, …)` reemplaza
+      `processWhatsappWithAi(aiTenantId, …)` donde
+      `aiTenantId = resolvedTenantId || user?.tenantId || 'default'`
+      — eliminada otra fuente del magic `'default'` y de cross-tenant
+      leak ya que `resolvedTenantId` está garantizado no-null
+      (Block A fail-closed guard).
+    - SURVEY_RESPONSE: validación `!Number.isNaN(stars) && stars
+      >= 1 && stars <= 5` antes de `updateSatisfaction`. Out-of-
+      range loguea warning y NO escribe; el branch no produce
+      `finalResponse` falso de agradecimiento.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: `additionalContacts` → `UserPhoneContact` con
+  OTP → Block E. Hardening anti-ban (Redis counters, circadian
+  wireup) + log sanitization → Block F.
+
 ### [x] whatsapp Block C (2026-05-13) — AES-256-GCM encryption of `whatsappAccessToken`
 
 - **Resolved by**: this commit (third block of whatsapp remediation)

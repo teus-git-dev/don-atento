@@ -16,6 +16,7 @@ import {
 import { WhatsappService } from './whatsapp.service';
 import type { Request } from 'express';
 import { Public } from '../auth/public.decorator';
+import type { MetaWebhookBody } from './dto/meta-webhook.dto';
 import * as crypto from 'crypto';
 
 @Public() // WhatsApp webhook is called by Meta — no JWT available
@@ -59,7 +60,7 @@ export class WhatsappController {
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   async handleIncomingMessage(
-    @Body() body: any,
+    @Body() body: MetaWebhookBody,
     @Headers('x-hub-signature-256') signature: string,
     @Req() req: RawBodyRequest<Request>,
   ) {
@@ -95,39 +96,46 @@ export class WhatsappController {
       throw new UnauthorizedException('Invalid signature');
     }
 
-    if (body.object) {
-      if (
-        body.entry &&
-        body.entry[0].changes &&
-        body.entry[0].changes[0].value.messages &&
-        body.entry[0].changes[0].value.messages[0]
-      ) {
-        const phoneNumberId =
-          body.entry[0].changes[0].value.metadata?.phone_number_id;
-        const message = body.entry[0].changes[0].value.messages[0];
-        const from = message.from; // Número del remitente
-        const text = message.text?.body; // Contenido del mensaje
-        const type = message.type;
-        let mediaUrl = null;
-
-        if (type === 'image' || type === 'video' || type === 'document') {
-          // Nota de implementación: La URL real se obtiene mediante una llamada adicional a Meta con el media_id.
-          // Por ahora simulamos la captura del ID para el flujo de Don Atento.
-          mediaUrl = message[type]?.id || 'MEDIA_ID_PLACEHOLDER';
-        }
-
-        if (text || mediaUrl) {
-          await this.whatsappService.processIncomingMessage(
-            from,
-            text || '',
-            mediaUrl,
-            phoneNumberId,
-          );
-        }
-      }
-      return 'EVENT_RECEIVED';
-    } else {
+    if (!body?.object) {
       return 'NOT_A_WHATSAPP_EVENT';
     }
+
+    // Defensive optional-chain at every level — the chain previously
+    // mixed `body.entry && body.entry[0].changes &&` (raw index) with
+    // `?.metadata?.phone_number_id` (chained), so a malformed payload
+    // anywhere except the outer `object` would TypeError into a 500.
+    const change = body?.entry?.[0]?.changes?.[0];
+    const message = change?.value?.messages?.[0];
+    if (!change || !message) {
+      return 'EVENT_RECEIVED';
+    }
+
+    const phoneNumberId: string | undefined =
+      change?.value?.metadata?.phone_number_id;
+    const from: string | undefined = message?.from;
+    const text: string | undefined = message?.text?.body;
+    const type: string | undefined = message?.type;
+    let mediaUrl: string | undefined = undefined;
+
+    if (type === 'image' || type === 'video' || type === 'document') {
+      const id = message?.[type]?.id;
+      // Drop the prior "MEDIA_ID_PLACEHOLDER" sentinel: that literal
+      // string used to land in DB attachments downstream, contaminating
+      // audit trails. If Meta did not give us an id we just don't
+      // forward a mediaUrl — text-only path handles the rest.
+      if (typeof id === 'string' && id.length > 0) {
+        mediaUrl = id;
+      }
+    }
+
+    if (typeof from === 'string' && (text || mediaUrl)) {
+      await this.whatsappService.processIncomingMessage(
+        from,
+        text || '',
+        mediaUrl,
+        phoneNumberId,
+      );
+    }
+    return 'EVENT_RECEIVED';
   }
 }
