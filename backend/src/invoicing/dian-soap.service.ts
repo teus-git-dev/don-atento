@@ -1,81 +1,131 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotImplementedException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import axios from 'axios';
+import { create } from 'xmlbuilder2';
 
+/**
+ * Default WSDL endpoint — DIAN habilitación (test environment).
+ * Override via `DIAN_WSDL_URL` env var for production.
+ */
+const DEFAULT_WSDL_URL =
+  'https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc';
+
+/**
+ * xmlbuilder2 leaves bare `&` that looks like an entity reference untouched
+ * (treats `&attack;` as a pre-escaped entity). To guarantee well-formed
+ * output we pre-escape `&` ourselves. xmlbuilder2 then sees `&amp;` (a valid
+ * entity) and passes it through. `<` and `>` remain xmlbuilder2's job.
+ */
+function escapeAmpersands(s: string): string {
+  return s.replace(/&/g, '&amp;');
+}
+
+/**
+ * Outbound SOAP transport to DIAN's VPFE service.
+ *
+ * Transmission is **disabled by default** behind the `DIAN_TRANSMISSION_ENABLED`
+ * env flag. When `false`/unset, `sendSignedXmlToDian` throws
+ * `NotImplementedException` — there is no silent mock that pretends success.
+ *
+ * When `DIAN_TRANSMISSION_ENABLED=true`, a real axios.post fires. Operator
+ * MUST also wire actual ZIP packaging (current implementation only base64-
+ * encodes the signed XML — DIAN expects a true ZIP container; add `jszip`
+ * or equivalent before going live).
+ */
 @Injectable()
 export class DianSoapService {
   private readonly logger = new Logger(DianSoapService.name);
 
-  // Endpoint de Habilitación para pruebas de la DIAN
-  private readonly WSDL_URL =
-    'https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc';
+  /**
+   * Build the SOAP envelope with proper XML escaping (xmlbuilder2 handles
+   * special chars). Pure function — no I/O.
+   */
+  public buildSoapEnvelope(
+    signedXml: string,
+    fileName: string,
+    testSetId: string,
+  ): string {
+    // TODO(production): replace base64-of-XML with base64-of-ZIP(XML).
+    // DIAN's SendTestSetAsync expects a ZIP container holding the XML.
+    // Adding jszip / archiver is required before enabling transmission.
+    const contentBase64 = Buffer.from(signedXml).toString('base64');
+
+    const envelope = create({ version: '1.0', encoding: 'UTF-8' })
+      .ele('soapenv:Envelope', {
+        'xmlns:soapenv': 'http://schemas.xmlsoap.org/soap/envelope/',
+        'xmlns:wcf': 'http://wcf.dian.colombia',
+      })
+      .ele('soapenv:Header')
+      .up()
+      .ele('soapenv:Body')
+      .ele('wcf:SendTestSetAsync')
+      .ele('wcf:fileName')
+      .txt(escapeAmpersands(`${fileName}.zip`))
+      .up()
+      .ele('wcf:contentFile')
+      .txt(contentBase64)
+      .up()
+      .ele('wcf:testSetId')
+      .txt(escapeAmpersands(testSetId))
+      .up()
+      .up()
+      .up()
+      .up();
+
+    return envelope.end({ prettyPrint: false });
+  }
 
   /**
-   * Envuelve el UBL XML en un sobre SOAP y lo dispara al método SendTestSetAsync de la DIAN.
-   * Se espera el SetTestId (que se obtiene de la resolución) y el ZipName.
+   * Send the SOAP envelope to DIAN. Gated by DIAN_TRANSMISSION_ENABLED.
    */
   public async sendSignedXmlToDian(
     signedXml: string,
     fileName: string,
     testSetId: string,
-  ): Promise<{ success: boolean; zipKey?: string; message: string }> {
-    this.logger.log(`Empaquetando factura ${fileName} en SOAP Envelope...`);
+  ): Promise<{ success: true; zipKey: string; message: string }> {
+    if (process.env.DIAN_TRANSMISSION_ENABLED !== 'true') {
+      throw new NotImplementedException(
+        'DIAN transmission is disabled. Set DIAN_TRANSMISSION_ENABLED=true and ' +
+          'configure a real .p12 certificate before activating. See ' +
+          'invoicing module documentation.',
+      );
+    }
 
-    // El servicio real requiere comprimir el XML en ZIP y enviarlo en Base64.
-    // Para simplificar la demo, simulamos el envoltorio y envío
-    const simulatedZipBuffer = Buffer.from(signedXml).toString('base64');
+    const wsdlUrl = process.env.DIAN_WSDL_URL || DEFAULT_WSDL_URL;
+    const envelope = this.buildSoapEnvelope(signedXml, fileName, testSetId);
 
-    const soapEnvelope = `
-      <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wcf="http://wcf.dian.colombia">
-         <soapenv:Header/>
-         <soapenv:Body>
-            <wcf:SendTestSetAsync>
-               <wcf:fileName>${fileName}.zip</wcf:fileName>
-               <wcf:contentFile>${simulatedZipBuffer}</wcf:contentFile>
-               <wcf:testSetId>${testSetId}</wcf:testSetId>
-            </wcf:SendTestSetAsync>
-         </soapenv:Body>
-      </soapenv:Envelope>
-    `;
+    this.logger.log(
+      `Sending SOAP envelope to DIAN (${wsdlUrl}) — operation SendTestSetAsync, fileName=${fileName}`,
+    );
 
     try {
-      this.logger.log(
-        `Enviando POST SOAP a DIAN (${this.WSDL_URL}) >> Operación: SendTestSetAsync`,
-      );
-
-      // Simulamos la respuesta de la DIAN porque nuestro Certificado es Autofirmado (.p12 Mock)
-      // En entorno de PRODUCCIÓN aquí se ejecutaría:
-      /*
-      const response = await axios.post(this.WSDL_URL, soapEnvelope, {
+      const response = await axios.post<string>(wsdlUrl, envelope, {
         headers: {
           'Content-Type': 'text/xml;charset=UTF-8',
-          'SOAPAction': 'http://wcf.dian.colombia/IWcfDianCustomerServices/SendTestSetAsync'
-        }
+          SOAPAction:
+            'http://wcf.dian.colombia/IWcfDianCustomerServices/SendTestSetAsync',
+        },
+        timeout: 30_000,
       });
-      */
 
-      // Delay falso de 1 segundo para emular conexión de red.
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const fakeZipKey = `1fcb007d-5a67-4d7a-8f92-2${Math.floor(
-        Math.random() * 9999999,
-      )
-        .toString()
-        .padStart(7, '0')}`;
-      this.logger.log(
-        `¡Respuesta DIAN Exitosa (SIMULADA)! Documento encolado con ZipKey: ${fakeZipKey}`,
+      // TODO(production): parse the SOAP response XML to extract the real
+      // ZipKey returned by DIAN. Until that parser is implemented, surface
+      // the raw response and throw — do not invent a key.
+      throw new Error(
+        `DIAN response parser not implemented. Raw response length=${
+          typeof response.data === 'string' ? response.data.length : 'n/a'
+        }`,
       );
-
-      return {
-        success: true,
-        zipKey: fakeZipKey,
-        message: 'Lote recibido con éxito por DIAN Habilitación',
-      };
-    } catch (error) {
-      this.logger.error('Fallo en la conexión SOAP con DIAN Muisca', error);
-      return {
-        success: false,
-        message: 'No se pudo comunicar con los servicios de VPFE DIAN.',
-      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown error';
+      this.logger.error(`DIAN SOAP transmission failed: ${msg}`);
+      throw new ServiceUnavailableException(
+        `DIAN SOAP transmission failed: ${msg}`,
+      );
     }
   }
 }

@@ -300,14 +300,43 @@ export class InvoicingService {
       );
     }
 
-    // 7. V1 Launch: XML Generation Only (no SOAP transmission to DIAN Muisca)
-    // The SOAP transmission stays disabled until Block F of the remediation
-    // wires a real DIAN client behind a feature flag.
-    const finalStatus = 'DRAFT';
-    const zipKey = null;
-    const soapMessage = certData
-      ? 'Factura generada y firmada en modo DRAFT. La transmisión a DIAN está pendiente de configuración.'
+    // 7. Optional DIAN SOAP transmission — gated by DIAN_TRANSMISSION_ENABLED.
+    // When the flag is unset/false, DianSoapService throws and the invoice
+    // stays as DRAFT. When enabled, success populates dianZipKey and flips
+    // status to SENT_TO_DIAN. No silent mock anymore.
+    let finalStatus: 'DRAFT' | 'SENT_TO_DIAN' = 'DRAFT';
+    let zipKey: string | null = null;
+    let soapMessage = certData
+      ? 'Factura generada y firmada en modo DRAFT. Habilite DIAN_TRANSMISSION_ENABLED para transmitir a DIAN.'
       : 'Factura generada en modo DRAFT sin firma digital. Cargue el certificado del tenant para habilitar XADES-EPES.';
+
+    if (
+      process.env.DIAN_TRANSMISSION_ENABLED === 'true' &&
+      certData &&
+      resolution.softwareId
+    ) {
+      try {
+        const soapResult = await this.dianSoap.sendSignedXmlToDian(
+          signedXml,
+          result.sequence,
+          resolution.softwareId,
+        );
+        finalStatus = 'SENT_TO_DIAN';
+        zipKey = soapResult.zipKey;
+        soapMessage = soapResult.message;
+      } catch (err) {
+        // Transmission failure is non-fatal — the invoice persists as DRAFT
+        // and the operator can retry. Log + surface the message.
+        this.logger.warn(
+          `DIAN transmission failed for invoice ${result.sequence}: ${
+            err instanceof Error ? err.message : 'unknown error'
+          }`,
+        );
+        soapMessage = `Factura firmada pero la transmisión a DIAN falló (queda en DRAFT): ${
+          err instanceof Error ? err.message : 'error desconocido'
+        }`;
+      }
+    }
 
     // 8. Save updated invoice
     await this.prisma.invoice.update({

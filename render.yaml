@@ -40,6 +40,10 @@ services:
         value: atento-media
       - key: DIAN_ENCRYPTION_KEY
         sync: false  # Set manually (64-char hex; openssl rand -hex 32)
+      - key: DIAN_TRANSMISSION_ENABLED
+        value: "false"  # Literal "true" to enable real DIAN SOAP transmission
+      - key: DIAN_WSDL_URL
+        sync: false  # Defaults to habilitación; set production URL when ready
       - key: REDIS_URL
         fromService:
           name: don-atento-redis

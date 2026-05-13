@@ -335,6 +335,62 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] DIAN audit (2026-05-12) — Block F: SOAP envelope hardening + drop mock; feature-flag DIAN transmission
+
+- **Resolved by**: Block F of DIAN remediation (this commit)
+- **What was wrong** (combined CRÍTICO #9 + CRÍTICO #10):
+  - `dian-soap.service.ts` built the SOAP envelope by **template literal
+    concatenation** (`${fileName}`, `${testSetId}` interpolated into raw
+    XML). Any input containing `<`, `>`, `&` (which `resolution.prefix`
+    is user-controllable) broke the envelope or enabled XML injection.
+  - The `sendSignedXmlToDian` method had the real `axios.post(...)`
+    commented out and returned a **fake `success: true` with a random
+    `Math.random()` zipKey**, pretending the document had been
+    transmitted to DIAN. Activation of the real path was "uncomment
+    these lines and redeploy" — an anti-pattern with high human-error
+    risk. The service had a hardcoded WSDL URL for habilitación only,
+    no production swap.
+- **What was applied**:
+  - `dian-soap.service.ts`: complete rewrite.
+    - `buildSoapEnvelope()` now builds via `xmlbuilder2.create(...)` —
+      pure function, structural injection eliminated. Adds an
+      `escapeAmpersands()` pre-pass so xmlbuilder2 doesn't leave bare
+      `&xxx;` patterns as malformed entity references.
+    - `sendSignedXmlToDian()` is **gated by `DIAN_TRANSMISSION_ENABLED`**.
+      When unset / not literal `"true"`, throws `NotImplementedException`
+      with a clear message. No silent mock anywhere.
+    - When enabled, performs a real `axios.post` with proper headers
+      and SOAPAction. Currently throws on response since the response
+      parser isn't implemented — explicit TODO surfaces that the
+      operator MUST also wire (a) ZIP packaging (`jszip` or equivalent),
+      and (b) the SOAP response → ZipKey parser before going live.
+    - `DIAN_WSDL_URL` env var with habilitación default — swap to
+      production endpoint without code change.
+  - `invoicing.service.ts`: the `[PRODUCTION] Uncomment` comment-as-flag
+    pattern is gone. The service now conditionally calls
+    `dianSoap.sendSignedXmlToDian(...)` when `DIAN_TRANSMISSION_ENABLED === 'true'`,
+    cert is loaded, and `softwareId` is present. Transmission failure is
+    non-fatal — invoice stays DRAFT and the operator can retry.
+  - 6 new tests in `dian-soap.service.spec.ts`: envelope structure +
+    escape of `<`/`>` + pre-escape of `&` + flag-gated transmission
+    (3 cases: unset, "false", "1" — only literal "true" enables).
+  - Env documentation updated in `backend/.env.example` and
+    `render.yaml` (`DIAN_TRANSMISSION_ENABLED=false` default in render,
+    `DIAN_WSDL_URL` declared `sync: false` for manual override).
+- **Operational follow-ups** (before activating transmission):
+  - Add a ZIP library (e.g., `jszip`) and replace the `Buffer.from(xml).toString('base64')` placeholder with `base64(zip(xml))`.
+  - Implement the SOAP response parser that extracts the real ZipKey
+    from DIAN's `SendTestSetAsyncResponse`. Until then, even with the
+    flag flipped, transmission throws after the POST.
+  - Set `DIAN_TRANSMISSION_ENABLED=true` and `DIAN_WSDL_URL` (production
+    URL) in the Render dashboard.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 125/125 across 18 suites (+6 from new SOAP spec)
+  - `npm run build` clean
+  - ESLint on `src/invoicing/**`: 177 → 126 problems across all of
+    Blocks A-F (net **-51 errors** removed from the module)
+
 ### [x] DIAN audit (2026-05-12) — Block E: fix XADES-EPES signature injection + drop `@ts-ignore` on crypto API
 
 - **Resolved by**: Block E of DIAN remediation (this commit)
