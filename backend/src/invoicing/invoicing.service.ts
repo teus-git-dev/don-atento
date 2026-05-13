@@ -12,6 +12,18 @@ import { Prisma } from '@prisma/client';
 import { CreateResolutionDto } from './dto/create-resolution.dto';
 import { CreateBillingItemDto } from './dto/create-billing-item.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { encryptDianSecret } from './dian-encryption.util';
+
+/** Fields stripped from any API response — these contain ciphertext credentials. */
+const RESOLUTION_SECRET_FIELDS = ['softwarePin', 'technicalKey'] as const;
+
+function stripResolutionSecrets<T extends Record<string, unknown>>(row: T): T {
+  const copy = { ...row };
+  for (const field of RESOLUTION_SECRET_FIELDS) {
+    delete copy[field];
+  }
+  return copy;
+}
 
 @Injectable()
 export class InvoicingService {
@@ -29,10 +41,14 @@ export class InvoicingService {
   // ============================================
 
   async getResolutions(tenantId: string) {
-    return this.prisma.dianResolution.findMany({
+    const rows = await this.prisma.dianResolution.findMany({
       where: { tenantId },
       orderBy: { validFrom: 'desc' },
     });
+    // Never expose encrypted softwarePin/technicalKey ciphertext in API output.
+    return rows.map((r) =>
+      stripResolutionSecrets(r as unknown as Record<string, unknown>),
+    );
   }
 
   async createResolution(tenantId: string, data: CreateResolutionDto) {
@@ -47,7 +63,7 @@ export class InvoicingService {
       );
     }
 
-    return this.prisma.dianResolution.create({
+    const created = await this.prisma.dianResolution.create({
       data: {
         tenantId,
         prefix: data.prefix,
@@ -57,11 +73,18 @@ export class InvoicingService {
         currentNumber: data.startNumber, // El próximo a utilizar
         validFrom: new Date(data.validFrom),
         validTo: new Date(data.validTo),
-        technicalKey: data.technicalKey,
+        // DIAN credentials encrypted at rest (AES-256-GCM, key from
+        // DIAN_ENCRYPTION_KEY env). Decryption happens only at use-time
+        // (currently no internal consumer; will be wired when SOAP
+        // transmission goes live in Block F).
+        technicalKey: encryptDianSecret(data.technicalKey),
+        softwarePin: encryptDianSecret(data.softwarePin),
         softwareId: data.softwareId,
-        softwarePin: data.softwarePin,
       },
     });
+    return stripResolutionSecrets(
+      created as unknown as Record<string, unknown>,
+    );
   }
 
   // ============================================

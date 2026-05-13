@@ -38,6 +38,8 @@ services:
         sync: false
       - key: SUPABASE_STORAGE_BUCKET
         value: atento-media
+      - key: DIAN_ENCRYPTION_KEY
+        sync: false  # Set manually (64-char hex; openssl rand -hex 32)
       - key: REDIS_URL
         fromService:
           name: don-atento-redis

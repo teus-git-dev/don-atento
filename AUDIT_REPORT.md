@@ -335,6 +335,53 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] DIAN audit (2026-05-12) — Block B: encrypt DIAN credentials at rest (AES-256-GCM)
+
+- **Resolved by**: Block B of DIAN remediation (this commit)
+- **What was wrong**:
+  - `invoicing.service.createResolution()` persisted `softwarePin` and
+    `technicalKey` plaintext in `DianResolution`. Both are equivalent to
+    portal MUISCA credentials — a DB dump would expose them for every
+    tenant. The fields could also be read back via `GET /invoicing/resolutions`
+    without redaction.
+- **What was applied**:
+  - New util `backend/src/invoicing/dian-encryption.util.ts` with
+    `encryptDianSecret()` / `decryptDianSecret()` using AES-256-GCM (12-byte
+    IV per encryption, 16-byte auth tag, base64 envelope). Lazy key
+    resolution (cached after first use) so tests that don't touch
+    encryption don't need the env var.
+  - `DIAN_ENCRYPTION_KEY` env var documented in `backend/.env.example` and
+    declared in `render.yaml` (sync: false). Generate with
+    `openssl rand -hex 32` → 64 hex chars (32 bytes / 256 bits).
+  - `createResolution()` encrypts both fields before `prisma.create`.
+  - `getResolutions()` and `createResolution()` both strip
+    `softwarePin`/`technicalKey` from API responses via a
+    `stripResolutionSecrets()` helper — ciphertext never leaves the server.
+  - 7 new unit tests for the encryption util: round-trip, IV randomness,
+    missing key, invalid key format, auth-tag tampering, too-short input.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 114/114 across 16 suites (+7 from new spec)
+  - `npm run build` clean
+- **Operational follow-ups** (operator action required before next deploy):
+  - Generate value: `openssl rand -hex 32`
+  - Set `DIAN_ENCRYPTION_KEY` in Render dashboard (declared `sync: false`)
+  - Set `DIAN_ENCRYPTION_KEY` in local `backend/.env` for any dev environment
+    that exercises `createResolution`
+- **Not addressed in this block** (out of scope):
+  - Migration of existing rows: if production has `DianResolution` rows
+    persisted plaintext under the old code path, those will fail to decrypt
+    after this change. There are currently no rows that need this (no
+    invoicing in prod yet), but a future migration script would need to
+    encrypt them on first read.
+  - `DigitalCertificate.passwordHash` (cert passphrase) is also a plaintext
+    credential by design today. Block A reads it as-is. Encrypting it
+    requires a cert upload endpoint that does the encryption, which
+    doesn't exist yet — out of scope for the audit remediation.
+  - WhatsApp tokens (`whatsappAccessToken` on Tenant) are also plaintext
+    despite CLAUDE.md claiming they're encrypted. Pre-existing gap, not
+    invoicing's audit scope.
+
 ### [x] DIAN audit (2026-05-12) — Block A: controller security, DTOs, remove hardcoded p12 password
 
 - **Resolved by**: Block A of DIAN remediation (this commit)
