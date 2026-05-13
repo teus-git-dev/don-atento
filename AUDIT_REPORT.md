@@ -305,6 +305,65 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] whatsapp Block B (2026-05-13) — BaileysController RBAC + manager strict mode + idempotent connect
+
+- **Resolved by**: this commit (second block of whatsapp remediation)
+- **What was wrong** (2 CRÍTICOs + 1 ALTO from the whatsapp audit):
+  - CRÍTICO #8: `BaileysController` tenía
+    `@UseGuards(JwtAuthGuard, TenantGuard)` pero **sin
+    `RolesGuard`** y sin `@Roles()` en ningún handler. Cualquier
+    usuario autenticado (incluído `TENANT_USER`, `OWNER`,
+    `MAINTENANCE`) podía generar QR, leer QR (= toma de control
+    del WhatsApp del tenant) y disconectar el número.
+  - CRÍTICO #10: `BaileysManager.getAdapter(tenantId)` tenía un
+    fallback que iteraba el map y retornaba el primer adapter
+    `connected` cuando el del tenant solicitado no existía. Mensajes
+    salientes terminaban enviándose desde el número WhatsApp de
+    otro tenant — el recipiente veía el número equivocado y la
+    reputación / facturación se atribuía al tenant equivocado.
+  - ALTO #11: `connectTenant` no era idempotente — clicks rápidos
+    en el frontend (o callers concurrentes) durante la ventana de
+    3-segundos del QR wait spawneaban adapters paralelos para el
+    mismo tenant.
+- **What was applied**:
+  - **RBAC en `BaileysController`**:
+    - Clase: `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)`.
+    - `POST /baileys/connect` → `@Roles('ADMIN_TENANT',
+      'SUPERADMIN')`.
+    - `GET /baileys/status` → `@Roles('AGENT', 'ADMIN_TENANT',
+      'SUPERADMIN')` — dashboards de agente pueden ver estado pero
+      la respuesta del status **strip el campo `qr`** antes de
+      retornar (Block B defensive layer).
+    - `GET /baileys/qr` → `@Roles('ADMIN_TENANT', 'SUPERADMIN')`
+      — único endpoint que retorna el QR; posesión del QR es
+      equivalente a credencial.
+    - `DELETE /baileys/disconnect` → `@Roles('ADMIN_TENANT',
+      'SUPERADMIN')`.
+    - `GET /baileys/health` → `@Roles('AGENT', 'ADMIN_TENANT',
+      'SUPERADMIN')` — métricas anti-ban son no-sensibles.
+  - **Strict mode en `BaileysManager.getAdapter`**:
+    - Reemplazado el loop con fallback por
+      `return this.adapters.get(tenantId) ?? null`. Sin lookup
+      cross-tenant. Callers existentes en `whatsapp.service.ts`
+      ya manejan `null` graciosamente (route via Meta o skip).
+  - **Idempotent connect**:
+    - Nuevo `Map<tenantId, Promise>` `this.connecting`.
+    - `connectTenant` chequea el map; si hay promise in-flight para
+      el mismo tenant la retorna en lugar de spawning una nueva.
+    - Extraído `doConnect(tenantId)` privado con la lógica real;
+      `connectTenant` lo envuelve con tracking del in-flight.
+    - El `finally` limpia el entry para permitir retries posteriores
+      a fallo.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: Cifrado AES-256-GCM de `whatsappAccessToken` →
+  Block C. DTO de webhook + sanitización LLM + validaciones →
+  Block D. `additionalContacts` → `UserPhoneContact` con OTP →
+  Block E. Hardening anti-ban (Redis counters, circadian wireup,
+  log sanitization) → Block F.
+
 ### [x] whatsapp Block A (2026-05-13) — tenant scoping del inbound + fail-closed + last10Digits guard
 
 - **Resolved by**: this commit (first block of whatsapp remediation)

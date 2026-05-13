@@ -20,6 +20,16 @@ import * as path from 'path';
 export class BaileysManager implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BaileysManager.name);
   private adapters = new Map<string, BaileysAdapter>();
+  /**
+   * In-flight connect promises keyed by tenantId. Prevents concurrent
+   * `connectTenant(tenant)` calls from racing each other during the
+   * 3-second wait window — the second caller awaits the same promise
+   * instead of spawning a parallel adapter.
+   */
+  private connecting = new Map<
+    string,
+    Promise<{ status: WhatsappConnectionStatus; qr?: string }>
+  >();
   private readonly authBaseDir = path.join(
     process.cwd(),
     'storage',
@@ -82,6 +92,9 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Conecta un tenant a Baileys. Retorna el QR code si necesita autenticación.
+   *
+   * Idempotente: concurrent calls for the same tenant share the
+   * single in-flight promise instead of racing each other.
    */
   async connectTenant(
     tenantId: string,
@@ -98,6 +111,25 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Dedup concurrent connect() calls within the QR-wait window.
+    const existing = this.connecting.get(tenantId);
+    if (existing) {
+      this.logger.log(
+        `connectTenant(${tenantId}): joining in-flight connection`,
+      );
+      return existing;
+    }
+
+    const promise = this.doConnect(tenantId).finally(() => {
+      this.connecting.delete(tenantId);
+    });
+    this.connecting.set(tenantId, promise);
+    return promise;
+  }
+
+  private async doConnect(
+    tenantId: string,
+  ): Promise<{ status: WhatsappConnectionStatus; qr?: string }> {
     // Crear nueva instancia
     const adapter = new BaileysAdapter(
       tenantId,
@@ -165,23 +197,18 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Obtiene el adapter de un tenant (si existe y está conectado).
+   * Obtiene el adapter de un tenant.
+   *
+   * Strict mode: returns ONLY the adapter for the requested tenantId,
+   * never another tenant's. The previous cross-tenant fallback (loop
+   * over all adapters, return first connected) sent outbound messages
+   * from the wrong tenant's WhatsApp number — recipients saw a
+   * foreign number and the message was billed / reputation-attributed
+   * to the wrong tenant. Callers should treat `null` as "tenant has
+   * no Baileys session" and route via Meta or skip.
    */
   getAdapter(tenantId: string): BaileysAdapter | null {
-    const adapter = this.adapters.get(tenantId);
-    if (adapter) return adapter;
-
-    // Fallback for offline/local development or 'default' tenantId
-    for (const [id, a] of this.adapters) {
-      if (a.getStatus() === 'connected') {
-        this.logger.warn(
-          `Fallback: Using Baileys session from tenant ${id} instead of requested ${tenantId}`,
-        );
-        return a;
-      }
-    }
-
-    return null;
+    return this.adapters.get(tenantId) ?? null;
   }
 
   /**
