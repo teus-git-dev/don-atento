@@ -1,6 +1,22 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * Whitelist of User fields safe to expose in workflow responses.
+ * Excludes `passwordHash`, `refreshTokenHash`, `mustChangePassword`
+ * and any internal flag. Mirrors the constant in
+ * PropertiesService / TicketsService for consistency.
+ */
+const USER_PUBLIC_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  role: true,
+  whatsappId: true,
+} as const;
+
 @Injectable()
 export class WorkflowsService {
   constructor(private prisma: PrismaService) {}
@@ -11,7 +27,7 @@ export class WorkflowsService {
       include: {
         states: {
           orderBy: { order: 'asc' },
-          include: { responsible: true },
+          include: { responsible: { select: USER_PUBLIC_SELECT } },
         },
       },
     });

@@ -305,6 +305,35 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] workflows Block B (2026-05-13) — passwordHash leak fix (USER_PUBLIC_SELECT on `responsible`)
+
+- **Resolved by**: this commit (second block of workflows remediation)
+- **What was wrong** (1 CRÍTICO from the workflows audit):
+  - CRÍTICO #6: `WorkflowsService.findAllByTenant` had
+    `include: { states: { include: { responsible: true } } }`.
+    `WorkflowState.responsible` is the `User?` assigned to a state
+    via `assignedUserId`. The bare include returned the full User
+    row — `passwordHash`, `refreshTokenHash`,
+    `mustChangePassword`, and other internal flags — to anyone
+    authorized to read workflows. Same root pattern already
+    corrected in properties Block A (494b2dc) and tickets Block A
+    (c2df2e5).
+- **What was applied**:
+  - Introduced `USER_PUBLIC_SELECT = { id, firstName, lastName,
+    email, phone, role, whatsappId }` at the top of
+    `workflows.service.ts`, mirroring the constants in properties
+    and tickets services so the project speaks one whitelist
+    vocabulary.
+  - Replaced `responsible: true` with `responsible: { select:
+    USER_PUBLIC_SELECT }`.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: DTOs + `$transaction` on delete + REST verb
+  migration → Block C. Swagger / Logger / pagination / dead code
+  cleanup → Block D.
+
 ### [x] workflows Block A (2026-05-13) — tenant scoping + RBAC per-handler
 
 - **Resolved by**: this commit (first block of workflows remediation)
