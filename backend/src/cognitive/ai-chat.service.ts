@@ -1,7 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BrandBrainService } from './brand-brain.service';
+import { ChatHistoryItemDto } from './dto/ai-chat.dto';
 import axios from 'axios';
+
+/**
+ * Map the DTO-validated role (`'user' | 'assistant' | 'usuario' | 'ia'`) to
+ * the canonical LLM pair. Anything outside the four-value allowlist is
+ * impossible here because the DTO `@IsIn` validator rejects it upstream.
+ */
+function normalizeChatRole(role: string): 'user' | 'assistant' {
+  return role === 'user' || role === 'usuario' ? 'user' : 'assistant';
+}
 
 @Injectable()
 export class AiChatService {
@@ -14,7 +24,7 @@ export class AiChatService {
     tenantId: string,
     userId: string,
     message: string,
-    history: any[] = [],
+    history: ChatHistoryItemDto[] = [],
   ) {
     // 1. Gather Context
     let brain: any;
@@ -69,15 +79,47 @@ Instrucciones Críticas:
 3. Si el usuario hace una sugerencia que va en contra de las "Políticas y Reglas", alértalo amablemente.
     `;
 
-    // Normalize history to standard roles (system, user, assistant)
+    // Normalize history to canonical OpenAI roles. Pre-validated by AiChatDto
+    // (only the 4 allowed role strings can reach here); `normalizeChatRole`
+    // collapses them to 'user' | 'assistant' — prompt-injection via fabricated
+    // `system` turns is blocked at the DTO layer.
     const messages = [
       { role: 'system', content: systemPrompt },
       ...history.map((msg) => ({
-        role: msg.role === 'usuario' ? 'user' : 'assistant',
+        role: normalizeChatRole(msg.role),
         content: msg.content,
       })),
       { role: 'user', content: message },
     ];
+
+    // FinOps quota enforcement — short-circuit before the LLM call if the
+    // tenant has exceeded its monthly token budget. Returns a degraded
+    // response (no LLM tokens spent) instead of silently continuing.
+    if (tenantId) {
+      const subscription = await this.prisma.tenantSubscription.findUnique({
+        where: { tenantId },
+      });
+      if (subscription) {
+        const totalUsed =
+          subscription.currentTokensInput + subscription.currentTokensOutput;
+        if (totalUsed >= subscription.monthlyTokenQuota) {
+          console.warn(
+            `[FinOps] Tenant ${tenantId} quota exceeded — returning degraded chat response (caller userId=${userId})`,
+          );
+          return {
+            reply:
+              'El cupo mensual de IA de tu plan ha sido excedido. Contacta al administrador para ampliar el plan.',
+            contextUsed: {
+              openTickets,
+              totalProperties,
+              providers,
+              tone: brain.tone,
+            },
+            quotaExceeded: true,
+          };
+        }
+      }
+    }
 
     try {
       const apiKey = process.env.OPENAI_API_KEY;
@@ -197,7 +239,10 @@ Context: The user is ${context?.name || 'a client'}. Property: ${context?.addres
       if (!apiKey || apiKey === 'FILL_ME')
         throw new Error('OpenAI API key missing or invalid');
 
-      // 1. Pre-flight Check: Has the tenant exceeded their quota?
+      // 1. Pre-flight Check: short-circuit if the tenant's monthly token
+      // quota is exhausted. Returns a structured WhatsApp-format message
+      // (parsed by the WhatsApp pipeline) instead of silently calling the
+      // LLM and over-spending.
       if (tenantId) {
         const subscription = await this.prisma.tenantSubscription.findUnique({
           where: { tenantId },
@@ -206,9 +251,15 @@ Context: The user is ${context?.name || 'a client'}. Property: ${context?.addres
           const totalUsed =
             subscription.currentTokensInput + subscription.currentTokensOutput;
           if (totalUsed >= subscription.monthlyTokenQuota) {
-            console.warn(`[FinOps] Tenant ${tenantId} exceeded quota.`);
-            // We could throw an error to trigger the fallback, blocking the AI response.
-            // throw new Error('QUOTA_EXCEEDED');
+            console.warn(
+              `[FinOps] Tenant ${tenantId} quota exceeded — returning degraded WA response.`,
+            );
+            return `[METADATA]
+Sentiment: 2 - NEUTRAL
+Intensity Score: 2
+Action: QUOTA_EXCEEDED
+[/METADATA]
+Hola, en este momento no puedo procesar tu mensaje por IA (cupo mensual agotado). Un agente humano te contactará pronto.`;
           }
         }
       }

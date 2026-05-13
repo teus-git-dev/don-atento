@@ -305,6 +305,69 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] cognitive Block 2 (2026-05-13) — ai-chat full remediation
+
+- **Resolved by**: this commit
+- **What was wrong** (2 CRÍTICOs + 3 ALTOs from the cognitive audit):
+  - `ai-chat.controller.ts:8-19` accepted `@Body('tenantId')` directly,
+    enabling cross-tenant LLM context construction (read of victim
+    tenant's `brain.policies` / `faq` into the system prompt) and
+    quota-drain (FinOps tokens billed to whatever tenantId the body
+    supplied).
+  - `userId` was also pulled from the body (frontend currently hardcodes
+    `'user-001'`), trusted by the service.
+  - `history: any[]` allowed fabricated `system`/`override` role turns —
+    classic prompt-injection vector.
+  - Quota check in `processWhatsappMessage` had a commented-out `throw`
+    making it a dead-branch — exceeded tenants merely logged, never
+    blocked.
+  - No DTO; global ValidationPipe inert.
+- **What was applied**:
+  - New `dto/ai-chat.dto.ts` with `AiChatDto` + `ChatHistoryItemDto`.
+    `role` validated by `@IsIn(['user', 'assistant', 'usuario', 'ia'])`
+    (legacy Spanish role names kept for current frontend compatibility;
+    anything outside the 4-value allowlist is rejected). `message` is
+    `@MinLength(1) @MaxLength(2000)`. History content
+    `@MaxLength(4000)`. `tenantId`/`userId` declared `@IsOptional()`
+    in the DTO purely to keep the global `forbidNonWhitelisted` happy
+    against the current frontend payload — the **handler ignores them**.
+  - `ai-chat.controller.ts`: rewrite. Class-level
+    `@UseGuards(JwtAuthGuard, TenantGuard)` + `@ApiTags` +
+    `@ApiBearerAuth`. Handler reads `tenantId` from `req.tenantId!` and
+    `userId` from `req.user!.id`. Body's tenantId/userId discarded.
+  - `ai-chat.service.ts`: history mapped through a new
+    `normalizeChatRole()` helper that correctly collapses the 4 allowed
+    roles to canonical `'user' | 'assistant'` (old code mapped any
+    non-'usuario' to 'assistant', which broke 'user' inputs as a
+    side-effect). Quota enforcement added to `processChat` —
+    short-circuits before the LLM call when tenant exceeds the monthly
+    quota and returns a degraded reply with `quotaExceeded: true`. Same
+    fix applied to `processWhatsappMessage`: the commented-out throw is
+    replaced with a structured `[METADATA]Action: QUOTA_EXCEEDED[/METADATA]`
+    response.
+  - 4 new tests in `ai-chat.controller.spec.ts`: confirm
+    JWT-supplied tenantId/userId overrides body, history forwarding,
+    default-empty-history, fallback for missing `req.user`.
+- **Frontend impact**: `chatService.ts` continues to send
+  `tenantId: TENANT_ID` and `userId: 'user-001'` in the body. With the
+  DTO declaring those as optional, the request validates; the handler
+  silently ignores them. No frontend change required. The frontend can
+  drop those fields whenever convenient.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (+4 new)
+  - `npm run build` clean
+- **Out of scope for Block 2** (carried into the cognitive audit
+  backlog, separate items):
+  - `OPENAI_API_KEY` env var not documented in `.env.example` /
+    `render.yaml`. Drift between docs and code; the service silently
+    falls back to mock if missing.
+  - The `dbError` and `error.message` logs are still raw — minor
+    leak risk if logs are ingested to external systems.
+  - `brain: any` typing chain from `BrandBrainService.getBrandTone()` —
+    type tightening would close the lint warnings but is out of audit
+    scope.
+
 ### [x] cognitive Block 1 (2026-05-13) — finops/analytics gated by SUPERADMIN
 
 - **Resolved by**: this commit
