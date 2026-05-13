@@ -168,15 +168,39 @@ export class WhatsappService {
     const intent = this.detectIntent(text);
     logMsg(`Detected intent: ${intent} for phone: ${cleanPhone}`);
 
-    let resolvedTenantId = receivedOnTenantId || null;
-    if (phoneNumberId) {
+    // Resolve tenantId BEFORE any user / property / ticket lookup. The
+    // previous flow looked up the user across the whole User table and
+    // only fell back to user.tenantId afterwards — which routinely
+    // matched a foreign-tenant user when phone last-10-digits collided.
+    // From here on every DB lookup is tenant-scoped.
+    let resolvedTenantId: string | null = receivedOnTenantId || null;
+    if (!resolvedTenantId && phoneNumberId) {
       const tenantByPhone = await this.prisma.tenant.findFirst({
         where: { whatsappPhoneNumberId: phoneNumberId },
       });
-      resolvedTenantId = tenantByPhone?.id || resolvedTenantId;
+      resolvedTenantId = tenantByPhone?.id || null;
+    }
+
+    // Fail-closed: if neither the Baileys-tenantId nor the Meta
+    // phoneNumberId-to-tenant resolution yielded a tenant, we cannot
+    // serve the message without risking cross-tenant data exposure.
+    if (!resolvedTenantId) {
+      this.logger.warn(
+        `[WA] Dropping inbound message — no tenant could be resolved (phoneNumberId=${phoneNumberId ?? 'null'}, receivedOnTenantId=${receivedOnTenantId ?? 'null'}).`,
+      );
+      return;
     }
 
     const normalizedIncoming = cleanPhone.replace(/[^0-9]/g, '');
+    // Reject too-short or empty phone normalizations — `endsWith('')`
+    // matches every row in Postgres, which previously turned any
+    // malformed remitente into "first User row in the DB".
+    if (normalizedIncoming.length < 7) {
+      this.logger.warn(
+        `[WA] Dropping inbound message — phone too short after normalization: "${normalizedIncoming}"`,
+      );
+      return;
+    }
     const last10Digits =
       normalizedIncoming.length >= 10
         ? normalizedIncoming.slice(-10)
@@ -184,6 +208,7 @@ export class WhatsappService {
 
     const user = await this.prisma.user.findFirst({
       where: {
+        tenantId: resolvedTenantId,
         OR: [
           { phone: { endsWith: last10Digits } },
           { phone: { contains: last10Digits } },
@@ -195,12 +220,8 @@ export class WhatsappService {
     });
 
     logMsg(
-      `User lookup result: ${user ? `${user.firstName} (ID: ${user.id})` : 'NOT FOUND'}`,
+      `User lookup result: ${user ? `${user.firstName} (ID: ${user.id})` : 'NOT FOUND'} for tenant=${resolvedTenantId}`,
     );
-
-    if (!resolvedTenantId && user?.tenantId) {
-      resolvedTenantId = user.tenantId;
-    }
 
     if (!user) {
       const state = await this.getState(from);
@@ -209,6 +230,7 @@ export class WhatsappService {
         const ownerName = text.trim();
         const foundOwner = await this.prisma.user.findFirst({
           where: {
+            tenantId: resolvedTenantId,
             OR: [
               { governmentId: ownerName.replace(/[^0-9]/g, '') || ownerName },
               { firstName: { contains: ownerName } },
@@ -223,21 +245,20 @@ export class WhatsappService {
             ? `${currentContacts}, ${cleanPhone}`
             : cleanPhone;
 
-          await this.prisma.user.update({
-            where: { id: foundOwner.id },
+          // updateMany with composite (id, tenantId) so a foreign id
+          // (defensive — findFirst above is already scoped) cannot mutate
+          // the wrong row.
+          await this.prisma.user.updateMany({
+            where: { id: foundOwner.id, tenantId: resolvedTenantId },
             data: { additionalContacts: updatedContacts },
           });
 
           await this.deleteState(from);
           const linkMsg = `Excelente. He verificado que los datos concuerdan y estás en nuestros registros.\n\nTe he vinculado como contacto autorizado para este inmueble en nuestro sistema Don IQ. ¿En qué te puedo ayudar hoy con respecto al inmueble?`;
-          return this.sendMessage(from, linkMsg, resolvedTenantId || undefined);
+          return this.sendMessage(from, linkMsg, resolvedTenantId);
         } else {
           const retryMsg = `Lo siento, no logré ubicar a nadie con la cédula o nombre "**${ownerName}**".\n\nPor favor, intenta nuevamente escribiendo únicamente el número de identificación (cédula) del titular del contrato, para que pueda ayudarte de manera rápida y segura.`;
-          return this.sendMessage(
-            from,
-            retryMsg,
-            resolvedTenantId || undefined,
-          );
+          return this.sendMessage(from, retryMsg, resolvedTenantId);
         }
       }
 
@@ -248,7 +269,7 @@ export class WhatsappService {
         step: 'AWAITING_OWNER_NAME',
         timestamp: Date.now(),
       });
-      return this.sendMessage(from, unknownMsg, resolvedTenantId || undefined);
+      return this.sendMessage(from, unknownMsg, resolvedTenantId);
     }
 
     // Intercept Disambiguation State BEFORE anything else
@@ -261,8 +282,13 @@ export class WhatsappService {
         finalCleanResponse,
         propertyName,
         propertyId,
-        resolvedTenantId,
         dbSentiment,
+        // resolvedTenantId is intentionally NOT destructured from
+        // state.data — the outer-scope `resolvedTenantId` was validated
+        // non-null at the top of processIncomingMessage and is the
+        // authoritative tenant for this webhook invocation. Re-reading
+        // from state.data would re-introduce the cross-tenant any-typing
+        // and bypass the fail-closed guard.
       } = state.data;
 
       await this.deleteState(from);
@@ -271,24 +297,27 @@ export class WhatsappService {
         return this.sendMessage(
           from,
           `❌ Opción no válida. Por favor, escribe un número entre 0 y ${activeTickets.length}.`,
-          resolvedTenantId || undefined,
+          resolvedTenantId,
         );
       }
 
       if (choice === 0) {
         // Create new ticket
         try {
-          let workflow = await this.prisma.workflow.findFirst({
-            where: { tenantId: resolvedTenantId || user.tenantId || 'default' },
+          // Tenant-scoped workflow lookup. Block A also eliminates the
+          // previous global `findFirst()` fallback that would let one
+          // tenant inherit another's state machine when its own had
+          // none configured.
+          const workflow = await this.prisma.workflow.findFirst({
+            where: { tenantId: resolvedTenantId },
           });
-          if (!workflow) workflow = await this.prisma.workflow.findFirst();
 
           const title =
             originalText.length > 50
               ? originalText.substring(0, 47) + '...'
               : originalText;
           const newTicket = await this.ticketsService.createTicket({
-            tenantId: resolvedTenantId || user.tenantId || 'default',
+            tenantId: resolvedTenantId,
             propertyId: propertyId,
             reportedByUserId: user.id,
             workflowId: workflow?.id,
@@ -304,17 +333,13 @@ export class WhatsappService {
           const response =
             finalCleanResponse +
             `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
-          return this.sendMessage(
-            from,
-            response,
-            resolvedTenantId || undefined,
-          );
+          return this.sendMessage(from, response, resolvedTenantId);
         } catch (error) {
           this.logger.error('Error auto-creating ticket:', error);
           return this.sendMessage(
             from,
             `Lo siento ${user.firstName}, tuve un inconveniente técnico intentando crear el reporte.`,
-            resolvedTenantId || undefined,
+            resolvedTenantId,
           );
         }
       } else {
@@ -330,12 +355,16 @@ export class WhatsappService {
         const response =
           finalCleanResponse +
           `\n\n*(Información anexada a tu Ticket activo #${selectedTicket.shortId || selectedTicket.id.split('-')[0].toUpperCase()})*`;
-        return this.sendMessage(from, response, resolvedTenantId || undefined);
+        return this.sendMessage(from, response, resolvedTenantId);
       }
     }
 
     const relation = await this.prisma.propertyRelation.findFirst({
-      where: { userId: user.id, status: 'ACTIVE' },
+      where: {
+        userId: user.id,
+        status: 'ACTIVE',
+        property: { tenantId: resolvedTenantId },
+      },
       include: { property: true },
     });
 
@@ -344,7 +373,7 @@ export class WhatsappService {
       return this.sendMessage(
         from,
         noPropertyMsg,
-        resolvedTenantId || undefined,
+        resolvedTenantId,
       );
     }
 
@@ -432,7 +461,7 @@ export class WhatsappService {
     if (intent === Intent.PHOTO_SUBMISSION || mediaUrl) {
       const latestTicket = await this.ticketsService.findLatestByPhone(
         cleanPhone,
-        resolvedTenantId || user.tenantId || 'default',
+        resolvedTenantId,
       );
       if (latestTicket && !latestTicket.resolvedAt) {
         finalResponse = `He recibido el archivo/evidencia y lo he anexado a tu reporte actual (Ticket #${(latestTicket as any).shortId || latestTicket.id.split('-')[0].toUpperCase()}).`;
@@ -448,7 +477,11 @@ export class WhatsappService {
     } else if (aiAction === 'CREATE_TICKET') {
       try {
         const activeTickets = await this.prisma.ticket.findMany({
-          where: { reportedByUserPhone: cleanPhone, resolvedAt: null },
+          where: {
+            tenantId: resolvedTenantId,
+            reportedByUserPhone: cleanPhone,
+            resolvedAt: null,
+          },
           orderBy: { createdAt: 'desc' },
         });
 
@@ -478,15 +511,15 @@ export class WhatsappService {
 
           finalResponse = menuMsg;
         } else {
-          // Normal creation
-          let workflow = await this.prisma.workflow.findFirst({
-            where: { tenantId: resolvedTenantId || user.tenantId || 'default' },
+          // Normal creation — tenant-scoped workflow lookup; no global
+          // fallback (cross-tenant workflow injection avoided).
+          const workflow = await this.prisma.workflow.findFirst({
+            where: { tenantId: resolvedTenantId },
           });
-          if (!workflow) workflow = await this.prisma.workflow.findFirst();
 
           const title = text.length > 50 ? text.substring(0, 47) + '...' : text;
           const newTicket = await this.ticketsService.createTicket({
-            tenantId: resolvedTenantId || user.tenantId || 'default',
+            tenantId: resolvedTenantId,
             propertyId: propertyId,
             reportedByUserId: user.id,
             workflowId: workflow?.id,
@@ -512,7 +545,7 @@ export class WhatsappService {
       if (intent === Intent.STATUS_QUERY) {
         const latestTicket = await this.ticketsService.findLatestByPhone(
           cleanPhone,
-          resolvedTenantId || user.tenantId || 'default',
+          resolvedTenantId,
         );
         if (latestTicket) {
           const status =
@@ -525,6 +558,7 @@ export class WhatsappService {
       } else if (intent === Intent.SURVEY_RESPONSE) {
         const lastResolvedTicket = await this.prisma.ticket.findFirst({
           where: {
+            tenantId: resolvedTenantId,
             reportedByUserPhone: cleanPhone,
             resolvedAt: { not: null },
             satisfactionStars: null,
@@ -552,7 +586,7 @@ export class WhatsappService {
     ) {
       const latestTicket = await this.ticketsService.findLatestByPhone(
         cleanPhone,
-        resolvedTenantId || user.tenantId || 'default',
+        resolvedTenantId,
       );
       if (latestTicket) {
         await this.cognitiveService.logInteraction(
@@ -575,7 +609,7 @@ export class WhatsappService {
     logMsg(
       `Process complete, sending response: "${finalResponse.substring(0, 50)}..."`,
     );
-    await this.sendMessage(from, finalResponse, resolvedTenantId || undefined);
+    await this.sendMessage(from, finalResponse, resolvedTenantId);
   }
 
   async sendMessage(to: string, text: string, tenantId?: string) {

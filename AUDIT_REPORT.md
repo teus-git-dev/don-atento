@@ -305,6 +305,91 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] whatsapp Block A (2026-05-13) — tenant scoping del inbound + fail-closed + last10Digits guard
+
+- **Resolved by**: this commit (first block of whatsapp remediation)
+- **What was wrong** (7 CRÍTICOs del audit + 1 ALTO):
+  - CRÍTICO #1: `user.findFirst({ OR: [...phone matches...] })` sin
+    filtro `tenantId` — identity confusion cross-tenant cuando el
+    `last10Digits` colisiona entre tenants.
+  - CRÍTICO #2: lookup de `governmentId / firstName / lastName` en
+    el flujo `AWAITING_OWNER_NAME` sin filtro de tenant — permitía
+    enrolar un teléfono desconocido en cualquier user de cualquier
+    tenant si se adivinaba la cédula.
+  - CRÍTICO #3: `user.update({ where: { id } })` para mutar
+    `additionalContacts` sin filtro de tenant.
+  - CRÍTICO #4: `propertyRelation.findFirst({ userId, status })` sin
+    filtro de tenant — devolvía propiedades del tenant equivocado
+    si el user se resolvió cross-tenant.
+  - CRÍTICO #5: dos sitios con `workflow.findFirst()` global como
+    fallback cuando el tenant no tenía workflow propio — mismo
+    patrón cerrado en tickets Block B.
+  - CRÍTICO #6: `ticket.findMany({ reportedByUserPhone, resolvedAt:
+    null })` para el menú de desambiguación, sin filtro de tenant.
+  - CRÍTICO #7: `ticket.findFirst({ ... satisfactionStars: null })`
+    para el SURVEY_RESPONSE, sin filtro de tenant — un rating podía
+    aplicarse al ticket más reciente del usuario en otro tenant.
+  - CRÍTICO #11: `last10Digits.slice(-10)` permitía
+    `phone: { endsWith: '' }` cuando el remitente venía vacío,
+    matcheando la primera fila de User.
+- **What was applied**:
+  - **Resolución de tenant ANTES de cualquier lookup**: el bloque
+    `resolvedTenantId = receivedOnTenantId || phoneNumberId-derived`
+    se hace primero. Si no hay tenant resuelto, **fail-closed**:
+    `this.logger.warn(...); return`. El mensaje no se procesa para
+    evitar cross-tenant exposure. CLAUDE.md "Fail-closed" pattern
+    explícito en el comentario.
+  - **Guard `last10Digits.length < 7`**: si después de
+    `replace(/[^0-9]/g, '')` quedan menos de 7 dígitos, drop +
+    log.warn. Evita el bug de `endsWith('')` que matcheaba todos
+    los users.
+  - **7 queries tenant-scoped**:
+    - `user.findFirst` (phone OR whatsappId OR additionalContacts)
+      ⇒ agrega `tenantId: resolvedTenantId` al where.
+    - `user.findFirst` (governmentId/firstName/lastName) en el
+      flujo `AWAITING_OWNER_NAME` ⇒ idem.
+    - `user.update` → `user.updateMany({ where: { id, tenantId }})`
+      — defense in depth aunque el findFirst ya estuviera scoped.
+    - `propertyRelation.findFirst` ⇒ filtra por
+      `property: { tenantId: resolvedTenantId }` (la relación no
+      tiene `tenantId` directo).
+    - **Eliminados** los dos `workflow.findFirst()` globales de
+      fallback en las ramas `CREATE_TICKET` (línea ~281 y ~482) —
+      ahora `workflow.findFirst({ where: { tenantId } })` único.
+      Si no hay workflow del tenant, el ticket se crea sin
+      `workflowId` (rama legítima del schema).
+    - `ticket.findMany` para desambiguación ⇒ agrega
+      `tenantId: resolvedTenantId`.
+    - `ticket.findFirst` para SURVEY_RESPONSE ⇒ idem.
+  - **Limpieza de `'default'` magic string**: las llamadas a
+    `ticketsService.findLatestByPhone(cleanPhone, resolvedTenantId
+    || user.tenantId || 'default')` ahora pasan solo
+    `resolvedTenantId` (que está garantizado no-null en este
+    punto). Eliminado el riesgo de que `'default'` fuera tratado
+    como id de tenant válido en colisión.
+  - **Disambiguation state no re-extrae `resolvedTenantId`**: la
+    rama `AWAITING_TICKET_DISAMBIGUATION` destructuraba
+    `resolvedTenantId` desde `state.data` (any-typed) shadowing
+    el outer-scope. Removido del destructuring — usa el outer
+    `resolvedTenantId` validado al inicio.
+  - **`sendMessage` calls**: `resolvedTenantId || undefined`
+    sustituido por `resolvedTenantId` directo (siempre truthy aquí).
+  - **Tests**: `whatsapp.service.spec.ts` actualizado para pasar
+    `phoneNumberId: 'meta-phone-id-1'` en los dos tests de
+    `processIncomingMessage` que antes corrían con el path
+    cross-tenant. Mock de `tenant.findFirst` retorna `{ id: 't1' }`
+    para satisfacer la resolución.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: RBAC en BaileysController + fallback fix de
+  `getAdapter` → Block B. Cifrado AES-256-GCM de
+  `whatsappAccessToken` → Block C. DTO de webhook + sanitización
+  LLM + validaciones → Block D. `additionalContacts` →
+  `UserPhoneContact` con OTP → Block E. Hardening anti-ban +
+  Redis counters + log sanitization → Block F.
+
 ### [x] workflows Block D (2026-05-13) — Swagger + Logger + paginación + orderBy + dead code + PrismaModule
 
 - **Resolved by**: this commit (final block of workflows remediation)

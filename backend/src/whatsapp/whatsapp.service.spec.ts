@@ -68,7 +68,9 @@ describe('WhatsappService', () => {
             },
             ticket: { findMany: jest.fn().mockResolvedValue([]) },
             workflow: { findFirst: jest.fn().mockResolvedValue({ id: 'wf1' }) },
-            tenant: { findFirst: jest.fn().mockResolvedValue(null) },
+            tenant: {
+              findFirst: jest.fn().mockResolvedValue({ id: 't1' }),
+            },
           },
         },
         { provide: CognitiveService, useValue: cognitiveServiceMock },
@@ -126,7 +128,15 @@ describe('WhatsappService', () => {
       // Stub sendMessage to prevent actual HTTP calls
       jest.spyOn(service, 'sendMessage').mockResolvedValue(undefined);
 
-      await service.processIncomingMessage('3000000000', 'Estoy muy molesto');
+      // Block A: phoneNumberId is required so the service can resolve
+      // tenant via prisma.tenant.findFirst (mocked to return t1). Without
+      // it the fail-closed guard drops the message.
+      await service.processIncomingMessage(
+        '3000000000',
+        'Estoy muy molesto',
+        undefined,
+        'meta-phone-id-1',
+      );
 
       expect(ticketsServiceMock.createTicket).not.toHaveBeenCalled();
       expect(service.sendMessage).toHaveBeenCalledWith(
@@ -146,6 +156,8 @@ describe('WhatsappService', () => {
       await service.processIncomingMessage(
         '3000000000',
         'Necesito reparar la puerta',
+        undefined,
+        'meta-phone-id-1',
       );
 
       expect(ticketsServiceMock.createTicket).toHaveBeenCalled();
