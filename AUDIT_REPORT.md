@@ -305,6 +305,76 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] cognitive Block 3 (2026-05-13) — brand-brain + property/summary hybrid; dead endpoints gated
+
+- **Resolved by**: this commit
+- **What was wrong** (2 CRÍTICOs + 2 ALTOs from the cognitive audit):
+  - `brand-brain.controller.ts`: `GET/PUT /brand-brain/:tenantId` trusted
+    the URL path param. CLAUDE.md is explicit: "TenantGuard intentionally
+    rejects `params.id` as a tenant source — conflating the two has
+    caused silent isolation failures." Any user could read/rewrite any
+    tenant's brain by manipulating the path.
+  - `cognitive.controller.ts`: `/property/:id/summary` and
+    `/property/:id/health-score` read property data without filtering by
+    tenant; `getPropertyCognitiveSummary` queried `ticketInteraction`
+    by `propertyId` only — cross-tenant interaction history leak.
+  - `validate-evidence` and `classify-priority` had no auth scoping and
+    no DTO; no frontend consumer (grep confirmed).
+- **What was applied** (hybrid v1: read-only enabled, writes / unused
+  endpoints gated):
+  - `brand-brain.controller.ts` rewrite:
+    - Class-level `@UseGuards(JwtAuthGuard, TenantGuard)` +
+      `@ApiTags('brand-brain')` + `@ApiBearerAuth()`.
+    - `GET /:tenantId` keeps the path segment for backwards-compat with
+      `brainService.ts` but the handler IGNORES it — reads
+      `req.tenantId` from the JWT. URL is decorative; access is
+      tenant-scoped.
+    - `PUT /:tenantId` carries `@UseGuards(FeatureDisabledGuard)`
+      (reused from `inventory-templates`). Returns 403 "Feature en
+      desarrollo — disponible en v2". Brand-brain write remediation
+      (audit log, DTO, role gating) deferred post-v1.
+  - `cognitive.controller.ts` rewrite:
+    - Class-level `@UseGuards(JwtAuthGuard, TenantGuard)` +
+      `@ApiTags('cognitive')` + `@ApiBearerAuth()`.
+    - `GET /property/:id/summary` — passes `req.tenantId` to the
+      service. Service filter updated below.
+    - `GET /property/:id/health-score` — gated with
+      `FeatureDisabledGuard` (no frontend consumer; deferred).
+    - `POST /validate-evidence`, `POST /classify-priority` — gated with
+      `FeatureDisabledGuard` (no frontend consumer; deferred).
+    - `GET /finops/analytics` — keeps the `RolesGuard + @Roles('SUPERADMIN')`
+      from Block 1.
+  - `cognitive.service.getPropertyCognitiveSummary(propertyId, tenantId)`:
+    signature updated. Query now filters
+    `where: { ticket: { propertyId, tenantId } }`. Cross-tenant
+    ticketInteraction read closed at service level.
+  - `FeatureDisabledGuard` reused from `inventory-templates` via
+    cross-module import — no duplication, no schema/module-level
+    refactor of either side.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (no regressions; the existing
+    `classifyPriority` service-level tests in
+    `cognitive.service.spec.ts` continue to pass since guards only
+    apply to HTTP routes, not direct service calls).
+  - `npm run build` clean
+- **Frontend impact**:
+  - `ia-config/page.tsx`: GET continues to work (tenant-scoped). The
+    Save / Update button will receive 403 from the PUT — the page
+    should either hide the save UI or display the v2-availability
+    message gracefully (frontend follow-up; not in this commit).
+  - `inmuebles/[id]/inspeccion/page.tsx`: GET property summary
+    continues to work; now correctly scoped to caller's tenant.
+  - No other frontend pages consume the gated cognitive endpoints
+    (`health-score`, `validate-evidence`, `classify-priority`).
+- **Out of scope** (v2 remediation):
+  - PUT `/brand-brain` full fix: audit log table, DTO with class-
+    validator decorators on `tone`/`policies`/`responseRules`/`faq`,
+    `@Roles('ADMIN_TENANT','SUPERADMIN')`.
+  - Service-level tenant scoping for `calculatePropertyHealthScore`,
+    `validateEvidence`, `classifyPriority` if they're ever exposed in
+    v2.
+
 ### [x] cognitive Block 2 (2026-05-13) — ai-chat full remediation
 
 - **Resolved by**: this commit

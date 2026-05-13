@@ -202,11 +202,12 @@ export class CognitiveService {
     });
   }
 
-  async getPropertyCognitiveSummary(propertyId: string) {
+  async getPropertyCognitiveSummary(propertyId: string, tenantId: string) {
     const interactions = await this.prisma.ticketInteraction.findMany({
       where: {
         ticket: {
           propertyId: propertyId,
+          tenantId: tenantId,
         },
       },
       orderBy: { sentAt: 'desc' },
