@@ -12,6 +12,7 @@ import {
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { CrmService } from '../crm/crm.service';
 import { BaileysManager } from './baileys.manager';
+import { decryptWhatsappSecret } from './whatsapp-encryption.util';
 import * as IORedis from 'ioredis';
 
 export enum Intent {
@@ -638,7 +639,17 @@ export class WhatsappService {
       });
       if (tenant?.whatsappPhoneNumberId && tenant?.whatsappAccessToken) {
         phoneNumberId = tenant.whatsappPhoneNumberId;
-        token = tenant.whatsappAccessToken;
+        // Decrypt at the point of use. decryptWhatsappSecret is a
+        // no-op for legacy plaintext rows (those without the ENCv1:
+        // prefix), so we stay compatible during the backfill window.
+        try {
+          token = decryptWhatsappSecret(tenant.whatsappAccessToken);
+        } catch (err) {
+          this.logger.error(
+            `Failed to decrypt whatsappAccessToken for tenant=${tenantId}: ${(err as Error).message}`,
+          );
+          return;
+        }
       }
     }
 

@@ -21,6 +21,10 @@ import {
   ProvisionTenantInput,
   UpdateTenantAdminInput,
 } from './onboarding.service';
+import {
+  encryptWhatsappSecret,
+  isEncrypted,
+} from '../whatsapp/whatsapp-encryption.util';
 
 @ApiTags('tenants')
 @ApiBearerAuth()
@@ -137,6 +141,18 @@ export class TenantsController {
       },
     });
 
+    // Token display: never decrypt for the UI. Encrypted values show
+    // a fixed redaction; legacy plaintext (pre-Block-C rows) keeps the
+    // old "first 8 ... last 4" mask so the dashboard remains usable
+    // during the backfill window.
+    const rawToken = tenant?.whatsappAccessToken;
+    let whatsappAccessTokenMasked: string | null = null;
+    if (rawToken) {
+      whatsappAccessTokenMasked = isEncrypted(rawToken)
+        ? '***ENCRYPTED***'
+        : `${rawToken.substring(0, 8)}...${rawToken.slice(-4)}`;
+    }
+
     return {
       id: tenant?.id,
       name: tenant?.name,
@@ -144,10 +160,7 @@ export class TenantsController {
       whatsappProvider: tenant?.whatsappProvider || 'meta',
       whatsappConfigured:
         !!tenant?.whatsappPhoneNumberId && !!tenant?.whatsappAccessToken,
-      // Mask the token for display
-      whatsappAccessTokenMasked: tenant?.whatsappAccessToken
-        ? `${tenant.whatsappAccessToken.substring(0, 8)}...${tenant.whatsappAccessToken.slice(-4)}`
-        : null,
+      whatsappAccessTokenMasked,
     };
   }
 
@@ -165,11 +178,16 @@ export class TenantsController {
       return { success: false, message: 'Faltan campos requeridos.' };
     }
 
+    // Encrypt the Meta access token before persisting. The token is a
+    // long-lived bearer credential — anyone with read access to the row
+    // can post messages as the tenant — so it never lands in the DB
+    // (or in DB backups / replicas / logs) in plaintext.
+    const plaintextToken = body.whatsappAccessToken.trim();
     await this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
         whatsappPhoneNumberId: body.whatsappPhoneNumberId.trim(),
-        whatsappAccessToken: body.whatsappAccessToken.trim(),
+        whatsappAccessToken: encryptWhatsappSecret(plaintextToken),
       },
     });
 

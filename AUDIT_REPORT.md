@@ -305,6 +305,68 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] whatsapp Block C (2026-05-13) — AES-256-GCM encryption of `whatsappAccessToken`
+
+- **Resolved by**: this commit (third block of whatsapp remediation)
+- **What was wrong** (1 CRÍTICO from the whatsapp audit):
+  - CRÍTICO #9: `Tenant.whatsappAccessToken` se persistía plaintext
+    en `tenants.controller.saveWhatsappConfig` (`.trim()` solo) y
+    se leía raw en `whatsapp.service.sendMessage` para autenticar
+    contra Meta API. CLAUDE.md afirma "encrypted at rest with
+    `WHATSAPP_ENCRYPTION_KEY`" pero el env var sólo existía en
+    `.env.example` — nunca se usaba en código. Cualquier DB dump,
+    backup snapshot o error log expone tokens long-lived de Meta
+    Cloud API (capaces de enviar mensajes, leer historial, crear
+    templates).
+- **What was applied**:
+  - **Nuevo `src/whatsapp/whatsapp-encryption.util.ts`** espejo
+    byte-por-byte de `dian-encryption.util.ts` (mismo formato
+    `base64(iv[12] || tag[16] || ciphertext)`, mismo algoritmo
+    AES-256-GCM, misma resolución lazy de la key):
+    - `encryptWhatsappSecret(plaintext): string` — produce
+      output con prefix `ENCv1:` para distinguir de legacy
+      plaintext.
+    - `decryptWhatsappSecret(value): string` — si NO empieza con
+      `ENCv1:` retorna el valor tal cual (compat con filas legacy
+      durante backfill window).
+    - `isEncrypted(value): boolean` — chequeo de prefix.
+    - Env var dedicado `WHATSAPP_ENCRYPTION_KEY` (64-char hex /
+      32 bytes). Separación intencional con `DIAN_ENCRYPTION_KEY`
+      — un leak de una key no descifra la otra.
+  - **Write path** (`tenants.controller.saveWhatsappConfig`):
+    `encryptWhatsappSecret(plaintextToken)` antes del `prisma
+    .tenant.update`. El plaintext no toca disco / replicas / logs.
+  - **Read path** (`whatsapp.service.sendMessage`): si hay
+    `tenant.whatsappAccessToken`, `decryptWhatsappSecret(...)`
+    al borde del uso. try/catch dedicado — un fallo de decrypt
+    aborta el envío con `logger.error` (no propaga al cliente
+    mensaje sensible).
+  - **`getMyTenant` display masking**: si el token está
+    encrypted (prefix `ENCv1:`) el dashboard ve
+    `***ENCRYPTED***`. Si es legacy plaintext, el mask antiguo
+    (`first 8 ... last 4`) se preserva para que la UI siga
+    usable durante el backfill window.
+  - **Backfill script** `prisma/backfill-whatsapp-tokens.ts`:
+    - Idempotente: filas con prefix `ENCv1:` se saltan.
+    - Soporta `--dry-run`.
+    - Falla fast si `WHATSAPP_ENCRYPTION_KEY` no está set.
+    - Per audit history, no hay tenants Meta activos al momento
+      del commit (cluster en Baileys) — script esperado como
+      no-op en prod, pero debe correrse antes del primer Meta
+      onboarding.
+  - **`.env.example`** corregido: el comentario decía
+    `openssl rand -hex 16` (= 32 chars) pero el util exige 64
+    chars. Ahora dice `openssl rand -hex 32`.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (no nuevos specs porque
+    el util es mirror del existente `dian-encryption.util.ts` ya
+    cubierto)
+  - `npm run build` clean
+- **Carryover**: DTO de webhook + sanitización LLM + validaciones →
+  Block D. `additionalContacts` → `UserPhoneContact` con OTP →
+  Block E. Hardening anti-ban + log sanitization → Block F.
+
 ### [x] whatsapp Block B (2026-05-13) — BaileysController RBAC + manager strict mode + idempotent connect
 
 - **Resolved by**: this commit (second block of whatsapp remediation)
