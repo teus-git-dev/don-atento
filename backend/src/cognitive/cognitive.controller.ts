@@ -1,6 +1,8 @@
-import { Controller, Get, Param, Post, Body } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, UseGuards } from '@nestjs/common';
 import { CognitiveService } from './cognitive.service';
 import { MaintenancePredictorService } from './maintenance-predictor.service';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('cognitive')
 export class CognitiveController {
@@ -36,6 +38,8 @@ export class CognitiveController {
   }
 
   @Get('finops/analytics')
+  @UseGuards(RolesGuard)
+  @Roles('SUPERADMIN')
   async getFinOpsAnalytics() {
     return this.cognitiveService.getFinOpsAnalytics();
   }

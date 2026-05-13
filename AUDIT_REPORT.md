@@ -305,6 +305,36 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] cognitive Block 1 (2026-05-13) — finops/analytics gated by SUPERADMIN
+
+- **Resolved by**: this commit
+- **Surfaced by**: audit chat session 2026-05-13 (cognitive trio)
+- **What was wrong**: `GET /cognitive/finops/analytics` was reachable by
+  any authenticated user. The underlying `cognitiveService.getFinOpsAnalytics()`
+  runs `prisma.tenantSubscription.findMany({})` with NO filter — returns
+  per-tenant token usage, costs (USD), revenue, and margins for ALL
+  tenants. Any AGENT or TENANT_USER could enumerate the platform's
+  internal financials.
+- **What was applied** (1 endpoint, additive):
+  - `cognitive.controller.ts` imports: added `UseGuards`, `RolesGuard`,
+    `Roles`.
+  - `getFinOpsAnalytics()` handler decorated with
+    `@UseGuards(RolesGuard) @Roles('SUPERADMIN')`. The global
+    `JwtAuthGuard` already enforces authentication; this adds the role
+    gate per-handler so the rest of the controller is not affected.
+- **Frontend impact**: the consumer page `frontend/src/app/(dashboard)/admin/finops/page.tsx`
+  uses a hardcoded `http://localhost:3000/cognitive/finops/analytics`
+  URL (separate frontend issue, not in this scope). Non-SUPERADMIN users
+  hitting that page will now receive 403 — expected and correct since
+  it's an admin-only dashboard. The hardcoded URL bug remains tracked
+  for a separate frontend audit.
+- **Remaining cognitive findings** (addressed in Blocks 2 and 3 of this
+  remediation):
+  - Block 2: `ai-chat` full remediation (CRÍTICO #1 + ALTOs around
+    DTOs, history validation, quota dead-branch).
+  - Block 3: `brand-brain` + `cognitive.property/*` hybrid (CRÍTICO #2
+    + #3, plus `FeatureDisabledGuard` for unused endpoints).
+
 ### [ ] inventory-templates: read-only habilitado para v1, CRUD completo fuera de scope — remediación post-v1
 
 - **Owner**: backend team (re-audit owner TBD when CRUD is scheduled)
