@@ -172,8 +172,8 @@ export default function NuevoInmueblePage() {
 
   const fetchWorkflows = async () => {
     try {
-        const data = await apiClient.get<any[]>('/workflows');
-        setWorkflows(Array.isArray(data) ? data : []);
+        const res = await apiClient.get<{ data: unknown[] }>('/workflows?limit=100');
+        setWorkflows(Array.isArray(res?.data) ? res.data : []);
     } catch (e) {
         console.error("Error fetching workflows", e);
     }

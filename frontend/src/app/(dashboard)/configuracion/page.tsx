@@ -40,8 +40,8 @@ export default function ConfiguracionPage() {
 
   const fetchWorkflows = async () => {
     try {
-        const data = await apiClient.get<any[]>('/workflows');
-        setWorkflows(data);
+        const res = await apiClient.get<{ data: unknown[] }>('/workflows?limit=100');
+        setWorkflows(res.data);
     } catch (e) {
         console.error("Fetch workflows error", e);
     }

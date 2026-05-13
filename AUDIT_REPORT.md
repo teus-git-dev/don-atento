@@ -305,6 +305,64 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] workflows Block D (2026-05-13) — Swagger + Logger + paginación + orderBy + dead code + PrismaModule
+
+- **Resolved by**: this commit (final block of workflows remediation)
+- **What was wrong** (1 MEDIO de Swagger + 3 MEDIOs varios + 1 INFO):
+  - MEDIO #2: Sin `@ApiTags`/`@ApiBearerAuth`/`@ApiOperation` —
+    documentación Swagger ausente, inconsistente con
+    tickets/properties.
+  - MEDIO #3: `getInitialState(workflowId)` era dead code (nadie
+    lo llamaba en el codebase) y sin filtro de `tenantId`.
+  - MEDIO #4: `findMany` sin `orderBy` — resultado no determinístico
+    en Postgres.
+  - MEDIO #6: `findAll` sin paginación — un tenant con muchos
+    workflows + estados eager-loaded podía generar respuestas
+    grandes.
+  - MEDIO #10 / INFO: `WorkflowsModule` no importaba `PrismaModule`
+    explícitamente (funcionaba via `@Global()`), inconsistente con
+    el resto de módulos.
+  - Sin `Logger` en operaciones destructivas (audit-trail).
+- **What was applied**:
+  - **Swagger** en `workflows.controller.ts`:
+    - `@ApiTags('workflows')`, `@ApiBearerAuth()` a nivel clase.
+    - `@ApiOperation` por handler (descripción en español
+      alineada con tickets/properties).
+    - `@ApiQuery` para `?page=` y `?limit=` en `findAll`.
+  - **Paginación + orderBy** en `findAllByTenant(tenantId, page,
+    limit)`:
+    - `page` defaults a 1, `limit` defaults a 20, cap
+      `MAX_PAGE_LIMIT = 100` (mismo cap que properties).
+    - `orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]` — segundo
+      key como tie-break para paginación determinística.
+    - Response shape alineada con properties: `{ data,
+      totalRecords, totalPages, currentPage }`.
+  - **Logger** en `WorkflowsService`:
+    - `create` loguea `id`, `tenant`, número de estados creados.
+    - `deleteStatesByWorkflow` loguea `workflowId`, `tenant`,
+      count.
+    - `delete` loguea `id`, `tenant`, `statesRemoved` (vía
+      `$transaction` que ahora retorna también el count).
+  - **Dead code**: `getInitialState` eliminado del service.
+  - **PrismaModule**: importado explícitamente en
+    `WorkflowsModule.imports`.
+  - **Frontend follow-through** (consumers de `/workflows`):
+    - `frontend/src/app/(dashboard)/configuracion/page.tsx`:
+      `fetchWorkflows` ahora unwrap `res.data` desde
+      `{ data: unknown[] }`, pasa `?limit=100` para evitar
+      truncado del listado de configuración.
+    - `frontend/src/app/(dashboard)/inmuebles/nuevo/page.tsx`:
+      mismo cambio (con `Array.isArray` defensivo preexistente).
+    - `frontend/src/components/tickets/CreateTicketModal.tsx`:
+      **no requiere cambio** — ya tenía guard defensivo
+      (`Array.isArray(wfsRes) ? wfsRes : (wfsRes?.data || [])`)
+      que cubre ambos shapes (array legacy y paginado nuevo).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean (backend)
+  - `next build` clean (frontend)
+
 ### [x] workflows Block C (2026-05-13) — DTOs + `$transaction` on delete + DELETE/PATCH verbs
 
 - **Resolved by**: this commit (third block of workflows remediation)

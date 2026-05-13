@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -19,18 +19,33 @@ const USER_PUBLIC_SELECT = {
 
 @Injectable()
 export class WorkflowsService {
+  private readonly logger = new Logger(WorkflowsService.name);
+
   constructor(private prisma: PrismaService) {}
 
-  async findAllByTenant(tenantId: string) {
-    return this.prisma.workflow.findMany({
-      where: { tenantId },
-      include: {
-        states: {
-          orderBy: { order: 'asc' },
-          include: { responsible: { select: USER_PUBLIC_SELECT } },
+  async findAllByTenant(tenantId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.workflow.findMany({
+        where: { tenantId },
+        include: {
+          states: {
+            orderBy: { order: 'asc' },
+            include: { responsible: { select: USER_PUBLIC_SELECT } },
+          },
         },
-      },
-    });
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.workflow.count({ where: { tenantId } }),
+    ]);
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page,
+    };
   }
 
   async create(data: {
@@ -41,7 +56,7 @@ export class WorkflowsService {
   }) {
     const { states, ...workflowData } = data;
 
-    return this.prisma.workflow.create({
+    const created = await this.prisma.workflow.create({
       data: {
         ...workflowData,
         states: states
@@ -62,6 +77,11 @@ export class WorkflowsService {
         states: true,
       },
     });
+
+    this.logger.log(
+      `Workflow created id=${created.id} tenant=${data.tenantId} states=${created.states.length}`,
+    );
+    return created;
   }
 
   async createState(
@@ -91,14 +111,6 @@ export class WorkflowsService {
     });
   }
 
-  async getInitialState(workflowId: string) {
-    const firstState = await this.prisma.workflowState.findFirst({
-      where: { workflowId },
-      orderBy: { order: 'asc' },
-    });
-    return firstState;
-  }
-
   async update(
     id: string,
     tenantId: string,
@@ -118,9 +130,13 @@ export class WorkflowsService {
   async deleteStatesByWorkflow(workflowId: string, tenantId: string) {
     await this.assertWorkflowBelongsToTenant(workflowId, tenantId);
 
-    return this.prisma.workflowState.deleteMany({
+    const result = await this.prisma.workflowState.deleteMany({
       where: { workflowId },
     });
+    this.logger.log(
+      `Deleted ${result.count} states for workflow=${workflowId} tenant=${tenantId}`,
+    );
+    return result;
   }
 
   async delete(id: string, tenantId: string) {
@@ -131,10 +147,18 @@ export class WorkflowsService {
     // still reference workflowId), the state deletions roll back and the
     // workflow stays consistent. Without this we'd leave a stateless
     // workflow row referenced by orphaned tickets.
-    return this.prisma.$transaction(async (tx) => {
-      await tx.workflowState.deleteMany({ where: { workflowId: id } });
-      return tx.workflow.delete({ where: { id } });
+    const result = await this.prisma.$transaction(async (tx) => {
+      const states = await tx.workflowState.deleteMany({
+        where: { workflowId: id },
+      });
+      const workflow = await tx.workflow.delete({ where: { id } });
+      return { workflow, deletedStates: states.count };
     });
+
+    this.logger.log(
+      `Workflow deleted id=${id} tenant=${tenantId} statesRemoved=${result.deletedStates}`,
+    );
+    return result.workflow;
   }
 
   /**
