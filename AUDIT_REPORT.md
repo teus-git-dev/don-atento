@@ -305,6 +305,38 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] properties Block B (2026-05-13) — transferProperty cross-tenant validation + $transaction + DTO
+
+- **Resolved by**: this commit
+- **What was wrong** (1 CRÍTICO + 1 ALTO + 1 MEDIO from the properties audit):
+  - `transferProperty` created `propertyRelation` rows with
+    `userId: data.newOwnerId` and `userId: data.newTenantId` without
+    validating that those User IDs (a) exist and (b) belong to the
+    caller's tenant. Vector for phantom cross-tenant relationships.
+  - The four writes (updateMany historic + create owner + optional
+    create tenant) were separate Prisma calls. Partial failure left
+    relations in an inconsistent state.
+  - `data.startDate` was a `string` consumed via `new Date(...)` with
+    no validation. Invalid dates yielded `Invalid Date` and Prisma
+    behavior was undefined.
+- **What was applied**:
+  - New `dto/transfer-property.dto.ts` with `TransferPropertyDto`:
+    `newOwnerId @IsString @MinLength(1)`, `newTenantId @IsOptional @IsString @MinLength(1)`,
+    `startDate @IsDateString`.
+  - Controller `transfer()` signature uses the DTO.
+  - Service `transferProperty()` rewritten:
+    - All operations wrapped in `prisma.$transaction(async (tx) => {...})`.
+    - Property lookup (tenant-scoped) inside the transaction.
+    - `newOwnerId` looked up in `User` with `where: { id, tenantId }`
+      and a narrow `select: { id: true }`; throws `BadRequestException`
+      with a clear message if the user doesn't exist in this tenant.
+    - Same validation applied to `newTenantId` when provided.
+    - The new TENANT relation reuses `property.propertyCode` already
+      loaded — eliminates the extra `findOne` call from before.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (no regressions)
+
 ### [x] properties Block A (2026-05-13) — passwordHash leak fix + tenant filter on inventoryTemplate lookup
 
 - **Resolved by**: this commit

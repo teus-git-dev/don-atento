@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -6,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { TransferPropertyDto } from './dto/transfer-property.dto';
 
 /**
  * Whitelist of User fields safe to expose in property responses. Excludes
@@ -502,46 +504,76 @@ export class PropertiesService {
   async transferProperty(
     propertyId: string,
     tenantId: string,
-    data: { newOwnerId: string; newTenantId?: string; startDate: string },
+    data: TransferPropertyDto,
   ) {
-    const property = await this.prisma.property.findFirst({
-      where: { id: propertyId, tenantId },
-    });
+    // Cross-tenant identity injection vector: a user from Tenant A could
+    // previously transfer ownership to a User ID belonging to Tenant B
+    // (creating a phantom relation linking A's property to B's user). All
+    // four lookups + writes wrap in a single $transaction so a partial
+    // failure rolls back.
+    return this.prisma.$transaction(async (tx) => {
+      const property = await tx.property.findFirst({
+        where: { id: propertyId, tenantId },
+      });
+      if (!property) {
+        throw new NotFoundException('Property not found or access denied');
+      }
 
-    if (!property) {
-      throw new NotFoundException('Property not found or access denied');
-    }
+      const newOwner = await tx.user.findFirst({
+        where: { id: data.newOwnerId, tenantId },
+        select: { id: true },
+      });
+      if (!newOwner) {
+        throw new BadRequestException(
+          `newOwnerId ${data.newOwnerId} no pertenece al tenant.`,
+        );
+      }
 
-    await this.prisma.propertyRelation.updateMany({
-      where: { propertyId, status: 'ACTIVE' },
-      data: { status: 'HISTORIC', endDate: new Date(data.startDate) },
-    });
+      let newTenantUser: { id: string } | null = null;
+      if (data.newTenantId) {
+        newTenantUser = await tx.user.findFirst({
+          where: { id: data.newTenantId, tenantId },
+          select: { id: true },
+        });
+        if (!newTenantUser) {
+          throw new BadRequestException(
+            `newTenantId ${data.newTenantId} no pertenece al tenant.`,
+          );
+        }
+      }
 
-    const newOwner = await this.prisma.propertyRelation.create({
-      data: {
-        propertyId,
-        userId: data.newOwnerId,
-        relationType: 'OWNER',
-        startDate: new Date(data.startDate),
-        status: 'ACTIVE',
-      },
-    });
+      const effectiveDate = new Date(data.startDate);
 
-    let newTenant;
-    if (data.newTenantId) {
-      const currentProperty = await this.findOne(propertyId, tenantId);
-      newTenant = await this.prisma.propertyRelation.create({
+      await tx.propertyRelation.updateMany({
+        where: { propertyId, status: 'ACTIVE' },
+        data: { status: 'HISTORIC', endDate: effectiveDate },
+      });
+
+      const newOwnerRel = await tx.propertyRelation.create({
         data: {
           propertyId,
-          userId: data.newTenantId,
-          relationType: 'TENANT',
-          startDate: new Date(data.startDate),
+          userId: newOwner.id,
+          relationType: 'OWNER',
+          startDate: effectiveDate,
           status: 'ACTIVE',
-          contractNumber: currentProperty?.propertyCode,
         },
       });
-    }
 
-    return { newOwner, newTenant };
+      let newTenantRel = null;
+      if (newTenantUser) {
+        newTenantRel = await tx.propertyRelation.create({
+          data: {
+            propertyId,
+            userId: newTenantUser.id,
+            relationType: 'TENANT',
+            startDate: effectiveDate,
+            status: 'ACTIVE',
+            contractNumber: property.propertyCode,
+          },
+        });
+      }
+
+      return { newOwner: newOwnerRel, newTenant: newTenantRel };
+    });
   }
 }

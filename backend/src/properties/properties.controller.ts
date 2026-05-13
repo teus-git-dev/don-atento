@@ -22,6 +22,7 @@ import { PropertiesService } from './properties.service';
 import { BulkImportService } from './bulk-import.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { TransferPropertyDto } from './dto/transfer-property.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -130,8 +131,7 @@ export class PropertiesController {
   async transfer(
     @Req() req: any,
     @Param('id') id: string,
-    @Body()
-    data: { newOwnerId: string; newTenantId?: string; startDate: string },
+    @Body() data: TransferPropertyDto,
   ) {
     return this.propertiesService.transferProperty(id, req['tenantId'], data);
   }
