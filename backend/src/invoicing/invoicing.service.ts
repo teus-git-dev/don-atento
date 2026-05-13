@@ -190,20 +190,19 @@ export class InvoicingService {
       where: { id: tenantId },
     });
 
-    let thirdParty = await this.prisma.accountingThirdParty.findFirst({
-      where: { tenantId, AND: [{ documentNumber: data.clientId }] },
+    const thirdParty = await this.prisma.accountingThirdParty.findFirst({
+      where: { tenantId, documentNumber: data.clientId },
     });
-    // 3.b If thirdParty not found, use inline data without FK reference (to avoid FK violation)
-    // In production, the ThirdParty record must exist before invoicing.
-    // Block D of the remediation will replace this fallback with a hard reject.
-    const useInlineThirdParty = !thirdParty || !thirdParty.id;
+    // The third party MUST exist in this tenant's catalog before invoicing.
+    // Schema requires Invoice.thirdPartyId (non-nullable FK), and emitting a
+    // tax document with fabricated client data is a compliance risk —
+    // documents would either be rejected by DIAN or, worse, persisted with
+    // unattributable acquirer info. Tenants needing "Consumidor Final" must
+    // register a real AccountingThirdParty (NIT 222222222222, doc type 13).
     if (!thirdParty) {
-      thirdParty = {
-        name: data.clientId || 'Consumidor Final',
-        documentNumber: data.clientId || '222222222222',
-        documentType: 'CC',
-        taxLevelCode: 'R-99-PN',
-      } as any;
+      throw new UnprocessableEntityException(
+        `Cliente con documento ${data.clientId} no está registrado en el catálogo de terceros. Regístrelo antes de facturar.`,
+      );
     }
 
     // 3. Process Lines and calculate totals
@@ -264,9 +263,7 @@ export class InvoicingService {
           subtotal: invoiceSubtotal,
           taxAmount: invoiceTaxAmount,
           total: invoiceTotal,
-          ...(thirdParty?.id && !useInlineThirdParty
-            ? { thirdPartyId: thirdParty.id }
-            : {}),
+          thirdPartyId: thirdParty.id,
           dianStatus: 'DRAFT',
           lines: {
             create: linesToCreate,

@@ -335,6 +335,39 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Resolved
 
+### [x] DIAN audit (2026-05-12) — Block D: reject thirdParty fabrication; require real ThirdParty record
+
+- **Resolved by**: Block D of DIAN remediation (this commit)
+- **What was wrong**:
+  - `createDraftInvoice` had a fallback that constructed an inline
+    `thirdParty` object with fabricated data (`name: data.clientId || 'Consumidor Final'`,
+    `documentNumber: data.clientId || '222222222222'`, hardcoded
+    `documentType: 'CC'` and `taxLevelCode: 'R-99-PN'`) when the lookup
+    returned null. The Invoice XML was built with these fabricated fields.
+  - Latent bug: `Invoice.thirdPartyId` is `String` (non-nullable) in the
+    schema. The `...(thirdParty?.id && !useInlineThirdParty ? {...} : {})`
+    expression omitted `thirdPartyId` when fabricated, so the transaction
+    would have crashed on `tx.invoice.create` with a Prisma validation
+    error. The fallback path **could never have succeeded**.
+  - Compliance risk: emitting tax documents (UBL Invoice) with fabricated
+    acquirer data is rejected by DIAN at best, or worse, persisted with
+    unattributable client info that tenant auditors cannot reconcile.
+- **What was applied**:
+  - Removed the inline fabrication entirely. `findFirst` is now followed
+    by `if (!thirdParty) throw new UnprocessableEntityException(...)`.
+  - `Invoice.create` now always passes `thirdPartyId: thirdParty.id`
+    (the `useInlineThirdParty` conditional is gone).
+  - Cleaned up the `AND: [{ documentNumber }]` wrapper on the `findFirst`
+    where (was a no-op).
+- **For "Consumidor Final" support**: tenants need to register a real
+  `AccountingThirdParty` row (NIT 222222222222, document type 13 per DIAN
+  spec) once and reference it. The service no longer fabricates this
+  case to prevent silent compliance drift.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 114/114 across 16 suites
+  - `npm run build` clean
+
 ### [x] DIAN audit (2026-05-12) — Block C: BillingItem.code uniqueness scoped per tenant
 
 - **Resolved by**: Block C of DIAN remediation (this commit)
