@@ -53,7 +53,7 @@ model AccountingThirdParty {
 model BillingItem {
   id          String            @id @default(cuid())
   tenantId    String
-  code        String            @unique
+  code        String
   name        String
   basePrice   Decimal?
   taxRate     Decimal           @default(0)
@@ -63,6 +63,8 @@ model BillingItem {
   account     AccountingAccount @relation(fields: [accountId], references: [id])
   tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   InvoiceLine InvoiceLine[]
+
+  @@unique([tenantId, code])
 }
 
 model BrandBrain {

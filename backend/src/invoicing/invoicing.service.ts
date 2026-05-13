@@ -102,14 +102,13 @@ export class InvoicingService {
   }
 
   async createBillingItem(tenantId: string, data: CreateBillingItemDto) {
-    // Note: BillingItem.code is currently `@unique` globally (schema). Block C
-    // of the remediation will convert this to `@@unique([tenantId, code])` so
-    // the lookup below can be tenant-scoped. Until then, accept the constraint.
+    // BillingItem.code is unique per tenant (schema: @@unique([tenantId, code])).
+    // Cross-tenant code reuse is allowed; same-tenant duplicates are rejected.
     const existing = await this.prisma.billingItem.findUnique({
-      where: { code: data.code },
+      where: { tenantId_code: { tenantId, code: data.code } },
     });
 
-    if (existing && existing.tenantId === tenantId) {
+    if (existing) {
       throw new UnprocessableEntityException(
         'Ya existe un concepto de cobro con este código.',
       );
