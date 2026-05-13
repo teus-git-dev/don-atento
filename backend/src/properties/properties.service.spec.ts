@@ -14,33 +14,40 @@ const makeProperty = (overrides = {}) => ({
   ...overrides,
 });
 
-// `any` return type is required because makePrismaMock is recursively
-// referenced from $transaction's callback below — TS can't infer otherwise.
-const makePrismaMock = (): any => ({
-  property: {
-    create: jest.fn().mockResolvedValue(makeProperty()),
-    findMany: jest.fn().mockResolvedValue([makeProperty()]),
-    count: jest.fn().mockResolvedValue(1),
-    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-    findFirst: jest.fn().mockResolvedValue(makeProperty()),
-  },
-  user: {
-    findFirst: jest.fn().mockResolvedValue(null),
-    create: jest.fn().mockResolvedValue({ id: 'user-1' }),
-    update: jest.fn().mockResolvedValue({ id: 'user-1' }),
-  },
-  propertyRelation: {
-    create: jest.fn().mockResolvedValue({ id: 'rel-1' }),
-    findFirst: jest.fn().mockResolvedValue(null),
-    update: jest.fn().mockResolvedValue({ id: 'rel-1' }),
-  },
-  inventoryTemplate: {
-    findUnique: jest.fn().mockResolvedValue(null),
-  },
-  $transaction: jest.fn(async (cb: (tx: any) => Promise<any>) => {
-    return cb(makePrismaMock());
-  }),
-});
+// `any` return type is required because $transaction's callback receives a
+// reference to the mock itself — TS can't easily infer the recursive shape.
+const makePrismaMock = (): any => {
+  const mock: any = {
+    property: {
+      create: jest.fn().mockResolvedValue(makeProperty()),
+      findMany: jest.fn().mockResolvedValue([makeProperty()]),
+      count: jest.fn().mockResolvedValue(1),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findFirst: jest.fn().mockResolvedValue(makeProperty()),
+    },
+    user: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'user-1' }),
+      update: jest.fn().mockResolvedValue({ id: 'user-1' }),
+    },
+    propertyRelation: {
+      create: jest.fn().mockResolvedValue({ id: 'rel-1' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue({ id: 'rel-1' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    inventoryTemplate: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+  };
+  // Pass the SAME mock instance into the callback so assertions on
+  // mock.X.method capture both direct and transactional calls.
+  mock.$transaction = jest.fn(async (cb: (tx: any) => Promise<any>) =>
+    cb(mock),
+  );
+  return mock;
+};
 
 describe('PropertiesService', () => {
   let service: PropertiesService;

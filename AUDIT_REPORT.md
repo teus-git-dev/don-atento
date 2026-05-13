@@ -305,6 +305,65 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] properties Block D (2026-05-13) — RBAC + update() transaction + DRY + limit caps + bulk size check + dead-route cleanup
+
+- **Resolved by**: this commit
+- **What was wrong** (multiple ALTOs from the properties audit):
+  - `RolesGuard` applied class-level but ZERO `@Roles()` decorators on
+    any handler → RBAC was a no-op; any auth'd user (AGENT, TECHNICIAN,
+    OWNER, TENANT_USER) could create/update/transfer/bulk-import/delete
+    properties.
+  - `update()` did 4-6 separate Prisma writes outside any transaction
+    → partial-failure data corruption.
+  - `findOneDetail` was a verbatim duplicate of `findOne` — code
+    duplication + drift risk.
+  - `findAllByTenant` had no upper bound on `?limit=` → `?limit=999999`
+    returned the whole tenant; combined with Block A's User-leak fix
+    this was still a perf DoS vector.
+  - `bulkImport` accepted `data: any[]` with no array-validation and no
+    size cap → DoS via 100k items per request.
+  - Two dead routes `@Post('../inmuebles')` and `@Post('../propietarios')`
+    with non-standard `..` path notation. The second returned a mock
+    "Simulated" response. Both unreachable from any normalized client.
+- **What was applied**:
+  - Controller rewrite with `@Roles()` per-handler:
+    - Reads (`findAll`, `findOne`, `search/:code`):
+      `@Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')`.
+    - Writes (`create`, `bulk`, `:id/status`, `:id`, `:id/transfer`):
+      `@Roles('ADMIN_TENANT', 'SUPERADMIN')`.
+  - Two new server-side constants in the controller:
+    `MAX_BULK_IMPORT_ITEMS = 100` and `MAX_PAGE_LIMIT = 100`. Bulk
+    handler throws `BadRequestException` on overflow; findAll handler
+    clamps the requested limit.
+  - Dead routes `createInmueble` (Post('../inmuebles')) and
+    `createPropietario` (Post('../propietarios') simulated mock) removed
+    entirely. The `inmuebles` alias was unreachable due to the `..`
+    path notation; the propietarios endpoint was a hardcoded
+    `{ message: 'Simulated' }` response with no persistence.
+  - `findAllByTenant` (service-level): defensive `Math.min/Math.max`
+    on `page` and `limit`; added tie-break `{ id: 'asc' }` to the
+    `orderBy` for deterministic pagination across equal `createdAt`
+    values.
+  - `findOneDetail` removed; only the controller called it, switched
+    to `findOne`. `USER_PUBLIC_SELECT` doc comment updated.
+  - `update()` rewritten: full body wrapped in
+    `prisma.$transaction(async (tx) => {...})`. All ~6 writes
+    (property updateMany, owner upsert, relation upsert, optional
+    tenant contractNumber update) now atomic.
+  - Test spec mock `$transaction` updated to pass the SAME mock
+    instance into the callback (so existing assertions on
+    `prismaMock.property.updateMany` continue to capture transactional
+    calls). Added `propertyRelation.updateMany` and
+    `inventoryTemplate.findFirst` to the mock surface to keep up with
+    earlier blocks.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+- **Note re Block E scope**: dead-route cleanup was originally
+  scheduled for Block E but consolidated here because removing them
+  was part of the controller rewrite that also added `@Roles()`.
+  Block E now scopes down to the contractNumber bug + DTO hardening.
+
 ### [x] properties Block C (2026-05-13) — temp-password refactor: high-entropy + mustChangePassword
 
 - **Resolved by**: this commit

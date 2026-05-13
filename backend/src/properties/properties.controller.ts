@@ -1,22 +1,22 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Get,
-  Query,
-  Post,
-  Body,
-  Patch,
   Param,
-  UseGuards,
+  Patch,
+  Post,
+  Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
+  ApiBearerAuth,
+  ApiBody,
   ApiOperation,
-  ApiResponse,
   ApiParam,
   ApiQuery,
-  ApiBody,
-  ApiBearerAuth,
+  ApiTags,
 } from '@nestjs/swagger';
 import { PropertiesService } from './properties.service';
 import { BulkImportService } from './bulk-import.service';
@@ -28,6 +28,19 @@ import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
 import { Roles } from '../auth/roles.decorator';
 
+/**
+ * Server-side cap on synchronous bulk-import payload size. Past this the
+ * caller should batch via a background job (out of v1 scope) — anything
+ * larger creates a runaway transaction storm that locks the connection pool.
+ */
+const MAX_BULK_IMPORT_ITEMS = 100;
+
+/**
+ * Server-side cap on `?limit=` for paginated property list. Prevents a
+ * single request from exfiltrating the whole tenant or DoS-ing the DB.
+ */
+const MAX_PAGE_LIMIT = 100;
+
 @ApiTags('properties')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
@@ -38,31 +51,20 @@ export class PropertiesController {
     private readonly bulkImportService: BulkImportService,
   ) {}
 
-  @Post('../inmuebles')
-  @ApiOperation({
-    summary: 'Alias para creación de inmueble (Plug & Play Connect)',
-  })
-  @ApiResponse({ status: 201, description: 'Inmueble creado con éxito' })
-  async createInmueble(@Req() req: any, @Body() data: CreatePropertyDto) {
-    data.tenantId = req['tenantId'];
-    return this.propertiesService.create(data);
-  }
-
-  @Post('../propietarios')
-  @ApiOperation({ summary: 'Alias para registro de propietarios (Simulado)' })
-  async createPropietario(@Body() data: any) {
-    return { message: 'Propietario endpoint reached (Simulated)', data };
-  }
-
   @Get()
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Obtener todos los inmuebles de un tenant' })
   async findAll(
     @Req() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 10;
+    const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
+    const requestedLimit = limit ? parseInt(limit, 10) : 10;
+    const limitNum = Math.min(
+      Math.max(1, isNaN(requestedLimit) ? 10 : requestedLimit),
+      MAX_PAGE_LIMIT,
+    );
     return this.propertiesService.findAllByTenant(
       req['tenantId'],
       pageNum,
@@ -71,12 +73,14 @@ export class PropertiesController {
   }
 
   @Get(':id')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Obtener detalle de un inmueble por UUID' })
   async findOne(@Req() req: any, @Param('id') id: string) {
-    return this.propertiesService.findOneDetail(id, req['tenantId']);
+    return this.propertiesService.findOne(id, req['tenantId']);
   }
 
   @Get('search/:code')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Buscar inmueble por ID Inmueble (propertyCode)' })
   @ApiQuery({ name: 'tenantId', required: true })
   @ApiParam({
@@ -88,6 +92,7 @@ export class PropertiesController {
   }
 
   @Post()
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear nuevo inmueble' })
   async create(@Req() req: any, @Body() data: CreatePropertyDto) {
     data.tenantId = req['tenantId'];
@@ -95,16 +100,28 @@ export class PropertiesController {
   }
 
   @Post('bulk')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Importación masiva con Smart Mapper' })
   @ApiBody({
     type: [CreatePropertyDto],
     description: 'Array de objetos de propiedad extraídos de CSV/Excel',
   })
   async bulkImport(@Req() req: any, @Body() data: any[]) {
+    if (!Array.isArray(data)) {
+      throw new BadRequestException(
+        'El body debe ser un array de propiedades.',
+      );
+    }
+    if (data.length > MAX_BULK_IMPORT_ITEMS) {
+      throw new BadRequestException(
+        `Importación masiva limitada a ${MAX_BULK_IMPORT_ITEMS} items por request. Use un job en background para volúmenes mayores.`,
+      );
+    }
     return this.bulkImportService.processImport(req['tenantId'], data);
   }
 
   @Patch(':id/status')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Activar/Desactivar inmueble' })
   async patchStatus(
     @Req() req: any,
@@ -115,6 +132,7 @@ export class PropertiesController {
   }
 
   @Patch(':id')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Actualizar datos de un inmueble' })
   async update(
     @Req() req: any,
@@ -125,6 +143,7 @@ export class PropertiesController {
   }
 
   @Post(':id/transfer')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Realizar cesión (transferencia) de titularidad o arrendatario',
   })

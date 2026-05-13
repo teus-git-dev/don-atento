@@ -30,7 +30,7 @@ function randomEmailSuffix(): string {
 /**
  * Whitelist of User fields safe to expose in property responses. Excludes
  * `passwordHash`, `mustChangePassword`, `isActive`, and any internal flags.
- * Used across findOne / findOneDetail / findByPropertyCode includes.
+ * Used across findOne / findByPropertyCode includes.
  */
 const USER_PUBLIC_SELECT = {
   id: true,
@@ -326,7 +326,11 @@ export class PropertiesService {
     page: number = 1,
     limit: number = 10,
   ) {
-    const skip = (page - 1) * limit;
+    // Defense in depth: controller already caps `limit`, but enforce here too
+    // so internal callers can't bypass the cap.
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const safePage = Math.max(1, page);
+    const skip = (safePage - 1) * safeLimit;
 
     try {
       const [data, totalRecords] = await Promise.all([
@@ -347,8 +351,8 @@ export class PropertiesService {
             },
           },
           skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
+          take: safeLimit,
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         }),
         this.prisma.property.count({ where: { tenantId } }),
       ]);
@@ -356,8 +360,8 @@ export class PropertiesService {
       return {
         data,
         totalRecords,
-        totalPages: Math.ceil(totalRecords / limit),
-        currentPage: page,
+        totalPages: Math.ceil(totalRecords / safeLimit),
+        currentPage: safePage,
       };
     } catch (err) {
       this.logger.error('[PropertiesService] findAllByTenant error:', err);
@@ -394,137 +398,130 @@ export class PropertiesService {
     });
   }
 
-  async findOneDetail(id: string, tenantId: string) {
-    return this.prisma.property.findFirst({
-      where: { id, tenantId },
-      include: {
-        relations: {
-          include: { user: { select: USER_PUBLIC_SELECT } },
-        },
-      },
-    });
-  }
-
   async update(id: string, tenantId: string, data: any) {
     const { ownerInfo, tenantInfo, attachments, ...propertyFields } = data;
 
-    const property = await this.prisma.property.updateMany({
-      where: { id, tenantId },
-      data: {
-        title: propertyFields.title,
-        propertyType: propertyFields.propertyType,
-        address: propertyFields.address,
-        city: propertyFields.city,
-        department: propertyFields.department,
-        country: propertyFields.country,
-        areaM2: propertyFields.areaM2,
-        rooms: propertyFields.rooms,
-        bathrooms: propertyFields.bathrooms,
-        status: propertyFields.status,
-        propertyCode: propertyFields.propertyCode,
-        isVip: propertyFields.isVip,
-        workflowId: propertyFields.workflowId,
-        rentAmount: propertyFields.rentAmount,
-        adminAmount: propertyFields.adminAmount,
-        taxAmount: propertyFields.taxAmount,
-        managementName: propertyFields.managementName,
-        managementNit: propertyFields.managementNit,
-        managementEmail: propertyFields.managementEmail,
-        managementPhone: propertyFields.managementPhone,
-        splatUrl: propertyFields.splatUrl,
-        visionVideoUrl: propertyFields.visionVideoUrl,
-        attachments: attachments || [],
-        visionAnalysis: propertyFields.visionAnalysis,
-        latitude: propertyFields.latitude,
-        longitude: propertyFields.longitude,
-      },
-    });
-
-    if (ownerInfo && ownerInfo.name) {
-      let ownerUser = await this.prisma.user.findFirst({
-        where: {
-          tenantId: tenantId,
-          OR: [
-            { email: ownerInfo.email || 'pending' },
-            { phone: ownerInfo.phone },
-          ],
+    // All writes wrapped in a single $transaction: property update + (if
+    // ownerInfo) user upsert + relation upsert + (if propertyCode) tenant
+    // relation update. A failure mid-way rolls back the whole set.
+    return this.prisma.$transaction(async (tx) => {
+      const property = await tx.property.updateMany({
+        where: { id, tenantId },
+        data: {
+          title: propertyFields.title,
+          propertyType: propertyFields.propertyType,
+          address: propertyFields.address,
+          city: propertyFields.city,
+          department: propertyFields.department,
+          country: propertyFields.country,
+          areaM2: propertyFields.areaM2,
+          rooms: propertyFields.rooms,
+          bathrooms: propertyFields.bathrooms,
+          status: propertyFields.status,
+          propertyCode: propertyFields.propertyCode,
+          isVip: propertyFields.isVip,
+          workflowId: propertyFields.workflowId,
+          rentAmount: propertyFields.rentAmount,
+          adminAmount: propertyFields.adminAmount,
+          taxAmount: propertyFields.taxAmount,
+          managementName: propertyFields.managementName,
+          managementNit: propertyFields.managementNit,
+          managementEmail: propertyFields.managementEmail,
+          managementPhone: propertyFields.managementPhone,
+          splatUrl: propertyFields.splatUrl,
+          visionVideoUrl: propertyFields.visionVideoUrl,
+          attachments: attachments || [],
+          visionAnalysis: propertyFields.visionAnalysis,
+          latitude: propertyFields.latitude,
+          longitude: propertyFields.longitude,
         },
       });
 
-      if (!ownerUser) {
-        // High-entropy temp password placeholder; user must complete a
-        // password setup flow before logging in (mustChangePassword: true).
-        const passwordHash = await bcrypt.hash(generateTempPassword(), 10);
-
-        ownerUser = await this.prisma.user.create({
-          data: {
+      if (ownerInfo && ownerInfo.name) {
+        let ownerUser = await tx.user.findFirst({
+          where: {
             tenantId: tenantId,
-            email: ownerInfo.email || `owner_${randomEmailSuffix()}@teus.com`,
-            passwordHash,
-            mustChangePassword: true,
-            firstName: ownerInfo.name,
-            lastName: ownerInfo.lastName || 'Propietario',
-            role: 'OWNER',
-            phone: ownerInfo.phone,
-            personType: ownerInfo.personType,
-            isTaxDeclarant: ownerInfo.isTaxDeclarant,
-            regimeType: ownerInfo.regimeType,
-            applyReteIva: ownerInfo.applyReteIva,
-            applyReteFuente: ownerInfo.applyReteFuente,
-            applyReteIca: ownerInfo.applyReteIca,
+            OR: [
+              { email: ownerInfo.email || 'pending' },
+              { phone: ownerInfo.phone },
+            ],
           },
         });
-      } else {
-        await this.prisma.user.update({
-          where: { id: ownerUser.id },
-          data: {
-            firstName: ownerInfo.name,
-            personType: ownerInfo.personType,
-            isTaxDeclarant: ownerInfo.isTaxDeclarant,
-            regimeType: ownerInfo.regimeType,
-            applyReteIva: ownerInfo.applyReteIva,
-            applyReteFuente: ownerInfo.applyReteFuente,
-            applyReteIca: ownerInfo.applyReteIca,
-          },
+
+        if (!ownerUser) {
+          const passwordHash = await bcrypt.hash(generateTempPassword(), 10);
+
+          ownerUser = await tx.user.create({
+            data: {
+              tenantId: tenantId,
+              email:
+                ownerInfo.email || `owner_${randomEmailSuffix()}@teus.com`,
+              passwordHash,
+              mustChangePassword: true,
+              firstName: ownerInfo.name,
+              lastName: ownerInfo.lastName || 'Propietario',
+              role: 'OWNER',
+              phone: ownerInfo.phone,
+              personType: ownerInfo.personType,
+              isTaxDeclarant: ownerInfo.isTaxDeclarant,
+              regimeType: ownerInfo.regimeType,
+              applyReteIva: ownerInfo.applyReteIva,
+              applyReteFuente: ownerInfo.applyReteFuente,
+              applyReteIca: ownerInfo.applyReteIca,
+            },
+          });
+        } else {
+          await tx.user.update({
+            where: { id: ownerUser.id },
+            data: {
+              firstName: ownerInfo.name,
+              personType: ownerInfo.personType,
+              isTaxDeclarant: ownerInfo.isTaxDeclarant,
+              regimeType: ownerInfo.regimeType,
+              applyReteIva: ownerInfo.applyReteIva,
+              applyReteFuente: ownerInfo.applyReteFuente,
+              applyReteIca: ownerInfo.applyReteIca,
+            },
+          });
+        }
+
+        const existingRel = await tx.propertyRelation.findFirst({
+          where: { propertyId: id, relationType: 'OWNER' },
         });
+
+        if (existingRel) {
+          await tx.propertyRelation.update({
+            where: { id: existingRel.id },
+            data: { userId: ownerUser.id },
+          });
+        } else {
+          await tx.propertyRelation.create({
+            data: {
+              propertyId: id,
+              userId: ownerUser.id,
+              relationType: 'OWNER',
+              startDate: new Date(),
+              status: 'ACTIVE',
+            },
+          });
+        }
       }
 
-      const existingRel = await this.prisma.propertyRelation.findFirst({
-        where: { propertyId: id, relationType: 'OWNER' },
-      });
+      if (propertyFields.propertyCode) {
+        const activeTenantRel = await tx.propertyRelation.findFirst({
+          where: { propertyId: id, relationType: 'TENANT', status: 'ACTIVE' },
+        });
 
-      if (existingRel) {
-        await this.prisma.propertyRelation.update({
-          where: { id: existingRel.id },
-          data: { userId: ownerUser.id },
-        });
-      } else {
-        await this.prisma.propertyRelation.create({
-          data: {
-            propertyId: id,
-            userId: ownerUser.id,
-            relationType: 'OWNER',
-            startDate: new Date(),
-            status: 'ACTIVE',
-          },
-        });
+        if (activeTenantRel) {
+          await tx.propertyRelation.update({
+            where: { id: activeTenantRel.id },
+            data: { contractNumber: propertyFields.propertyCode },
+          });
+        }
       }
-    }
 
-    if (propertyFields.propertyCode) {
-      const activeTenantRel = await this.prisma.propertyRelation.findFirst({
-        where: { propertyId: id, relationType: 'TENANT', status: 'ACTIVE' },
-      });
-
-      if (activeTenantRel) {
-        await this.prisma.propertyRelation.update({
-          where: { id: activeTenantRel.id },
-          data: { contractNumber: propertyFields.propertyCode },
-        });
-      }
-    }
-
-    return property;
+      return property;
+    });
   }
 
   async transferProperty(
