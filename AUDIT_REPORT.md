@@ -305,6 +305,60 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] tickets Block A (2026-05-13) — passwordHash leak fix (USER_PUBLIC_SELECT) + RBAC dormante (@Roles per-handler)
+
+- **Resolved by**: this commit (first block of tickets remediation)
+- **What was wrong** (2 CRÍTICOs from the tickets audit):
+  - `tickets.service.ts` had **six methods** with raw `user: true` /
+    `reportedByUser: true` / `assignedTechnician: true` /
+    `completedByUser: true` / `agent: true` / `responsible: true`
+    includes that returned the full `User` record — including
+    `passwordHash`, `refreshTokenHash`, `mustChangePassword` and
+    other internal flags. Every `GET /tickets`, `GET /tickets/:id`,
+    `GET /tickets/technician/:id`, the `findAllByOwner` query, plus
+    the `transitionState` update response, **and** the
+    `notifyRoleAssignment` user lookup were exfiltrating credential
+    hashes to any authenticated caller. Same root pattern as
+    properties pre-Block-A (494b2dc).
+  - `tickets.controller.ts` had `@UseGuards(JwtAuthGuard, RolesGuard,
+    TenantGuard)` at class level but **zero** `@Roles()` decorators
+    on its 9 handlers. `RolesGuard` active without metadata = no
+    authorization enforcement. Anyone authenticated (incl.
+    `MAINTENANCE`, `TENANT_USER`) could create, transition, resolve,
+    complete-task, list-all, list-by-technician, and upload. Same
+    anti-pattern as properties pre-Block-D (5e5e3a0).
+- **What was applied**:
+  - `tickets.service.ts`: introduced
+    `USER_PUBLIC_SELECT = { id, firstName, lastName, email, phone,
+    role, whatsappId }` constant mirroring properties.
+  - Replaced every `user: true` / `reportedByUser: true` /
+    `assignedTechnician: true` / `completedByUser: true` /
+    `agent: true` / `responsible: true` with
+    `{ select: USER_PUBLIC_SELECT }` across `createTicket`,
+    `transitionState`, `completeStateTask` (initial + post-fallback
+    fetch), `findAllByTenant`, `findOne`, `findAllByTechnician`,
+    `findAllByOwner`, and `notifyRoleAssignment`.
+  - `tickets.controller.ts`: added `@Roles()` per-handler:
+    - Reads (`@Get`, `@Get('technician/:id')`, `@Get(':id')`) →
+      `'AGENT','ADMIN_TENANT','SUPERADMIN','OWNER','MAINTENANCE'`
+      (technician route narrowed to AGENT/ADMIN/SUPER/MAINTENANCE).
+    - Writes (`@Post`, `@Post('upload')`,
+      `@Patch(':id/status')`, `@Patch(':id/resolve')`,
+      `@Patch(':id/complete-task')`) → `'AGENT','ADMIN_TENANT',
+      'SUPERADMIN','MAINTENANCE'` (OWNER on `@Post()` because the
+      reporter can be an owner reporting via dashboard).
+    - Survey endpoints stay `@Public()` — handled in Block D.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npx jest tickets` 23/23 across 2 suites
+  - `npm run build` clean
+- **Carryover**: cross-tenant scoping for `findAllByTechnician`,
+  `findAllByOwner`, `findLatestByPhone`, and the auto-default-workflow
+  `findFirst` is Block B. Identity-spoofing via `userId` in body
+  (`transition`/`completeTask`) is Block C. Survey hardening is
+  Block D. DTO hardening + Logger + addAttachment URL whitelist +
+  cleanup is Block E.
+
 ### [x] properties Block E (2026-05-13) — contractNumber-bug fix + DTO hardening
 
 - **Resolved by**: this commit (final block of properties remediation)

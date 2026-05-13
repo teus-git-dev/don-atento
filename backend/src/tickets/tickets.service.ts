@@ -7,6 +7,21 @@ import { EmailService } from '../cognitive/email.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { SlaMatrixService } from './sla-matrix.service';
 
+/**
+ * Whitelist of User fields safe to expose in ticket responses. Excludes
+ * `passwordHash`, `refreshTokenHash`, `mustChangePassword` and any internal
+ * flag. Mirrors the constant in PropertiesService for consistency.
+ */
+const USER_PUBLIC_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  role: true,
+  whatsappId: true,
+} as const;
+
 @Injectable()
 export class TicketsService {
   constructor(
@@ -88,13 +103,13 @@ export class TicketsService {
           property: {
             include: {
               relations: {
-                include: { user: true },
+                include: { user: { select: USER_PUBLIC_SELECT } },
               },
             },
           },
-          assignedTechnician: true,
+          assignedTechnician: { select: USER_PUBLIC_SELECT },
           currentState: true,
-          reportedByUser: true,
+          reportedByUser: { select: USER_PUBLIC_SELECT },
         },
       });
 
@@ -223,8 +238,8 @@ export class TicketsService {
       include: {
         currentState: true,
         property: true,
-        assignedTechnician: true,
-        reportedByUser: true,
+        assignedTechnician: { select: USER_PUBLIC_SELECT },
+        reportedByUser: { select: USER_PUBLIC_SELECT },
         tenant: true,
       },
     });
@@ -286,6 +301,7 @@ export class TicketsService {
         tenantId: ticket.tenantId,
         role: state.assignedRole,
       },
+      select: USER_PUBLIC_SELECT,
     });
 
     const message = `Don Atento Tareas: Tienes un nuevo ticket en estado "${state.name}" para la propiedad ${ticket.property?.title || 'sin asignar'}. Título: ${ticket.title}`;
@@ -382,7 +398,7 @@ export class TicketsService {
       where: { id: ticketId, tenantId },
       include: {
         currentState: true,
-        reportedByUser: true,
+        reportedByUser: { select: USER_PUBLIC_SELECT },
         workflow: { include: { states: { orderBy: { order: 'asc' } } } },
       },
     });
@@ -407,7 +423,7 @@ export class TicketsService {
           where: { id: ticketId, tenantId },
           include: {
             currentState: true,
-            reportedByUser: true,
+            reportedByUser: { select: USER_PUBLIC_SELECT },
             workflow: { include: { states: { orderBy: { order: 'asc' } } } },
           },
         });
@@ -650,12 +666,16 @@ export class TicketsService {
       include: {
         property: {
           include: {
-            relations: { include: { user: true } },
-            assignments: { include: { agent: true } },
+            relations: {
+              include: { user: { select: USER_PUBLIC_SELECT } },
+            },
+            assignments: {
+              include: { agent: { select: USER_PUBLIC_SELECT } },
+            },
           },
         },
-        reportedByUser: true,
-        assignedTechnician: true,
+        reportedByUser: { select: USER_PUBLIC_SELECT },
+        assignedTechnician: { select: USER_PUBLIC_SELECT },
         currentState: true,
         interactions: {
           orderBy: { sentAt: 'desc' },
@@ -663,8 +683,10 @@ export class TicketsService {
         },
         stateLogs: {
           include: {
-            state: { include: { responsible: true } },
-            completedByUser: true,
+            state: {
+              include: { responsible: { select: USER_PUBLIC_SELECT } },
+            },
+            completedByUser: { select: USER_PUBLIC_SELECT },
           },
           orderBy: { startedAt: 'desc' },
         },
@@ -679,20 +701,26 @@ export class TicketsService {
       include: {
         property: {
           include: {
-            relations: { include: { user: true } },
-            assignments: { include: { agent: true } },
+            relations: {
+              include: { user: { select: USER_PUBLIC_SELECT } },
+            },
+            assignments: {
+              include: { agent: { select: USER_PUBLIC_SELECT } },
+            },
           },
         },
-        reportedByUser: true,
-        assignedTechnician: true,
+        reportedByUser: { select: USER_PUBLIC_SELECT },
+        assignedTechnician: { select: USER_PUBLIC_SELECT },
         currentState: true,
         workflow: {
           include: { states: { orderBy: { order: 'asc' } } },
         },
         stateLogs: {
           include: {
-            state: { include: { responsible: true } },
-            completedByUser: true,
+            state: {
+              include: { responsible: { select: USER_PUBLIC_SELECT } },
+            },
+            completedByUser: { select: USER_PUBLIC_SELECT },
           },
           orderBy: { startedAt: 'desc' },
         },
@@ -706,15 +734,21 @@ export class TicketsService {
       include: {
         property: {
           include: {
-            relations: { include: { user: true } },
-            assignments: { include: { agent: true } },
+            relations: {
+              include: { user: { select: USER_PUBLIC_SELECT } },
+            },
+            assignments: {
+              include: { agent: { select: USER_PUBLIC_SELECT } },
+            },
           },
         },
         currentState: true,
         stateLogs: {
           include: {
-            state: { include: { responsible: true } },
-            completedByUser: true,
+            state: {
+              include: { responsible: { select: USER_PUBLIC_SELECT } },
+            },
+            completedByUser: { select: USER_PUBLIC_SELECT },
           },
           orderBy: { startedAt: 'desc' },
         },
@@ -739,12 +773,16 @@ export class TicketsService {
       include: {
         property: {
           include: {
-            relations: { include: { user: true } },
-            assignments: { include: { agent: true } },
+            relations: {
+              include: { user: { select: USER_PUBLIC_SELECT } },
+            },
+            assignments: {
+              include: { agent: { select: USER_PUBLIC_SELECT } },
+            },
           },
         },
-        reportedByUser: true,
-        assignedTechnician: true,
+        reportedByUser: { select: USER_PUBLIC_SELECT },
+        assignedTechnician: { select: USER_PUBLIC_SELECT },
         currentState: true,
         interactions: {
           orderBy: { sentAt: 'desc' },
@@ -752,8 +790,10 @@ export class TicketsService {
         },
         stateLogs: {
           include: {
-            state: { include: { responsible: true } },
-            completedByUser: true,
+            state: {
+              include: { responsible: { select: USER_PUBLIC_SELECT } },
+            },
+            completedByUser: { select: USER_PUBLIC_SELECT },
           },
           orderBy: { startedAt: 'desc' },
         },

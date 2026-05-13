@@ -22,6 +22,7 @@ import { CreateTicketDto } from './dto/create-ticket.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { Roles } from '../auth/roles.decorator';
 import { Public } from '../auth/public.decorator';
 import { FileUploadService } from '../storage/file-upload.service';
 
@@ -42,6 +43,7 @@ export class TicketsController {
   ) {}
 
   @Post()
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
   async create(@Req() req: any, @Body() createTicketDto: CreateTicketDto) {
     createTicketDto.tenantId = req['tenantId'];
@@ -49,6 +51,7 @@ export class TicketsController {
   }
 
   @Get()
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({
     summary: 'Listar todos los tickets por tenant o propietario',
   })
@@ -60,18 +63,21 @@ export class TicketsController {
   }
 
   @Get('technician/:id')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver tickets asignados a un técnico' })
   async findByTechnician(@Param('id') id: string) {
     return this.ticketsService.findAllByTechnician(id);
   }
 
   @Get(':id')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver detalle de un ticket' })
   async findOne(@Req() req: any, @Param('id') id: string) {
     return this.ticketsService.findOne(id, req['tenantId']);
   }
 
   @Patch(':id/status')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Transición de estado y cálculo automático de ANS' })
   async transition(
     @Req() req: any,
@@ -87,6 +93,7 @@ export class TicketsController {
   }
 
   @Patch(':id/resolve')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Cerrar ticket con motivo de resolución y firma' })
   async resolve(
     @Req() req: any,
@@ -106,6 +113,7 @@ export class TicketsController {
   }
 
   @Patch(':id/complete-task')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Completar tarea de estado actual y avanzar' })
   async completeTask(
     @Req() req: any,
@@ -126,6 +134,7 @@ export class TicketsController {
   }
 
   @Post('upload')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Sube un archivo de evidencia para un ticket' })
   @UseInterceptors(
     FileInterceptor('file', {
