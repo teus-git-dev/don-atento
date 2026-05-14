@@ -305,6 +305,72 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] crm Block C (2026-05-14) — temp password + tenant outbound + `$transaction` en approveContract
+
+- **Resolved by**: this commit (third block of crm remediation)
+- **What was wrong** (CRÍTICO #9 + 3 ALTOs):
+  - CRÍTICO #9: `passwordHash: 'PROSPECT_CONVERTED'` sentinel literal
+    en dos sitios (`convertToClient` y `approveContract`). Cuentas
+    creadas sin hash bcrypt válido — sentinel predecible; combinado
+    con un futuro bug de `bcrypt.compare` que aceptara hash
+    no-bcrypt, login universal sobre estas cuentas. Mismo
+    anti-patrón que properties Block C cerró con `generateTempPassword`
+    + bcrypt(12) + `mustChangePassword: true`.
+  - ALTO (email zombie): `email: prospect.email || \`client_${id}
+    @example.com\`` — fallback a email `@example.com` no real.
+    Cuenta sin recovery path; emails / reset-password rebotan.
+  - ALTO (tenant outbound): `whatsappService.sendMessage(waTarget,
+    waMessage)` en `sendWelcomeKit` sin `tenantId` — caía al fallback
+    `process.env.WHATSAPP_*` (env globales del cluster). El cliente
+    nuevo recibía mensaje desde el número global de Don Atento, no
+    del tenant; facturación / reputación al pool global.
+  - ALTO (atomicity): `approveContract` ejecutaba 5 writes secuenciales
+    (User, PropertyRelation, ContractRequest, Prospect, Property) sin
+    `$transaction`. Si cualquier write intermedio fallaba, el estado
+    legal-binding quedaba parcial (User creado pero PropertyRelation
+    falló, o Property ya RENTED pero ContractRequest no APPROVED, etc.).
+- **What was applied**:
+  - **Nuevo helper `generateTempPasswordHash()`** local al
+    `crm.service.ts` — `randomBytes(32).toString('hex')` +
+    `bcrypt.hash(plaintext, 12)`. Mirror del patrón en
+    PropertiesService; intencionalmente local porque las firmas
+    de helpers cross-module aún no se consolidaron en un
+    `auth-utils.ts` shared (carryover post-v1 de auth).
+  - **`convertToClient`**:
+    - `passwordHash: 'PROSPECT_CONVERTED'` → `passwordHash` desde
+      el helper + `mustChangePassword: true`.
+    - Rechaza con `BadRequestException` si `prospect.email` está
+      vacío (no más `@example.com` auto-generado). El agente debe
+      completar el email antes de la conversión.
+  - **`approveContract`**:
+    - Rechaza con `BadRequestException` si
+      `request.prospect.email` está vacío.
+    - Helper `generateTempPasswordHash()` reemplaza el sentinel.
+    - `User` create con `mustChangePassword: true`.
+    - **Todos los 5 writes** (User, PropertyRelation,
+      ContractRequest, Prospect, Property) envueltos en
+      `prisma.$transaction(async (tx) => {...})`. Si cualquier
+      write falla, todos rollback. El return de la transacción es
+      el `newUser`.
+    - Side effects (email + WhatsApp) quedan FUERA del tx — no
+      pueden rollback. Si fallan, el log lo captura pero el
+      contrato permanece aprobado (mejor que dejar el estado
+      financiero corrupto por un fallo de SMTP).
+  - **`sendWelcomeKit` firma extendida con `tenantId: string`**:
+    - `approveContract` lo pasa (`request.tenantId`).
+    - El `whatsappService.sendMessage(waTarget, waMessage,
+      tenantId)` recibe el tenant — alinea con whatsapp Block A
+      strict mode. Sin tenantId el outbound caía al pool global
+      del cluster; ahora va por el adapter del tenant (Baileys o
+      Meta credentials encrypted-at-rest).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: Radar hardening (rate limit, prompt sanitization,
+  LLM output validation) → Block D. Paginación, HTML escape, Logger,
+  scoreLead constants, tests → Block E.
+
 ### [x] crm Block B (2026-05-14) — DTOs + identity-spoofing fix definitivo
 
 - **Resolved by**: this commit (second block of crm remediation)

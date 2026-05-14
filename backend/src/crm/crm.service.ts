@@ -1,9 +1,12 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ProspectStatus,
@@ -19,6 +22,22 @@ import { EmailService } from '../cognitive/email.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 import { UsersService } from '../users/users.service';
+
+/**
+ * Generates a high-entropy temporary password for prospect→User
+ * conversion flows. Mirrors the helper in PropertiesService — same
+ * crypto.randomBytes(32) + bcrypt(12) pattern, paired with
+ * mustChangePassword=true so the new client must rotate at first
+ * login.
+ */
+async function generateTempPasswordHash(): Promise<{
+  plaintext: string;
+  hash: string;
+}> {
+  const plaintext = randomBytes(32).toString('hex');
+  const hash = await bcrypt.hash(plaintext, 12);
+  return { plaintext, hash };
+}
 
 @Injectable()
 export class CrmService {
@@ -310,63 +329,85 @@ export class CrmService {
     if (!request) {
       throw new NotFoundException('Contract request no encontrado.');
     }
+    if (!request.prospect.email) {
+      throw new BadRequestException(
+        'El prospect del contrato no tiene email; completa el dato antes de aprobar.',
+      );
+    }
 
-    // 1. Convert Prospect to User (Tenant)
-    const newUser = await this.prisma.user.create({
-      data: {
-        tenantId: request.tenantId,
-        email:
-          request.prospect.email ||
-          `client_${request.id.substring(0, 8)}@example.com`,
-        passwordHash: 'PROSPECT_CONVERTED',
-        firstName: request.prospect.firstName,
-        lastName: request.prospect.lastName || '',
-        phone: request.prospect.phone,
-        whatsappId: request.prospect.whatsappId,
-        role: UserRole.TENANT_USER,
-      },
+    // Block C: all 5 writes (User, PropertyRelation, ContractRequest,
+    // Prospect, Property) run inside a single Prisma interactive
+    // transaction. If any step fails, the legal-binding state stays
+    // consistent — previously a mid-sequence failure could leave the
+    // contract APPROVED, the property RENTED, but no PropertyRelation
+    // (or vice-versa). Side effects (email / WA) live outside the tx
+    // because they can't be rolled back; if they fail we log and
+    // continue.
+    const { hash: passwordHash } = await generateTempPasswordHash();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Convert Prospect to User (Tenant)
+      const newUser = await tx.user.create({
+        data: {
+          tenantId: request.tenantId,
+          email: request.prospect.email!,
+          passwordHash,
+          mustChangePassword: true,
+          firstName: request.prospect.firstName,
+          lastName: request.prospect.lastName || '',
+          phone: request.prospect.phone,
+          whatsappId: request.prospect.whatsappId,
+          role: UserRole.TENANT_USER,
+        },
+      });
+
+      // 2. Link User to Property
+      await tx.propertyRelation.create({
+        data: {
+          propertyId: request.propertyId,
+          userId: newUser.id,
+          relationType: RelationType.TENANT,
+          startDate: new Date(),
+          status: 'ACTIVE',
+        },
+      });
+
+      // 3. Update Statuses
+      await tx.contractRequest.update({
+        where: { id: requestId },
+        data: { status: 'APPROVED', approvedByUserId },
+      });
+      await tx.prospect.update({
+        where: { id: request.prospectId },
+        data: { status: ProspectStatus.CLOSED_WON },
+      });
+      await tx.property.update({
+        where: { id: request.propertyId },
+        data: { status: 'RENTED' },
+      });
+
+      return newUser;
     });
 
-    // 2. Link User to Property
-    await this.prisma.propertyRelation.create({
-      data: {
-        propertyId: request.propertyId,
-        userId: newUser.id,
-        relationType: RelationType.TENANT,
-        startDate: new Date(),
-        status: 'ACTIVE',
-      },
-    });
+    // 4. Side effects — outside the transaction. Pass the tenantId
+    // so WhatsappService routes via the tenant's Baileys/Meta config
+    // and not the cluster-wide env fallback (which would identify the
+    // outbound as Don Atento global rather than the actual tenant).
+    await this.sendWelcomeKit(
+      result.id,
+      request.propertyId,
+      approvedByUserId,
+      request.tenantId,
+    );
 
-    // 3. Update Statuses
-    await this.prisma.contractRequest.update({
-      where: { id: requestId },
-      data: {
-        status: 'APPROVED',
-        approvedByUserId,
-      },
-    });
-
-    await this.prisma.prospect.update({
-      where: { id: request.prospectId },
-      data: { status: ProspectStatus.CLOSED_WON },
-    });
-
-    await this.prisma.property.update({
-      where: { id: request.propertyId },
-      data: { status: 'RENTED' },
-    });
-
-    // 4. Send Welcome Kit (IA + Agent Branding)
-    await this.sendWelcomeKit(newUser.id, request.propertyId, approvedByUserId);
-
-    return { newUser, property: request.property };
+    return { newUser: result, property: request.property };
   }
 
   private async sendWelcomeKit(
     tenantUserId: string,
     propertyId: string,
     agentUserId: string,
+    tenantId: string,
   ) {
     const tenant = await this.prisma.user.findUnique({
       where: { id: tenantUserId },
@@ -412,11 +453,14 @@ export class CrmService {
     // 1. Send Email
     await this.emailService.sendEmail(tenant.email, welcomeSubject, emailBody);
 
-    // 2. Send WhatsApp
+    // 2. Send WhatsApp — Block C passes tenantId so the message is
+    // routed via the tenant's WhatsApp credentials (Baileys session
+    // or Meta token), not the cluster-wide env fallback that would
+    // identify the outbound as a Don Atento global number.
     if (tenant.phone || tenant.whatsappId) {
       const waTarget = tenant.whatsappId || tenant.phone!;
       const waMessage = `¡Hola ${tenant.firstName}! 🏠 Soy Don Atento. Tu contrato para ${property.title} ha sido aprobado. Tu asesor comercial ${agentName} y yo te damos la bienvenida oficial. ¡Estamos a un mensaje de distancia!`;
-      await this.whatsappService.sendMessage(waTarget, waMessage);
+      await this.whatsappService.sendMessage(waTarget, waMessage, tenantId);
     }
 
     // Log the welcome interaction
@@ -428,23 +472,31 @@ export class CrmService {
   }
 
   async convertToClient(prospectId: string, tenantId: string) {
-    // Legacy method - redirecting to newer flow or keeping for simple cases.
-    // Block A: findFirst with composite (id, tenantId) so a foreign
-    // prospectId cannot be used to create a User in the caller's
-    // tenant carrying the foreign prospect's email/phone (which the
-    // pre-Block-A flow happily did).
+    // Legacy simple conversion path. Block A added the
+    // findFirst({ id, tenantId }) tenant guard; Block C replaces the
+    // 'PROSPECT_CONVERTED' sentinel passwordHash with a CSPRNG temp
+    // password + bcrypt(12) + mustChangePassword=true, and rejects
+    // conversion when the prospect lacks a real email (no more
+    // @example.com auto-generated zombie accounts).
     const prospect = await this.prisma.prospect.findFirst({
       where: { id: prospectId, tenantId },
     });
 
     if (!prospect) throw new NotFoundException('Prospect no encontrado.');
+    if (!prospect.email) {
+      throw new BadRequestException(
+        'El prospect no tiene email; completa el dato antes de convertirlo a cliente.',
+      );
+    }
+
+    const { hash: passwordHash } = await generateTempPasswordHash();
 
     const user = await this.prisma.user.create({
       data: {
         tenantId,
-        email:
-          prospect.email || `client_${prospect.id.substring(0, 8)}@example.com`,
-        passwordHash: 'PROSPECT_CONVERTED',
+        email: prospect.email,
+        passwordHash,
+        mustChangePassword: true,
         firstName: prospect.firstName,
         lastName: prospect.lastName || '',
         phone: prospect.phone,
