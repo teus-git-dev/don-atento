@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
+import { AnnulJournalEntryDto } from './dto/annul-journal-entry.dto';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -47,7 +48,25 @@ export class AccountingController {
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   async postJournalEntry(@Req() req: any, @Param('id') id: string) {
     const tenantId = req['tenantId'];
-    return this.accountingService.postJournalEntry(tenantId, id);
+    const userId = req.user.id;
+    return this.accountingService.postJournalEntry(tenantId, id, userId);
+  }
+
+  @Post('journal-entries/:id/annul')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  async annulJournalEntry(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: AnnulJournalEntryDto,
+  ) {
+    const tenantId = req['tenantId'];
+    const userId = req.user.id;
+    return this.accountingService.annulJournalEntry(
+      tenantId,
+      id,
+      userId,
+      body.reason,
+    );
   }
 
   @Get('puc')

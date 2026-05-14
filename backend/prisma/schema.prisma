@@ -222,22 +222,41 @@ model InvoiceLine {
 }
 
 model JournalEntry {
-  id              String            @id @default(cuid())
+  id              String      @id @default(cuid())
   tenantId        String
   date            DateTime
   documentType    String
   documentNumber  String?
   description     String
-  status          EntryStatus       @default(DRAFT)
+  status          EntryStatus @default(DRAFT)
   createdByUserId String
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  Invoice         Invoice[]
-  createdBy       User              @relation(fields: [createdByUserId], references: [id])
-  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lines           TransactionLine[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
+  /// Block C — audit trail post-creación. Nullable porque rows
+  /// pre-Block-C no los tenían; el backfill script setea
+  /// postedAt = createdAt y postedByUserId = createdByUserId como
+  /// mejor aproximación para asientos ya POSTED.
+  postedAt         DateTime?
+  postedByUserId   String?
+  annulledAt       DateTime?
+  annulledByUserId String?
+  annullReason     String?
+
+  Invoice    Invoice[]
+  createdBy  User              @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id])
+  postedBy   User?             @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id])
+  annulledBy User?             @relation("JournalEntryAnnulledBy", fields: [annulledByUserId], references: [id])
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines      TransactionLine[]
+
+  /// Partial unique on (tenantId, documentType, documentNumber) when
+  /// documentNumber is present — prevents duplicate posting of the
+  /// same legal document soporte. Rows without documentNumber
+  /// coexist (Postgres allows NULL repeats).
+  @@unique([tenantId, documentType, documentNumber])
   @@index([tenantId, date])
+  @@index([tenantId, status])
 }
 
 model MeterReading {
@@ -611,7 +630,9 @@ model User {
   accountType                                      String?
   thirdParty                                       AccountingThirdParty?
   ContractRequest                                  ContractRequest[]
-  JournalEntry                                     JournalEntry[]
+  JournalEntry_createdBy                           JournalEntry[]            @relation("JournalEntryCreatedBy")
+  JournalEntry_postedBy                            JournalEntry[]            @relation("JournalEntryPostedBy")
+  JournalEntry_annulledBy                          JournalEntry[]            @relation("JournalEntryAnnulledBy")
   assignments                                      PropertyAgentAssignment[]
   relations                                        PropertyRelation[]
   Prospect                                         Prospect[]

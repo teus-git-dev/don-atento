@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -146,22 +147,128 @@ export class AccountingService {
     });
   }
 
-  async postJournalEntry(tenantId: string, id: string) {
-    const entry = await this.prisma.journalEntry.findUnique({
-      where: { id, tenantId },
+  /**
+   * Strict DRAFT → POSTED transition. Block C hardens vs the previous
+   * "update status to POSTED" naïve flow:
+   *  - Rejects any status other than DRAFT (POSTED → POSTED, ANNULLED
+   *    → POSTED both fail).
+   *  - Re-reads the lines from DB and re-validates balance — the
+   *    pre-Block-C flow trusted the create-time check, which a future
+   *    line-update endpoint could have subverted.
+   *  - Persists postedAt + postedByUserId for the audit trail.
+   *  - Wraps the whole sequence in $transaction so a balance re-check
+   *    failure doesn't leave a half-applied state.
+   */
+  async postJournalEntry(
+    tenantId: string,
+    id: string,
+    postedByUserId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const entry = await tx.journalEntry.findFirst({
+        where: { id, tenantId },
+        include: { lines: { select: { debit: true, credit: true } } },
+      });
+
+      if (!entry) {
+        throw new NotFoundException('Asiento no encontrado');
+      }
+
+      if (entry.status === EntryStatus.POSTED) {
+        // Idempotent no-op rather than error — clients retrying on
+        // network blips shouldn't fail. Still does NOT update the
+        // postedAt / postedByUserId (first poster wins).
+        return entry;
+      }
+
+      if (entry.status !== EntryStatus.DRAFT) {
+        // ANNULLED → POSTED would "resurrect" an annulled entry —
+        // reject explicitly.
+        throw new ConflictException(
+          `No se puede postear un asiento en estado ${entry.status}. Solo DRAFT puede pasar a POSTED.`,
+        );
+      }
+
+      // Re-validate balance from the current DB state (not from the
+      // create-time payload). Belt-and-suspenders against future
+      // line-update endpoints that might subvert the create-time check.
+      const EPSILON = new Prisma.Decimal('0.0001');
+      let totalDebit = new Prisma.Decimal(0);
+      let totalCredit = new Prisma.Decimal(0);
+      for (const line of entry.lines) {
+        totalDebit = totalDebit.plus(line.debit ?? new Prisma.Decimal(0));
+        totalCredit = totalCredit.plus(line.credit ?? new Prisma.Decimal(0));
+      }
+      if (totalDebit.minus(totalCredit).abs().greaterThan(EPSILON)) {
+        throw new UnprocessableEntityException(
+          'El asiento está descuadrado en DB. No puede postearse.',
+        );
+      }
+
+      return tx.journalEntry.update({
+        where: { id },
+        data: {
+          status: EntryStatus.POSTED,
+          postedAt: new Date(),
+          postedByUserId,
+        },
+      });
     });
+  }
 
-    if (!entry) {
-      throw new NotFoundException('Asiento no encontrado');
-    }
+  /**
+   * POSTED → ANNULLED transition. Block C novel endpoint — previously
+   * the EntryStatus enum had ANNULLED but no route set it, so a
+   * contador con un asiento erróneo tenía que ir a la DB directamente.
+   *
+   * Strict transition:
+   *  - Only POSTED can be annulled. DRAFT can't be annulled (just delete
+   *    the draft); ANNULLED → ANNULLED is rejected (idempotency would
+   *    overwrite the original annulledByUserId/reason).
+   *  - Persists annulledAt, annulledByUserId, annullReason.
+   *  - Wraps in $transaction.
+   *
+   * The journal entry row is NOT deleted — accounting integrity requires
+   * the historical record stay. Reverso contable se hace con un asiento
+   * nuevo (responsabilidad del frontend / proceso administrativo).
+   */
+  async annulJournalEntry(
+    tenantId: string,
+    id: string,
+    annulledByUserId: string,
+    reason: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const entry = await tx.journalEntry.findFirst({
+        where: { id, tenantId },
+        select: { id: true, status: true },
+      });
 
-    if (entry.status === EntryStatus.POSTED) {
-      return entry;
-    }
+      if (!entry) {
+        throw new NotFoundException('Asiento no encontrado');
+      }
 
-    return this.prisma.journalEntry.update({
-      where: { id },
-      data: { status: EntryStatus.POSTED },
+      if (entry.status === EntryStatus.ANNULLED) {
+        throw new ConflictException(
+          'El asiento ya está ANNULLED. Use un nuevo asiento de reverso si necesita corregir.',
+        );
+      }
+
+      if (entry.status !== EntryStatus.POSTED) {
+        throw new ConflictException(
+          `Solo asientos POSTED pueden anularse; el actual está en ${entry.status}.`,
+        );
+      }
+
+      return tx.journalEntry.update({
+        where: { id },
+        data: {
+          status: EntryStatus.ANNULLED,
+          annulledAt: new Date(),
+          annulledByUserId,
+          annullReason: reason,
+        },
+      });
     });
   }
 

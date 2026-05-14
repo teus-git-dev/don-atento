@@ -305,6 +305,127 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] accounting Block C (2026-05-14) — schema audit-trail + strict transitions + ANNULL endpoint + backfill
+
+- **Resolved by**: this commit (third block of accounting remediation)
+- **What was wrong** (CRÍTICO #4 + #5 + 2 ALTOs):
+  - CRÍTICO #4: `postJournalEntry` permitía transición desde
+    cualquier status a POSTED (incluido `ANNULLED → POSTED`
+    "des-anulando"); sin revalidar balance; sin audit trail —
+    `postedAt`/`postedByUserId` ni existían en el schema.
+  - CRÍTICO #5: Nada a nivel DB ni servicio impedía modificar un
+    asiento ya POSTED. En contabilidad, POSTED implica inmutable;
+    correcciones se hacen con asientos de reverso.
+  - ALTO: Sin endpoint ANNULL — el enum incluía `ANNULLED` pero
+    ninguna ruta lo seteaba; un contador con asiento erróneo
+    tenía que ir a la DB directamente.
+  - ALTO: `documentNumber` sin constraint de unicidad — duplicado
+    contable accidental aceptado.
+- **Plan de migración** (aprobado por el dueño antes de aplicar —
+  schema único bloque del módulo accounting que toca DB):
+  - Schema cambios aditivos (no destructivos):
+    - 5 columnas nuevas en `JournalEntry`: `postedAt DateTime?`,
+      `postedByUserId String?`, `annulledAt DateTime?`,
+      `annulledByUserId String?`, `annullReason String?`.
+    - 3 nuevas relations + 2 nuevas FKs `ON DELETE SET NULL ON
+      UPDATE CASCADE` (preservan audit trail si se borra un User).
+    - `@@unique([tenantId, documentType, documentNumber])` —
+      Postgres partial unique (NULL repeats permitidos, así rows
+      sin documentNumber coexisten).
+    - `@@index([tenantId, status])` para los filtros que Block D
+      añade.
+    - Relación inversa en `User` reorganizada:
+      `JournalEntry JournalEntry[]` → 3 fields nombrados
+      (`JournalEntry_createdBy`, `JournalEntry_postedBy`,
+      `JournalEntry_annulledBy`) con `@relation` name explícita.
+  - Rollback trivial: `DROP COLUMN` de los 5 + `DROP INDEX` de
+    los 2 + revert del User relations.
+- **What was applied**:
+  - **Schema** (`prisma/schema.prisma`): los 5 fields + 3
+    relations + 2 indexes + reorganización de User.
+  - **Migración**: schema-only en este commit. El proyecto usa
+    `prisma db push` declarativo (sin `migrations/`) — la
+    aplicación en deploy es `npx prisma db push`. Pre-flight
+    check requerido en prod:
+    ```sql
+    SELECT "tenantId", "documentType", "documentNumber", COUNT(*)
+    FROM "JournalEntry"
+    WHERE "documentNumber" IS NOT NULL
+    GROUP BY "tenantId", "documentType", "documentNumber"
+    HAVING COUNT(*) > 1;
+    ```
+    Si el query retorna filas, el unique index falla — resolver
+    los duplicados antes del push (cero filas esperadas en prod
+    actual; per audit history nadie ha posteado vía la API).
+  - **`postJournalEntry(tenantId, id, postedByUserId)`** completo
+    rewrite:
+    - Strict transition: solo `DRAFT → POSTED`. `POSTED → POSTED`
+      idempotent no-op (clients retrying en network blips); cualquier
+      otra (ANNULLED → POSTED) lanza `ConflictException`.
+    - Envuelto en `$transaction`.
+    - Re-lee las líneas desde DB y revalida balance —
+      belt-and-suspenders contra futuros endpoints de update de
+      línea.
+    - Persiste `postedAt: new Date()` + `postedByUserId`.
+  - **Nuevo `annulJournalEntry(tenantId, id, annulledByUserId,
+    reason)`**:
+    - Strict transition: solo `POSTED → ANNULLED`. DRAFT no se
+      anula (se borra como draft); `ANNULLED → ANNULLED`
+      rejected (preserva el primer `annulledByUserId`/reason).
+    - Envuelto en `$transaction`.
+    - Persiste `annulledAt`, `annulledByUserId`, `annullReason`.
+    - El row NO se elimina — accounting requiere histórico.
+      Reverso se hace con asiento nuevo (responsabilidad
+      administrativa).
+  - **Nuevo DTO `AnnulJournalEntryDto`**: `reason @MinLength(1)
+    @MaxLength(500)` — required.
+  - **Nuevo endpoint** `POST /accounting/journal-entries/:id/annul`
+    en el controller. `@Roles('ADMIN_TENANT', 'SUPERADMIN')`.
+    `userId` desde `req.user.id`.
+  - **Backfill script** (`prisma/backfill-journal-entry-audit.ts`):
+    - Set `postedAt = createdAt` y `postedByUserId = createdByUserId`
+      para POSTED rows con `postedAt: null`. Best-approximation —
+      no sabemos quién realmente posteó pre-Block-C (el campo no
+      existía); usamos createdBy como proxy y documentamos la
+      limitación.
+    - Idempotente vía `postedAt: null` filter.
+    - `--dry-run` soportado, muestra primeros 20 cambios.
+    - ANNULLED rows pre-Block-C no se tocan (no había ruta que las
+      creara, así que si existen vinieron de mano operativa y el
+      operador debe llenar los campos a mano).
+- **Verification**:
+  - `npx prisma format` aplicó normalización (commiteada)
+  - `npx prisma validate` ✓
+  - `npx prisma generate` regenera client con audit-trail fields
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Deploy steps** (para cuando se haga push a prod):
+  1. Pre-flight SQL check: `SELECT ... GROUP BY ... HAVING COUNT(*)
+     > 1` para verificar 0 duplicados de
+     `(tenantId, documentType, documentNumber)`.
+  2. `npx prisma db push` (aditivo).
+  3. `npx ts-node prisma/backfill-journal-entry-audit.ts --dry-run`
+     → verificar conteos esperados.
+  4. `npx ts-node prisma/backfill-journal-entry-audit.ts` → aplicar.
+- **Carryover explícito** (NOT en este bloque, documentado como
+  acordado con el dueño):
+  - **Trigger SQL-level de inmutabilidad post-POSTED**: el
+    service-layer guard de Block C cubre los flows del módulo
+    accounting actual. Defense-in-depth en Postgres (trigger
+    `BEFORE UPDATE` que lanza si `OLD.status = 'POSTED'` y se
+    intenta modificar cualquier campo de la fila o de
+    `TransactionLine` cuyo `journalEntryId` apunte a un POSTED)
+    queda como tarea separada — requiere migration manual SQL
+    fuera del flow `prisma db push` declarativo. Tracked como
+    backlog post-v1.
+  - **Tests del módulo** (`accounting.controller.spec.ts` no
+    existe): cubrir la matemática de doble partida, las
+    transitions strict, ANNULL flow, y los cross-tenant FK guards.
+    Igual al patrón de carryover de crm Block E — los flows están
+    endurecidos por Blocks A-C a nivel de lógica, los tests serían
+    regresión vs futuro.
+
 ### [x] accounting Block B (2026-05-14) — DTOs + balance validations + USER_PUBLIC_SELECT + select whitelists + generic balance error
 
 - **Resolved by**: this commit (second block of accounting remediation)
