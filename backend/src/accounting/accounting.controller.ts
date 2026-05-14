@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
+import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -33,7 +34,10 @@ export class AccountingController {
 
   @Post('journal-entries')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
-  async createJournalEntry(@Req() req: any, @Body() body: any) {
+  async createJournalEntry(
+    @Req() req: any,
+    @Body() body: CreateJournalEntryDto,
+  ) {
     const tenantId = req['tenantId'];
     const userId = req.user.id;
     return this.accountingService.createJournalEntry(tenantId, body, userId);

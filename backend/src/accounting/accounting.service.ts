@@ -6,6 +6,50 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, EntryStatus } from '@prisma/client';
 
+/**
+ * Whitelist of User fields safe to expose in accounting responses.
+ * Mirrors the constant in properties / tickets / workflows / crm.
+ * Block B added — pre-Block-B `createdBy: true` returned passwordHash
+ * and other internal flags on every journal-entries listing.
+ */
+const USER_PUBLIC_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  role: true,
+  whatsappId: true,
+} as const;
+
+/** Whitelist of fields exposed for the `account` include in
+ *  TransactionLine — only what the frontend needs to render reports.
+ *  Pre-Block-B the full row was returned. */
+const ACCOUNT_PUBLIC_SELECT = {
+  id: true,
+  code: true,
+  name: true,
+  nature: true,
+  level: true,
+  isActive: true,
+} as const;
+
+/** Whitelist for the `thirdParty` include. Pre-Block-B returned full
+ *  documentNumber / documentType + PII to anyone listing journals. */
+const THIRD_PARTY_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  documentType: true,
+  documentNumber: true,
+} as const;
+
+/** Whitelist for the `property` include in TransactionLine. */
+const PROPERTY_PUBLIC_SELECT = {
+  id: true,
+  title: true,
+  address: true,
+} as const;
+
 @Injectable()
 export class AccountingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -59,11 +103,13 @@ export class AccountingService {
 
     const difference = totalDebit.minus(totalCredit).abs();
     if (difference.greaterThan(EPSILON)) {
-      // Block B will replace this with a generic message (no totals
-      // leaked). Block A keeps the existing behavior for diff-minimal
-      // change.
+      // Block B: generic error. The pre-Block-B message included exact
+      // debit/credit/difference totals — useful for an attacker
+      // probing balance manipulation (it tells them exactly how much
+      // they need to add to one side). The actual totals are still
+      // available to the caller in the request payload they just sent.
       throw new UnprocessableEntityException(
-        `Descuadre contable detectado. Débitos: ${totalDebit.toString()} Créditos: ${totalCredit.toString()}. Diferencia: ${difference.toString()}`,
+        'Asiento descuadrado. Verifica que la suma de débitos sea igual a la suma de créditos.',
       );
     }
 
@@ -128,12 +174,22 @@ export class AccountingService {
   }
 
   async getJournalEntries(tenantId: string) {
+    // Block B closes CRÍTICO #6 (passwordHash leak via createdBy: true)
+    // and the related ALTO (full thirdParty/property/account exposure).
+    // Each include now goes through a whitelist; Block D will add
+    // pagination + filters on top.
     return this.prisma.journalEntry.findMany({
       where: { tenantId },
       orderBy: { date: 'desc' },
       include: {
-        lines: { include: { account: true, property: true, thirdParty: true } },
-        createdBy: true,
+        lines: {
+          include: {
+            account: { select: ACCOUNT_PUBLIC_SELECT },
+            property: { select: PROPERTY_PUBLIC_SELECT },
+            thirdParty: { select: THIRD_PARTY_PUBLIC_SELECT },
+          },
+        },
+        createdBy: { select: USER_PUBLIC_SELECT },
       },
       take: 100,
     });
@@ -150,13 +206,17 @@ export class AccountingService {
     tenantId: string,
   ): Promise<void> {
     const ids = Array.from(accountIds);
+    // Block B: also require accounts to be `isActive: true`. A
+    // journal entry that uses a deactivated account corrupts the
+    // chart-of-accounts semantics — deactivation in accounting means
+    // "do not post here anymore".
     const rows = await this.prisma.accountingAccount.findMany({
-      where: { id: { in: ids }, tenantId },
+      where: { id: { in: ids }, tenantId, isActive: true },
       select: { id: true },
     });
     if (rows.length !== ids.length) {
       throw new NotFoundException(
-        'Una o más cuentas (accountId) no existen para este tenant.',
+        'Una o más cuentas (accountId) no existen o están inactivas para este tenant.',
       );
     }
   }

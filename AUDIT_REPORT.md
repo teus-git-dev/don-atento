@@ -305,6 +305,81 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] accounting Block B (2026-05-14) — DTOs + balance validations + USER_PUBLIC_SELECT + select whitelists + generic balance error
+
+- **Resolved by**: this commit (second block of accounting remediation)
+- **What was wrong** (1 CRÍTICO + 5 ALTOs + 1 MEDIO):
+  - CRÍTICO #6: `createdBy: true` en `getJournalEntries` retornaba
+    el `User` completo — `passwordHash` + flags internos. Mismo
+    patrón ya cerrado en properties/tickets/workflows/crm.
+  - CRÍTICO #7: `body: any` sin DTO ni `class-validator`. Bodies
+    pasaban sin validar — strings sin límite, `debit`/`credit`
+    como strings malformados, `Infinity`, `NaN`.
+  - ALTO #2: sin validación de `lines.length >= 2` / `debit` o
+    `credit` mutuamente exclusivos / `accountId` activo.
+  - ALTO #3 (parcial — `isActive` filter en accounts).
+  - ALTO #4 (parcial — date validation via `@IsDateString`).
+  - ALTO #9: include de `account`/`property`/`thirdParty`
+    retornaba objetos completos — PII de terceros (`documentNumber`,
+    `email`, `phone`) expuesto.
+  - ALTO #10: mensaje de error de descuadre exponía totales exactos.
+- **What was applied**:
+  - **2 DTOs nuevos** en `src/accounting/dto/`:
+    - **`TransactionLineDto`**:
+      - `accountId @MinLength(1) @MaxLength(64)`.
+      - `debit @IsOptional @IsNumber({maxDecimalPlaces: 4}) @Min(0)`.
+      - `credit @IsOptional @IsNumber({maxDecimalPlaces: 4}) @Min(0)`.
+      - `thirdPartyId @MaxLength(64)`, `propertyId @MaxLength(64)`.
+      - `description @MaxLength(500)`.
+      - **Custom `@ValidatorConstraint` `IsValidDoubleEntryLine`**
+        que rechaza:
+        - `debit <= 0 && credit <= 0` (línea vacía).
+        - `debit > 0 && credit > 0` (línea con ambos lados —
+          semánticamente ambigua).
+      - Aplicado vía un campo synthetic `__doubleEntryGuard`
+        decorado con `@Validate(...)`.
+    - **`CreateJournalEntryDto`**:
+      - `date @IsOptional @IsDateString` (rechaza
+        `'invalid-date'` que antes producía `Invalid Date` ⇒
+        500).
+      - `documentType @MinLength(1) @MaxLength(64)`.
+      - `documentNumber @MaxLength(64)`.
+      - `description @MinLength(1) @MaxLength(500)`.
+      - `lines @IsArray @ArrayMinSize(2) @ArrayMaxSize(50)
+        @ValidateNested({each:true}) @Type(() => TransactionLineDto)`.
+      - **NO incluye `tenantId`, `createdByUserId`, `status`,
+        `isAutomated`** — whitelist+forbidNonWhitelisted del pipe
+        rechaza cualquier intento de smuggle.
+  - **Controller** tipa `@Body() body: CreateJournalEntryDto`.
+    El `ValidationPipe` global ahora ejecuta toda la validación
+    antes de llegar al service.
+  - **`AccountingService` selects whitelist**:
+    - Constantes: `USER_PUBLIC_SELECT`, `ACCOUNT_PUBLIC_SELECT`
+      (id/code/name/nature/level/isActive),
+      `THIRD_PARTY_PUBLIC_SELECT` (id/name/documentType/
+      documentNumber — sin email ni phone),
+      `PROPERTY_PUBLIC_SELECT` (id/title/address).
+    - `getJournalEntries`:
+      - `createdBy: { select: USER_PUBLIC_SELECT }` — cierra
+        CRÍTICO #6.
+      - `lines.include`: cada uno con su `select`. PII de
+        terceros y users ya no escapa.
+  - **`assertAccountsBelongToTenant`** extendido con
+    `isActive: true` filter — cuentas desactivadas no aceptan
+    asientos nuevos (cierra ALTO #2 sub-bullet).
+  - **Mensaje genérico de descuadre**: el `UnprocessableEntityException`
+    ahora dice "Asiento descuadrado. Verifica que la suma de
+    débitos sea igual a la suma de créditos." — sin números,
+    cierra ALTO #10.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: Schema migration + immutability + ANNULL → Block
+  C (con plan de migración explícito antes de aplicar).
+  Paginación + filtros + Logger + Swagger + `PrismaModule` import
+  + `BALANCE_TOLERANCE_COP` constant → Block D.
+
 ### [x] accounting Block A (2026-05-14) — RBAC + cross-tenant FK validation + remove isAutomated bypass
 
 - **Resolved by**: this commit (first block of accounting remediation)
