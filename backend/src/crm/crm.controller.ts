@@ -15,7 +15,12 @@ import {
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { CrmService } from './crm.service';
 import { LegalAiService } from '../cognitive/legal-ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -58,6 +63,7 @@ export class CrmController {
 
   @Post('prospects')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Crear nuevo prospect en el tenant' })
   create(@Body() data: CreateProspectDto, @Req() req: Request) {
     return this.crmService.createProspect({
       ...data,
@@ -67,12 +73,23 @@ export class CrmController {
 
   @Get('prospects')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
-  findAll(@Req() req: Request) {
-    return this.crmService.findAll(req.tenantId!);
+  @ApiOperation({ summary: 'Listar prospects del tenant (paginado)' })
+  @ApiQuery({ name: 'page', required: false, example: '1' })
+  @ApiQuery({ name: 'limit', required: false, example: '20' })
+  findAll(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
+    const requestedLimit = limit ? parseInt(limit, 10) : 20;
+    const limitNum = Math.max(1, isNaN(requestedLimit) ? 20 : requestedLimit);
+    return this.crmService.findAll(req.tenantId!, pageNum, limitNum);
   }
 
   @Patch('prospects/:id')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Actualizar campos mutables de un prospect' })
   update(
     @Param('id') id: string,
     @Body() data: UpdateProspectDto,
@@ -83,18 +100,21 @@ export class CrmController {
 
   @Get('analytics/funnel')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Métricas de embudo por estado de prospect' })
   getFunnel(@Req() req: Request) {
     return this.crmService.getFunnel(req.tenantId!);
   }
 
   @Get('analytics/sentiment')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Distribución de sentimiento de prospects' })
   getSentiment(@Req() req: Request) {
     return this.crmService.getSentimentMetrics(req.tenantId!);
   }
 
   @Post('prospects/:id/tasks')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Crear tarea asociada a un prospect' })
   createTask(
     @Param('id') prospectId: string,
     @Body() data: CreateProspectTaskDto,
@@ -105,6 +125,7 @@ export class CrmController {
 
   @Patch('tasks/:taskId')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Actualizar campos mutables de una tarea' })
   updateTask(
     @Param('taskId') taskId: string,
     @Body() data: UpdateProspectTaskDto,
@@ -115,12 +136,17 @@ export class CrmController {
 
   @Post('prospects/:id/convert')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({
+    summary:
+      'Conversión simple prospect→User (legacy; requiere email en el prospect)',
+  })
   convert(@Param('id') id: string, @Req() req: Request) {
     return this.crmService.convertToClient(id, req.tenantId!);
   }
 
   @Post('prospects/:id/contract')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Iniciar proceso de contrato sobre un prospect' })
   startContract(
     @Param('id') prospectId: string,
     @Query('propertyId') propertyId: string,
@@ -137,6 +163,9 @@ export class CrmController {
 
   @Post('contracts/:requestId/generate-draft')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({
+    summary: 'Generar borrador de contrato vía IA (billable)',
+  })
   async generateDraft(
     @Param('requestId') requestId: string,
     @Req() req: Request,
@@ -161,6 +190,7 @@ export class CrmController {
    */
   @Post('upload')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({ summary: 'Subir documento de contrato (PDF/DOCX/imagen)' })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -208,6 +238,10 @@ export class CrmController {
 
   @Post('contracts/:requestId/approve')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @ApiOperation({
+    summary:
+      'Aprobar contrato: crea User, vincula Property, marca RENTED (atómico)',
+  })
   approveContract(@Param('requestId') requestId: string, @Req() req: Request) {
     // userId is read from the JWT (req.user.id), NOT from the body —
     // the previous @Body('userId') flow allowed any caller to attribute

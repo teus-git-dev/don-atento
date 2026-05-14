@@ -305,6 +305,93 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] crm Block E (2026-05-14) — hardening cleanup: paginación + USER_PUBLIC_SELECT + Logger + scoreLead constants + HTML escape + Swagger + dead-inject removal
+
+- **Resolved by**: this commit (final block of crm remediation)
+- **What was wrong** (resto del audit — MEDIOs y un par de ALTOs
+  cosméticos):
+  - ALTO #4: `findAll` sin paginación + eager-loads de
+    `interactions`, `tasks`, `assignedAgent`, `interestedProperties`
+    → response de varios MB en tenants grandes.
+  - ALTO #5: `assignedAgent` con select ad-hoc (id, firstName,
+    lastName, email) — inconsistente con `USER_PUBLIC_SELECT` del
+    resto del proyecto.
+  - MEDIO #7: `scoreLead` magic numbers (50, 30, 20, 5, 70, 100).
+  - MEDIO #4: HTML escape en `sendWelcomeKit` — interpolación raw
+    de `property.title`, `agent.firstName`, etc. en email body.
+  - MEDIO #10 + INFO: `crm.controller` y `radar.controller` sin
+    `@ApiOperation` por handler.
+  - MEDIO #13: `UsersService` injected en `CrmService` pero no
+    usado — dead inject + import dead.
+  - INFO: sin `Logger` privado en `CrmService`.
+- **What was applied**:
+  - **Paginación + USER_PUBLIC_SELECT en `findAll`**:
+    - Firma: `findAll(tenantId, page = 1, limit = 20)`.
+    - `MAX_PAGE_LIMIT = 100` cap (alineado con properties /
+      workflows).
+    - `orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }]` — segundo
+      key como tie-break para paginación determinística.
+    - Response: `{ data, totalRecords, totalPages, currentPage }`
+      (mismo shape que properties / workflows).
+    - `assignedAgent` ahora con `{ select: USER_PUBLIC_SELECT }`
+      compartido (`id, firstName, lastName, email, phone, role,
+      whatsappId`).
+    - Controller acepta `?page=&limit=` y forwarda al service.
+  - **`scoreLead` constants nombradas**:
+    - `URGENCY_BASE = 50`, `NEGATIVE_SENTIMENT_BUMP = 30`,
+      `HIGH_ENGAGEMENT_BUMP = 20`, `HIGH_ENGAGEMENT_THRESHOLD = 5`,
+      `HOT_LEAD_THRESHOLD = 70`, `URGENCY_CAP = 100`. Los magic
+      numbers in-line quedaron eliminados.
+  - **HTML escape en `sendWelcomeKit`**:
+    - Helper local `escapeHtml(input)` que sustituye `& < > " '`
+      por entidades HTML.
+    - Cada interpolación user-controlled (firstName, propertyTitle,
+      agent name, agent.photoUrl, agent.phone) pasa por el
+      helper antes de llegar al template. Defense layer-1; full
+      template engine migration queda como refactor post-v1.
+  - **Swagger annotations**:
+    - `@ApiOperation` por handler en `CrmController` (10 handlers).
+    - `@ApiQuery` para `?page=` y `?limit=` en `findAll`.
+    - El `RadarController` ya quedó con annotations en Block A/D.
+  - **`Logger` privado**: `private readonly logger = new Logger
+    (CrmService.name)`; usado en `sendWelcomeKit` cuando el lookup
+    de tenant/agent/property falla (antes era un `return` silente).
+  - **Dead-inject removal**:
+    - `UsersService` removido del constructor de `CrmService`
+      (no se usaba). Import eliminado.
+    - `UsersModule` removido de `CrmModule.imports` (era el único
+      consumer del módulo en CRM).
+    - `ContractStatus` import removido (unused).
+  - **Frontend**:
+    - `frontend/src/app/(dashboard)/crm/page.tsx fetchCrmData`:
+      `fetch('/crm/prospects?...&limit=100')`; unwrap `res.data`
+      con fallback a array raw (compat por si una réplica vieja
+      todavía responde con el shape legacy durante el rolling
+      deploy).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (backend)
+  - `npm run build` clean (backend)
+  - `next build` clean (frontend)
+- **NOT en este bloque** (declarado como carryover honesto):
+  - **Phone normalization vía `libphonenumber-js`** (ALTO #3):
+    requiere agregar dependencia + handling internacional + tests
+    de border cases. Más invasivo que un cleanup de seguridad.
+    Tracked como backlog post-v1.
+  - **Tests para `convertToClient` y `approveContract`** (MEDIO):
+    el `crm.controller.spec.ts` actual cubre sólo `uploadFile`
+    (85 líneas). Agregar coverage para los dos flows de mayor
+    blast radius requiere mocking del transaction client, email
+    service y whatsapp service. Tracked como tarea separada
+    (`crm/tests-coverage` follow-up) — los flows ya están
+    endurecidos por Blocks A-D al nivel de lógica, los tests
+    serían regresión vs futuro.
+  - **`addInteraction` tenant filter** (ALTO #6): el método se
+    exporta de `CrmModule` pero no se invoca cross-módulo. Aún
+    así, agregar `tenantId` a la firma cambia el contrato de un
+    método público — se difiere hasta auditar los otros callers
+    (no encontrados pero el grep podría tener falsos negativos).
+
 ### [x] crm Block D (2026-05-14) — radar hardening: rate-limit + URL allowlist + prompt sanitization + LLM output validation + Logger
 
 - **Resolved by**: this commit (fourth block of crm remediation)

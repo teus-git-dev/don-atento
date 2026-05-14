@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
@@ -12,7 +13,6 @@ import {
   ProspectStatus,
   ProspectSource,
   SentimentAnalysis,
-  ContractStatus,
   UserRole,
   RelationType,
   InteractionChannel,
@@ -21,7 +21,47 @@ import { BrandBrainService } from '../cognitive/brand-brain.service';
 import { EmailService } from '../cognitive/email.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 
-import { UsersService } from '../users/users.service';
+/**
+ * Whitelist of User fields safe to expose in CRM responses. Mirrors
+ * the constant in PropertiesService / TicketsService / WorkflowsService
+ * so the project speaks one vocabulary for what a "public" user looks
+ * like.
+ */
+const USER_PUBLIC_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  role: true,
+  whatsappId: true,
+} as const;
+
+/** Cap on `?limit=`. Mirrors properties/workflows for consistency. */
+const MAX_PAGE_LIMIT = 100;
+
+/** scoreLead tunables. Were inline magic numbers pre-Block-E. */
+const URGENCY_BASE = 50;
+const NEGATIVE_SENTIMENT_BUMP = 30;
+const HIGH_ENGAGEMENT_BUMP = 20;
+const HIGH_ENGAGEMENT_THRESHOLD = 5;
+const HOT_LEAD_THRESHOLD = 70;
+const URGENCY_CAP = 100;
+
+/**
+ * Minimal HTML escape for fields interpolated into the welcome email
+ * body. Block E layer-1 defense — full template engine migration is a
+ * post-v1 refactor. Covers the 5 chars that meaningfully change layout
+ * or open attribute escapes.
+ */
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 /**
  * Generates a high-entropy temporary password for prospect→User
@@ -41,10 +81,11 @@ async function generateTempPasswordHash(): Promise<{
 
 @Injectable()
 export class CrmService {
+  private readonly logger = new Logger(CrmService.name);
+
   constructor(
     private prisma: PrismaService,
     private brandBrain: BrandBrainService,
-    private usersService: UsersService,
     private emailService: EmailService,
     @Inject(forwardRef(() => WhatsappService))
     private whatsappService: WhatsappService,
@@ -110,19 +151,33 @@ export class CrmService {
     });
   }
 
-  async findAll(tenantId: string) {
-    return this.prisma.prospect.findMany({
-      where: { tenantId },
-      include: {
-        interactions: { orderBy: { createdAt: 'desc' }, take: 5 },
-        tasks: { orderBy: { createdAt: 'desc' } },
-        assignedAgent: {
-          select: { id: true, firstName: true, lastName: true, email: true },
+  async findAll(tenantId: string, page = 1, limit = 20) {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_LIMIT);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.prospect.findMany({
+        where: { tenantId },
+        include: {
+          interactions: { orderBy: { createdAt: 'desc' }, take: 5 },
+          tasks: { orderBy: { createdAt: 'desc' } },
+          assignedAgent: { select: USER_PUBLIC_SELECT },
+          interestedProperties: true,
         },
-        interestedProperties: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        skip,
+        take: safeLimit,
+      }),
+      this.prisma.prospect.count({ where: { tenantId } }),
+    ]);
+
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / safeLimit),
+      currentPage: safePage,
+    };
   }
 
   async createTask(
@@ -209,16 +264,25 @@ export class CrmService {
     const interactionCount = prospect.interactions.length;
     const lastSentiment = prospect.sentiment;
 
-    let urgencyScore = 50;
-    if (lastSentiment === SentimentAnalysis.NEGATIVE) urgencyScore += 30;
-    if (interactionCount > 5) urgencyScore += 20;
+    let urgencyScore = URGENCY_BASE;
+    if (lastSentiment === SentimentAnalysis.NEGATIVE) {
+      urgencyScore += NEGATIVE_SENTIMENT_BUMP;
+    }
+    if (interactionCount > HIGH_ENGAGEMENT_THRESHOLD) {
+      urgencyScore += HIGH_ENGAGEMENT_BUMP;
+    }
+
+    const finalScore = Math.min(URGENCY_CAP, urgencyScore);
 
     return {
       prospectId,
-      urgencyScore: Math.min(100, urgencyScore),
+      urgencyScore: finalScore,
       qualityLabel:
         lastSentiment === SentimentAnalysis.POSITIVE ? 'HOT LEAD' : 'WARM',
-      nextAction: urgencyScore > 70 ? 'CALL IMMEDIATELY' : 'FOLLOW UP IN 24H',
+      nextAction:
+        finalScore > HOT_LEAD_THRESHOLD
+          ? 'CALL IMMEDIATELY'
+          : 'FOLLOW UP IN 24H',
     };
   }
 
@@ -419,34 +483,53 @@ export class CrmService {
       where: { id: propertyId },
     });
 
-    if (!tenant || !agent || !property) return;
+    if (!tenant || !agent || !property) {
+      this.logger.warn(
+        `Welcome kit skipped: missing tenant/agent/property (tenantUserId=${tenantUserId}, agentUserId=${agentUserId}, propertyId=${propertyId})`,
+      );
+      return;
+    }
+
+    // Block E: every interpolation into the welcome email is HTML-
+    // escaped. The fields come from user-edited data (agent name,
+    // property title, etc.) and an angle-bracket payload could break
+    // out of an attribute or inject layout used for phishing. Full
+    // template engine migration is post-v1; this is the minimum
+    // viable defense.
+    const tenantFirstNameSafe = escapeHtml(tenant.firstName);
+    const agentNameSafe = escapeHtml(`${agent.firstName} ${agent.lastName}`);
+    const propertyTitleSafe = escapeHtml(property.title);
+    const agentPhotoSafe = escapeHtml(
+      agent.photoUrl || 'https://donatento.ai/api/placeholder-avatar.png',
+    );
+    const agentPhoneSafe = escapeHtml(agent.phone || '');
 
     const agentName = `${agent.firstName} ${agent.lastName}`;
     const welcomeSubject = `¡Bienvenido a tu nuevo hogar! - Don Atento & ${agentName}`;
 
     // IA Personalizada: Actúa como el puente entre Don Atento y el Agente
     const emailBody = `
-      <h1>¡Felicidades, ${tenant.firstName}!</h1>
-      <p>Tu contrato para el inmueble <strong>${property.title}</strong> ha sido aprobado formalmente.</p>
-      
+      <h1>¡Felicidades, ${tenantFirstNameSafe}!</h1>
+      <p>Tu contrato para el inmueble <strong>${propertyTitleSafe}</strong> ha sido aprobado formalmente.</p>
+
       <div style="background: #f8fafc; border-radius: 1rem; padding: 2rem; border-left: 4px solid #06b6d4; margin: 2rem 0;">
         <p><em>"Es un placer para mí darte la bienvenida oficial. Estoy aquí para asegurar que tu estancia sea impecable, gestionando tus requerimientos de forma inteligente y predictiva."</em></p>
         <p><strong>— Don Atento (Tu Asistente IA)</strong></p>
       </div>
 
       <p>Este proceso fue liderado por tu Agente Comercial asignado:</p>
-      
+
       <div style="display: flex; align-items: center; gap: 1rem; margin: 2rem 0;">
-        <img src="${agent.photoUrl || 'https://donatento.ai/api/placeholder-avatar.png'}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" alt="${agentName}">
+        <img src="${agentPhotoSafe}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" alt="${agentNameSafe}">
         <div>
-          <h3 style="margin: 0;">${agentName}</h3>
+          <h3 style="margin: 0;">${agentNameSafe}</h3>
           <p style="margin: 0; color: #64748b; font-size: 0.9rem;">Agente Comercial Don Atento</p>
-          <p style="margin: 0; color: #64748b; font-size: 0.8rem;">${agent.phone || ''}</p>
+          <p style="margin: 0; color: #64748b; font-size: 0.8rem;">${agentPhoneSafe}</p>
         </div>
       </div>
 
       <p>A partir de ahora, puedes reportar cualquier novedad sobre el inmueble simplemente enviando un mensaje a nuestro WhatsApp oficial.</p>
-      
+
       <p>Cordialmente,<br>El equipo de Don Atento.</p>
     `;
 

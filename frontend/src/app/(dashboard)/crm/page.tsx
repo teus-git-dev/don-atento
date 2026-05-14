@@ -40,13 +40,17 @@ export default function CrmDashboard() {
     setLoading(true);
     try {
       const [pRes, fRes, sRes] = await Promise.all([
-        fetch(`${API_URL}/crm/prospects?tenantId=${TENANT_ID}`).then(r => r.json()),
+        fetch(`${API_URL}/crm/prospects?tenantId=${TENANT_ID}&limit=100`).then(r => r.json()),
         fetch(`${API_URL}/crm/analytics/funnel?tenantId=${TENANT_ID}`).then(r => r.json()),
         fetch(`${API_URL}/crm/analytics/sentiment?tenantId=${TENANT_ID}`).then(r => r.json()),
       ]);
 
-      // Defensive checks — backend may return {message, statusCode} on auth error
-      setProspects(Array.isArray(pRes) ? pRes : []);
+      // Defensive checks — backend may return {message, statusCode} on auth error.
+      // CRM Block E: findAll now returns { data, totalRecords, ... } — unwrap
+      // .data, fall back to raw array for any legacy caller still hitting an
+      // un-deployed pod.
+      const prospectsArray = Array.isArray(pRes) ? pRes : pRes?.data;
+      setProspects(Array.isArray(prospectsArray) ? prospectsArray : []);
       if (Array.isArray(fRes) && fRes.length > 0) setFunnelData(fRes);
       
       if (Array.isArray(sRes)) {

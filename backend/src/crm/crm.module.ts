@@ -6,15 +6,12 @@ import { RadarController } from './radar.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CognitiveModule } from '../cognitive/cognitive.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
-
-import { UsersModule } from '../users/users.module';
 import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
     PrismaModule,
     CognitiveModule,
-    UsersModule,
     StorageModule,
     forwardRef(() => WhatsappModule),
   ],
