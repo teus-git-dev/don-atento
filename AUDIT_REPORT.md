@@ -305,6 +305,74 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] accounting Block A (2026-05-14) — RBAC + cross-tenant FK validation + remove isAutomated bypass
+
+- **Resolved by**: this commit (first block of accounting remediation)
+- **What was wrong** (3 CRÍTICOs from the accounting audit):
+  - CRÍTICO #1: `AccountingController` con `@UseGuards(JwtAuthGuard,
+    TenantGuard)` sin `RolesGuard` ni `@Roles()` — cualquier
+    `TENANT_USER` podía leer el PUC, listar journal entries (vista
+    sensible legalmente), crear asientos y postear-los. Mismo
+    anti-patrón cerrado en workflows / baileys / crm.
+  - CRÍTICO #2: `createJournalEntry` insertaba líneas con
+    `accountId`, `thirdPartyId`, `propertyId` desde el body sin
+    verificar pertenencia al tenant — Prisma chequea la FK existe
+    pero no la tenancy. Cross-tenant FK injection: un atacante en
+    tenant A podía persistir líneas apuntando a cuentas / terceros
+    / propiedades del tenant B, corrompiendo los totales reportados
+    cuando se agregue por esos IDs.
+  - CRÍTICO #3: `data.isAutomated: true` en el body permitía crear
+    asientos directamente en `EntryStatus.POSTED` — bypass del
+    flow `DRAFT → revisión → POSTED`. En contabilidad colombiana,
+    separar quién registra de quién aprueba es control interno
+    básico (DIAN / NIIF).
+- **What was applied**:
+  - **`AccountingController`**: `@UseGuards(JwtAuthGuard,
+    RolesGuard, TenantGuard)` a nivel clase; cada handler con
+    `@Roles('ADMIN_TENANT', 'SUPERADMIN')`. Lecturas y escrituras
+    igualmente restringidas — el módulo accounting es admin
+    surface por diseño regulatorio; ningún rol inferior (AGENT,
+    OWNER, MAINTENANCE, TENANT_USER) tiene caso de uso legítimo.
+  - **`AccountingService` — 3 helpers privados de FK guard**:
+    - `assertAccountsBelongToTenant(accountIds: Set<string>,
+      tenantId)`: dedup vía `Set`, batch `findMany({ id: { in: },
+      tenantId })`, compara `rows.length === ids.length`. Throw
+      uniforme `NotFoundException` (404 — no 403 — evita
+      enumeración cross-tenant).
+    - `assertThirdPartiesBelongToTenant(...)`: idem para
+      `AccountingThirdParty`.
+    - `assertPropertiesBelongToTenant(...)`: idem para `Property`.
+    - Los 3 se llaman ANTES del `$transaction` en
+      `createJournalEntry`. Batch dedup-eado (Set) — un asiento
+      con 10 líneas que tocan 2 cuentas distintas dispara 1
+      query, no 10.
+  - **Pre-validation explícita** en `createJournalEntry`:
+    - `Array.isArray(data?.lines) && data.lines.length > 0` antes
+      de cualquier procesamiento — un payload sin `lines` ahora
+      falla con 422 en lugar de TypeError 500.
+    - `line.accountId` requerido (ya estaba pero el ordering
+      cambió para garantizar el dedup-set se construya correctamente).
+  - **`isAutomated` eliminado** del flujo de `createJournalEntry`:
+    el `status` siempre se establece a `EntryStatus.DRAFT`. El
+    único camino a `POSTED` es ahora `postJournalEntry` (que
+    Block C endurecerá con audit trail + strict transition).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (sin spec del módulo aún
+    — `accounting.controller.spec.ts` no existe; queda declarado
+    como carryover post-v1)
+  - `npm run build` clean
+- **Carryover**: DTOs + balance validations + USER_PUBLIC_SELECT
+  en `createdBy` + select whitelist en includes + balance error
+  message genérico → Block B. Schema migration (`postedAt`,
+  `postedByUserId`, `annulledAt`, `annulledByUserId`,
+  `annullReason` + `@@unique([tenantId, documentType,
+  documentNumber])`) + immutability + ANNULL endpoint + strict
+  transitions → Block C (plan de migración explícito antes de
+  aplicar). Paginación + filtros + Logger + Swagger annotations
+  + `PrismaModule` import + `BALANCE_TOLERANCE_COP` constant →
+  Block D.
+
 ### [x] crm Block E (2026-05-14) — hardening cleanup: paginación + USER_PUBLIC_SELECT + Logger + scoreLead constants + HTML escape + Swagger + dead-inject removal
 
 - **Resolved by**: this commit (final block of crm remediation)
