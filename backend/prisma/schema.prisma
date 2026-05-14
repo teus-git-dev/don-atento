@@ -627,9 +627,34 @@ model User {
   WorkflowState_RoleAssignments                    WorkflowState[]           @relation("RoleAssignments")
   RefreshTokens                                    RefreshToken[]
   uploadedFiles                                    FileAsset[]
+  phoneContacts                                    UserPhoneContact[]
 
   @@index([phone])
   @@index([whatsappId])
+}
+
+/**
+ * UserPhoneContact — additional WhatsApp / phone numbers authorized to
+ * speak on behalf of a User. Replaces the legacy CSV string in
+ * `User.additionalContacts` (which is preserved during the backfill
+ * window; cutover and column drop happen in Phase E.2).
+ * `verified=false` is the default for new rows written by the WA
+ * enrolment flow — verification arrives in Phase E.2 via an OTP sent
+ * to the user's primary `phone`. The unique constraint
+ * `@@unique([userId, phone])` closes the race where two concurrent
+ * webhooks both append the same number.
+ */
+model UserPhoneContact {
+  id         String    @id @default(cuid())
+  userId     String
+  phone      String
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, phone])
+  @@index([phone])
 }
 
 model Workflow {
@@ -977,8 +1002,8 @@ model FileAsset {
   uploadedById String?
   createdAt    DateTime @default(now())
 
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedBy User?  @relation(fields: [uploadedById], references: [id])
 
   @@index([tenantId])
 }

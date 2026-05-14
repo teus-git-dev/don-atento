@@ -305,6 +305,89 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] whatsapp Block E (2026-05-13) — `UserPhoneContact` schema + backfill + dual-write (OTP deferred to E.2)
+
+- **Resolved by**: this commit (fifth block of whatsapp remediation)
+- **What was wrong** (ALTO #3 from the whatsapp audit):
+  - ALTO: `User.additionalContacts` era un string CSV concatenado
+    sin dedup, sin max-length, sin formato. La escritura en
+    `whatsapp.service.AWAITING_OWNER_NAME` tenía race condition (dos
+    webhooks concurrentes leen el `currentContacts` original, ambos
+    appendean, último write gana) y ningún mecanismo de verificación
+    antes de aceptar un teléfono como "contacto autorizado".
+- **What was applied** (per el plan confirmado por el dueño antes de
+  tocar la DB — único bloque que modifica schema):
+  - **Schema** (`prisma/schema.prisma`):
+    - Nuevo `model UserPhoneContact { id, userId, phone, verified
+      (default false), verifiedAt?, createdAt, user (relation,
+      onDelete: Cascade) }` con `@@unique([userId, phone])` y
+      `@@index([phone])`.
+    - Relación inversa en `User`: `phoneContacts
+      UserPhoneContact[]`.
+    - `User.additionalContacts` se PRESERVA (read-path compat
+      durante backfill window) — el cutover y el DROP de columna
+      son Phase E.2 explícita.
+  - **Migración**: schema-only en este commit. El proyecto usa
+    `prisma db push` declarativo (sin directorio
+    `prisma/migrations/`), por lo que la migración se aplica en
+    deploy con `npx prisma db push` contra prod. Operación
+    aditiva, no destructiva, rollback trivial (`DROP TABLE
+    "UserPhoneContact"`).
+  - **Backfill** (`prisma/backfill-user-phone-contacts.ts`):
+    - Recorre `User` con `additionalContacts != null`/`''`.
+    - Parse por `,`, trim, dedup vía `Set`, rechaza entries con
+      menos de 7 dígitos después de strip non-numérico.
+    - Inserta `{ verified: true, verifiedAt: now() }` — los
+      contactos legacy se asumen verificados (eran trusted antes
+      de que existiera OTP); no degradamos UX.
+    - Idempotente vía `skipDuplicates: true` y el unique
+      constraint — re-runs son no-op.
+    - `--dry-run` para preview.
+  - **Dual-write** en
+    `whatsapp.service.processIncomingMessage AWAITING_OWNER_NAME`:
+    - Sigue escribiendo el string legacy `additionalContacts`
+      (read-path compat).
+    - Crea ADICIONALMENTE `UserPhoneContact { verified: false }`
+      — `verified=false` porque la verificación OTP aterriza en
+      Phase E.2; estas filas nuevas no se trustean por lookups
+      futuros hasta que OTP las flippee.
+    - Try/catch sobre el `create` — la race condition queda
+      cerrada por `@@unique([userId, phone])`: el segundo write
+      concurrente lanza P2002 y se loguea como warn no-op.
+  - **Lookup en `whatsapp.service`**: NO cambia en este bloque.
+    Sigue usando `additionalContacts: { contains: ... }` por compat.
+    Migrar al lookup de `UserPhoneContact` (con `verified: true`
+    obligatorio) es Phase E.2.
+- **Verification**:
+  - `npx prisma validate` ✓
+  - `npx prisma format` aplicó normalización (commiteada)
+  - `npx prisma generate` regenera client con `UserPhoneContact`
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Phase E.2 — explícita carryover** (NO en este bloque):
+  - Flujo OTP completo: cuando el enrolment crea
+    `UserPhoneContact{verified:false}`, enviar OTP via WA al
+    teléfono `user.phone` original. Estado Redis
+    `AWAITING_OTP{userPhoneContactId}`. Respuesta numérica desde
+    el nuevo teléfono valida + flip a `verified: true`.
+  - Cutover de lookup: `whatsapp.service.user.findFirst` migra a
+    consultar `UserPhoneContact` con `verified: true` en lugar
+    del CSV.
+  - `properties.service.ts:177-178` (`JSON.stringify(ownerInfo
+    .additionalContacts)` durante creación de propiedad) — flujo
+    distinto al de WA, evaluar si se migra también.
+  - DROP de `User.additionalContacts` post-observability del
+    cutover (campo gana 0 reads en un período de prueba).
+- **Deploy steps** (para cuando se haga el push a prod):
+  1. `npx prisma db push` (aditivo).
+  2. `npx ts-node prisma/backfill-user-phone-contacts.ts --dry-run`
+     → verificar conteos esperados.
+  3. `npx ts-node prisma/backfill-user-phone-contacts.ts` →
+     aplicar.
+  4. La aplicación continúa con dual-write; lookups intactos
+     hasta Phase E.2.
+
 ### [x] whatsapp Block D (2026-05-13) — Meta webhook DTO + LLM sanitization + validations
 
 - **Resolved by**: this commit (fourth block of whatsapp remediation)

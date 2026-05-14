@@ -275,6 +275,30 @@ export class WhatsappService {
             data: { additionalContacts: updatedContacts },
           });
 
+          // Block E dual-write: also materialize the enrolment in the
+          // new UserPhoneContact table with verified=false. The
+          // legacy CSV write above stays for read-path compat during
+          // the transition window. Phase E.2 will add OTP verification
+          // (sends a code to user.phone, flips verified=true on
+          // response) and then this lookup becomes the source of
+          // truth. The @@unique([userId, phone]) closes the race
+          // where two concurrent webhooks both enrol the same phone.
+          try {
+            await this.prisma.userPhoneContact.create({
+              data: {
+                userId: foundOwner.id,
+                phone: cleanPhone,
+                verified: false,
+              },
+            });
+          } catch (err) {
+            // Most common path: P2002 unique violation when the same
+            // phone was already enrolled. Idempotent — no action needed.
+            this.logger.warn(
+              `[WA enrolment] UserPhoneContact insert skipped for user=${foundOwner.id} phone=${cleanPhone}: ${(err as Error).message}`,
+            );
+          }
+
           await this.deleteState(from);
           const linkMsg = `Excelente. He verificado que los datos concuerdan y estás en nuestros registros.\n\nTe he vinculado como contacto autorizado para este inmueble en nuestro sistema Don IQ. ¿En qué te puedo ayudar hoy con respecto al inmueble?`;
           return this.sendMessage(from, linkMsg, resolvedTenantId);
