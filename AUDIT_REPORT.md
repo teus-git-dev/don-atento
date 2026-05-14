@@ -305,6 +305,70 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] crm Block B (2026-05-14) — DTOs + identity-spoofing fix definitivo
+
+- **Resolved by**: this commit (second block of crm remediation)
+- **What was wrong** (1 CRÍTICO + 2 ALTOs):
+  - CRÍTICO #7 (identity spoofing, finalización): el handler
+    `approveContract` aceptaba `userId` via `@Body('userId')`. Block
+    A pasó a leer `req.user.id` en el controller pero el body
+    legacy seguía permitido — un cliente stale podía seguir
+    enviándolo. Block B retira el parámetro del body por completo
+    y deja que `ValidationPipe({ whitelist: true,
+    forbidNonWhitelisted: true })` lo rechace si llega.
+  - ALTO #1: 5 handlers con `@Body() data: any`/`formData: any`
+    sin DTO ni `class-validator`. Bodies pasaban sin validar —
+    strings sin `@MaxLength`, fields arbitrarios, JSON bombs.
+  - ALTO #12 (writes con `data: any` permitían setear `tenantId`,
+    `whatsappId` (`@unique`) y otros campos no autorizados):
+    Block A ya bloqueó la mutación cross-tenant vía
+    `updateMany({ where: { id, tenantId } })`; Block B agrega la
+    segunda línea de defensa en el pipe.
+- **What was applied**:
+  - **5 DTOs nuevos** en `src/crm/dto/`:
+    - `CreateProspectDto` — `firstName @MinLength(1)
+      @MaxLength(120)`, `email @IsEmail @MaxLength(255)`,
+      `phone @MaxLength(32)`, `whatsappId @MaxLength(64)`,
+      `source @IsEnum(ProspectSource)`, `propertyIds @IsArray
+      @ArrayMaxSize(50) @IsString({each:true})`, `initialMessage
+      @MaxLength(4000)`. `tenantId` **NO** en el DTO — el
+      controller spreadea `{...data, tenantId: req.tenantId}` y
+      whitelist strip de un tenantId del body.
+    - `UpdateProspectDto` — fields permitidos para mutación
+      (`firstName`, `lastName`, `email`, `phone`, `status`,
+      `sentiment`, `assignedAgentId`). **Excluye** `tenantId`
+      (boundary) y `whatsappId` (es `@unique`, mutación requiere
+      flow admin separado).
+    - `CreateProspectTaskDto` — `title @MinLength(1)
+      @MaxLength(255)`, `description @MaxLength(2000)`,
+      `dueDate @IsDate` con `@Type(() => Date)` para
+      transformación class-transformer.
+    - `UpdateProspectTaskDto` — campos mutables (`title`,
+      `description`, `dueDate`, `isCompleted`). **Excluye**
+      `prospectId` (no se reasigna entre prospects).
+    - `StartContractDto` — `formData @IsOptional @IsObject` (sólo
+      acepta objects; rejecta strings/arrays). El shape interno
+      del formData se mantiene heterogéneo por diseño (varía por
+      template de contrato); validación por-template queda como
+      refactor futuro.
+  - **Controller** tipa los 5 bodies con los DTOs nuevos. Junto
+    con el global `forbidNonWhitelisted: true`, cualquier field
+    extra produce 400 — incluido el legacy `userId` en
+    `approveContract`.
+  - **`approveContract` handler**:
+    - Elimina por completo el `@Body('userId')`.
+    - `req.user` typed con guard defensivo (`{ user?: { id? } }`)
+      + `BadRequestException` si `reqUser.id` falta (no debería
+      pasar bajo `JwtAuthGuard` pero es defense-in-depth).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: password sentinel `'PROSPECT_CONVERTED'` + tenant
+  outbound en `whatsappService.sendMessage` + `$transaction` en
+  `approveContract` → Block C. Radar hardening → Block D.
+  Paginación, HTML escape, Logger, tests → Block E.
+
 ### [x] crm Block A (2026-05-14) — RBAC + tenant scoping en operaciones DB
 
 - **Resolved by**: this commit (first block of crm remediation)

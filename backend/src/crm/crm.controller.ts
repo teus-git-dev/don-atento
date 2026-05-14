@@ -23,6 +23,11 @@ import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
 import { Roles } from '../auth/roles.decorator';
 import { FileUploadService } from '../storage/file-upload.service';
+import { CreateProspectDto } from './dto/create-prospect.dto';
+import { UpdateProspectDto } from './dto/update-prospect.dto';
+import { CreateProspectTaskDto } from './dto/create-prospect-task.dto';
+import { UpdateProspectTaskDto } from './dto/update-prospect-task.dto';
+import { StartContractDto } from './dto/start-contract.dto';
 
 /** Allowed MIME types for contract/document uploads */
 const ALLOWED_MIME_TYPES = [
@@ -53,7 +58,7 @@ export class CrmController {
 
   @Post('prospects')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
-  create(@Body() data: any, @Req() req: Request) {
+  create(@Body() data: CreateProspectDto, @Req() req: Request) {
     return this.crmService.createProspect({
       ...data,
       tenantId: req.tenantId!,
@@ -70,7 +75,7 @@ export class CrmController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   update(
     @Param('id') id: string,
-    @Body() data: any,
+    @Body() data: UpdateProspectDto,
     @Req() req: Request,
   ) {
     return this.crmService.updateProspect(id, req.tenantId!, data);
@@ -92,7 +97,7 @@ export class CrmController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   createTask(
     @Param('id') prospectId: string,
-    @Body() data: any,
+    @Body() data: CreateProspectTaskDto,
     @Req() req: Request,
   ) {
     return this.crmService.createTask(prospectId, req.tenantId!, data);
@@ -102,7 +107,7 @@ export class CrmController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   updateTask(
     @Param('taskId') taskId: string,
-    @Body() data: any,
+    @Body() data: UpdateProspectTaskDto,
     @Req() req: Request,
   ) {
     return this.crmService.updateTask(taskId, req.tenantId!, data);
@@ -120,13 +125,13 @@ export class CrmController {
     @Param('id') prospectId: string,
     @Query('propertyId') propertyId: string,
     @Req() req: Request,
-    @Body() formData: any,
+    @Body() body: StartContractDto,
   ) {
     return this.crmService.startContractProcess(
       prospectId,
       propertyId,
       req.tenantId!,
-      formData,
+      body.formData ?? {},
     );
   }
 
@@ -203,18 +208,22 @@ export class CrmController {
 
   @Post('contracts/:requestId/approve')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
-  approveContract(
-    @Param('requestId') requestId: string,
-    @Req() req: Request,
-  ) {
+  approveContract(@Param('requestId') requestId: string, @Req() req: Request) {
     // userId is read from the JWT (req.user.id), NOT from the body —
     // the previous @Body('userId') flow allowed any caller to attribute
     // the approval to another user (identity spoofing on a legal-binding
-    // action). Block B intentionally moves this to req.user.id.
+    // action). Block B retires the body parameter entirely; the
+    // global ValidationPipe (whitelist + forbidNonWhitelisted) rejects
+    // a stale client that still sends one.
+    const reqUser = (req as Request & { user?: { id?: string } }).user;
+    if (!reqUser?.id) {
+      // JwtAuthGuard guarantees this in practice; defensive throw.
+      throw new BadRequestException('Usuario no identificado.');
+    }
     return this.crmService.approveContract(
       requestId,
       req.tenantId!,
-      (req as any).user.id,
+      reqUser.id,
     );
   }
 }
