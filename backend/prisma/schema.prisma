@@ -465,7 +465,7 @@ model Tenant {
   createdAt              DateTime               @default(now())
   aiTone                 String?
   brandManualUrl         String?
-  whatsappPhoneNumberId  String?
+  whatsappPhoneNumberId  String?                @unique
   whatsappAccessToken    String?
   whatsappProvider       String?                @default("meta")
   communicationTemplates Json?

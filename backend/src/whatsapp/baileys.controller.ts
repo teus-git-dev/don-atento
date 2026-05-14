@@ -103,9 +103,9 @@ export class BaileysController {
   @Get('health')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Métricas de salud anti-ban del número' })
-  getHealth(@Req() req: any) {
+  async getHealth(@Req() req: any) {
     const tenantId = req['tenantId'];
-    const health = this.antiBan.getHealthMetrics(tenantId);
+    const health = await this.antiBan.getHealthMetrics(tenantId);
     return {
       success: true,
       ...health,

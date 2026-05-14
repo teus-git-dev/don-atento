@@ -96,12 +96,28 @@ export class WhatsappService {
     );
   }
 
+  /**
+   * Wraps a Redis op with a hard 800ms timeout. If Redis stalls (not
+   * down, just slow) the webhook used to hang for tens of seconds and
+   * Meta retried the same delivery — leading to duplicate processing.
+   * Block F: cap the wait and treat slow-Redis as cache-miss.
+   */
+  private withRedisTimeout<T>(op: Promise<T>, fallback: T): Promise<T> {
+    return Promise.race<T>([
+      op,
+      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), 800)),
+    ]);
+  }
+
   /** Get conversation state from Redis (returns null on miss or Redis error) */
   private async getState(
     key: string,
   ): Promise<{ step: string; timestamp: number; data?: any } | null> {
     try {
-      const raw = await this.redis.get(`wa:state:${key}`);
+      const raw = await this.withRedisTimeout(
+        this.redis.get(`wa:state:${key}`),
+        null,
+      );
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -114,11 +130,14 @@ export class WhatsappService {
     value: { step: string; timestamp: number; data?: any },
   ): Promise<void> {
     try {
-      await this.redis.set(
-        `wa:state:${key}`,
-        JSON.stringify(value),
-        'EX',
-        CONVERSATION_TTL_SECONDS,
+      await this.withRedisTimeout(
+        this.redis.set(
+          `wa:state:${key}`,
+          JSON.stringify(value),
+          'EX',
+          CONVERSATION_TTL_SECONDS,
+        ),
+        null,
       );
     } catch (err) {
       this.logger.warn(`[Redis] setState failed for ${key}: ${err.message}`);
@@ -197,7 +216,10 @@ export class WhatsappService {
     // From here on every DB lookup is tenant-scoped.
     let resolvedTenantId: string | null = receivedOnTenantId || null;
     if (!resolvedTenantId && phoneNumberId) {
-      const tenantByPhone = await this.prisma.tenant.findFirst({
+      // findUnique now safe — whatsappPhoneNumberId is @unique in
+      // schema (Block F). Previously findFirst was used and two
+      // tenants could collide on the same phoneNumberId silently.
+      const tenantByPhone = await this.prisma.tenant.findUnique({
         where: { whatsappPhoneNumberId: phoneNumberId },
       });
       resolvedTenantId = tenantByPhone?.id || null;
@@ -729,8 +751,8 @@ export class WhatsappService {
     }
 
     if (!token || !phoneNumberId) {
-      console.warn(
-        'WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER_ID not found. Skipping fallback.',
+      this.logger.warn(
+        `[Meta API] WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER_ID not found for tenant=${tenantId ?? 'env-default'}. Skipping outbound.`,
       );
       return;
     }
@@ -753,9 +775,21 @@ export class WhatsappService {
         ),
       );
     } catch (error) {
-      console.error(
-        'Error sending WhatsApp message:',
-        error.response?.data || error.message,
+      // Sanitized error log — Meta's 401 responses can echo back the
+      // submitted token's tail in the error payload, and the previous
+      // `error.response?.data` dump would have leaked that into stdout
+      // (which Render persists). Strip to status + error.code only.
+      const e = error as {
+        response?: {
+          status?: number;
+          data?: { error?: { code?: number; type?: string } };
+        };
+      };
+      const status = e.response?.status;
+      const code = e.response?.data?.error?.code;
+      const type = e.response?.data?.error?.type;
+      this.logger.error(
+        `[Meta API] Send failed: status=${status ?? 'n/a'} code=${code ?? 'n/a'} type=${type ?? 'n/a'}`,
       );
     }
   }

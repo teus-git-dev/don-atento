@@ -70,6 +70,9 @@ describe('WhatsappService', () => {
             workflow: { findFirst: jest.fn().mockResolvedValue({ id: 'wf1' }) },
             tenant: {
               findFirst: jest.fn().mockResolvedValue({ id: 't1' }),
+              // Block F: lookup migrated to findUnique now that
+              // whatsappPhoneNumberId is @unique in schema.
+              findUnique: jest.fn().mockResolvedValue({ id: 't1' }),
             },
           },
         },

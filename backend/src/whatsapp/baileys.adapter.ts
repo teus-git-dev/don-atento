@@ -170,7 +170,11 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
   /**
    * Envía un mensaje de texto con protección anti-ban.
    */
-  async sendText(to: string, text: string): Promise<void> {
+  async sendText(
+    to: string,
+    text: string,
+    options: { isOutbound?: boolean } = {},
+  ): Promise<void> {
     if (!this.sock || this.status !== 'connected') {
       this.logger.warn('Cannot send: not connected');
       return;
@@ -178,8 +182,11 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
 
     const jid = this.normalizeJid(to);
 
-    // Anti-ban: verificar límites
-    const check = this.antiBan.canSend(this.tenantId, to);
+    // Anti-ban: verificar límites. Defaults to outbound (proactive)
+    // — replies to inbound messages should pass `isOutbound: false`
+    // explicitly to bypass the circadian rule.
+    const isOutbound = options.isOutbound ?? true;
+    const check = await this.antiBan.canSend(this.tenantId, to, isOutbound);
     if (!check.allowed) {
       this.logger.warn(`Message blocked by anti-ban: ${check.reason}`);
       return;
@@ -199,7 +206,7 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
     await this.sock.sendPresenceUpdate('paused', jid);
 
     // Anti-ban: registrar envío
-    this.antiBan.recordSent(this.tenantId, to);
+    await this.antiBan.recordSent(this.tenantId, to);
 
     this.logger.debug(`Message sent to ${to}`);
   }
@@ -215,7 +222,7 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
     if (!this.sock || this.status !== 'connected') return;
 
     const jid = this.normalizeJid(to);
-    const check = this.antiBan.canSend(this.tenantId, to);
+    const check = await this.antiBan.canSend(this.tenantId, to, true);
     if (!check.allowed) return;
 
     await this.antiBan.applyDelay(this.tenantId);
@@ -225,7 +232,7 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
       caption: caption || '',
     });
 
-    this.antiBan.recordSent(this.tenantId, to);
+    await this.antiBan.recordSent(this.tenantId, to);
   }
 
   /**
@@ -235,7 +242,7 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
     if (!this.sock || this.status !== 'connected') return;
 
     const jid = this.normalizeJid(to);
-    const check = this.antiBan.canSend(this.tenantId, to);
+    const check = await this.antiBan.canSend(this.tenantId, to, true);
     if (!check.allowed) return;
 
     await this.antiBan.applyDelay(this.tenantId);
@@ -246,7 +253,7 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
       fileName: filename,
     });
 
-    this.antiBan.recordSent(this.tenantId, to);
+    await this.antiBan.recordSent(this.tenantId, to);
   }
 
   getStatus(): WhatsappConnectionStatus {

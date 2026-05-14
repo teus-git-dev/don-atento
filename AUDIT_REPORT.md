@@ -305,6 +305,127 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] whatsapp Block F (2026-05-13) — anti-ban counters → Redis, circadian wireup, log sanitization, batched startup, @unique phoneNumberId
+
+- **Resolved by**: this commit (final block of whatsapp remediation)
+- **What was wrong** (5 ALTOs + 1 MEDIO from the whatsapp audit):
+  - ALTO #6: `AntiBanService.counters = new Map<...>()` — estado
+    in-memory. Bajo horizontal scaling tres pods cada uno con su
+    Map contaban 25/h por separado ⇒ se enviaban hasta 75/h al
+    mismo número. Garantía teórica de anti-ban colapsada.
+  - ALTO #7: `canSend` chequeaba `ACTIVE_HOUR_START/END` pero
+    sólo `logger.debug` — nunca bloqueaba. La "capa 3" (Ritmo
+    Circadiano) era documentación.
+  - ALTO #4 (logs token leak): `console.error('Error sending
+    WhatsApp message:', error.response?.data || error.message)`
+    serializaba el payload completo de Meta — en respuestas 401
+    Meta puede eco el token enviado, leak directo en stdout.
+  - ALTO #10: `BaileysManager.onModuleInit` auto-conectaba todos
+    los tenants Baileys en paralelo. Un cluster grande disparaba
+    burst contra WA Web heuristics anti-bot durante deploy.
+  - ALTO #8: `whatsapp.service.getState/setState` sin timeout —
+    Redis stall ⇒ webhook hang ⇒ Meta retry ⇒ procesamiento
+    duplicado del mismo mensaje.
+  - MEDIO: `Tenant.whatsappPhoneNumberId` no era `@unique` —
+    `findFirst` por phoneNumberId resolvía arbitrariamente si dos
+    tenants colisionaban.
+- **What was applied**:
+  - **`AntiBanService` reescrito (counters → Redis):**
+    - Constructor abre cliente `ioredis` con
+      `lazyConnect`/`maxRetriesPerRequest: 1`/
+      `enableOfflineQueue: false` — misma config defensiva que
+      `WhatsappService`.
+    - Tres keys por tenant con TTL natural:
+      - `wa:antiban:${tenantId}:hour` — INCR + EXPIRE 3600s.
+      - `wa:antiban:${tenantId}:day` — INCR + EXPIRE 86400s.
+      - `wa:antiban:${tenantId}:contacts:day` — SET<contactId>
+        + EXPIRE 86400s, contado vía `SCARD`/`SISMEMBER`.
+    - `recordSent` ahora async, usa `multi()` para hacer las
+      6 ops atómicas.
+    - `getHealthMetrics` y `getHourCount`/`getDayCount` ahora
+      async.
+    - **Fail-closed para outbound** si Redis down: `canSend`
+      retorna `{ allowed: false, reason: 'Rate limit store
+      unavailable' }`. Para inbound replies (`isOutbound:
+      false`), fail-open — el cliente sigue recibiendo respuesta
+      a su mensaje aunque Redis esté caído.
+    - Mapa in-memory `counters` ELIMINADO.
+  - **Circadian wireup (capa 3):**
+    - `canSend(tenantId, contactId, isOutbound)` — tercer
+      parámetro con default `true`. Si `isOutbound && hora <
+      7 || hora >= 22` ⇒ `{ allowed: false, reason: 'Outside
+      active hours...' }`. Inbound replies pasan siempre.
+    - `BaileysAdapter.sendText(to, text, options?)` acepta
+      `{ isOutbound?: boolean }`. Default `true`. Los callers
+      en `whatsapp.service.sendMessage` actualmente pasan default
+      (todos son inbound responses pero el wiring queda listo
+      para outbound proactivo cuando aterricen workflows tipo
+      "recordatorio de pago").
+    - `sendImage` / `sendDocument` actualizados a `await
+      this.antiBan.canSend(...)` + `await this.antiBan
+      .recordSent(...)`.
+  - **Log sanitization (Meta API send):**
+    - El `console.error('Error sending WhatsApp message:',
+      error.response?.data || error.message)` se reemplaza por:
+      ```
+      this.logger.error(`[Meta API] Send failed: status=${...}
+      code=${...} type=${...}`);
+      ```
+      Sólo se loguean los tres campos seguros (`status`, `code`,
+      `type`). El body completo de Meta — que puede contener
+      tail del token en respuestas 401 — no toca stdout.
+    - Cast tipado del `unknown` error en lugar de `error: any`
+      satisface el lint y documenta la estructura esperada.
+    - `console.warn` de "WHATSAPP_ACCESS_TOKEN or PHONE_NUMBER
+      _ID not found" reemplazado por `this.logger.warn` con el
+      tenant id (o `'env-default'` sentinel).
+  - **Batched startup en `BaileysManager.onModuleInit`:**
+    - Nueva constante `AUTOCONNECT_CONCURRENCY = 3`.
+    - Loop en batches: `for (i = 0; i < tenants.length;
+      i += 3)` con `Promise.allSettled` por batch y
+      `gaussianDelay(5000, 2000)` entre batches (mismo
+      distribuidor humano-style ya usado en
+      `AntiBanService.gaussianDelay`).
+    - Per-tenant errors siguen siendo `.catch(...)` no-throw
+      para no parar el resto del cluster.
+  - **Redis timeout wrapper** en `WhatsappService`:
+    - Nuevo método privado `withRedisTimeout(op, fallback)`
+      que hace `Promise.race` con `setTimeout(800ms)`.
+    - `getState` y `setState` envueltos. Si Redis stalled,
+      tratan como cache miss / write-skip. Meta no retry duplica
+      el procesamiento.
+  - **Schema:** `Tenant.whatsappPhoneNumberId` ahora `@unique`.
+    `whatsapp.service.processIncomingMessage` migra de
+    `tenant.findFirst({ where: { whatsappPhoneNumberId } })` a
+    `tenant.findUnique({ where: { whatsappPhoneNumberId } })`.
+    Si dos tenants intentan registrar el mismo phoneNumberId al
+    onboarding, Prisma rechaza con P2002 — colisión silenciosa
+    eliminada.
+  - **`BaileysManager.getConnectionStatus`** ya no incluye `health`
+    en la respuesta (`getHealthMetrics` se volvió async y agregarlo
+    inline encadenaría todos los callers a `await`). Los callers
+    que necesitan health usan `antiBan.getHealthMetrics` directo
+    (el endpoint `GET /baileys/health` ya hacía exactamente eso).
+  - **`BaileysController.getHealth`** ahora `async` y `await
+    this.antiBan.getHealthMetrics(tenantId)`.
+  - **Tests:** spec de `whatsapp.service` agrega
+    `tenant.findUnique` al mock — `findFirst` se preserva para
+    paths legacy.
+- **Verification**:
+  - `prisma validate` ✓ — schema con `@unique` válido
+  - `prisma generate` regenera client
+  - `tsc --noEmit` clean (IDE muestra cache stale del cliente
+    Prisma viejo, pero CLI clean)
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Deploy steps**:
+  1. `npx prisma db push` para aplicar el `@unique` (si dos rows
+     ya colisionan en prod la operación falla — chequeo previo
+     con `SELECT whatsappPhoneNumberId, COUNT(*) FROM "Tenant"
+     GROUP BY whatsappPhoneNumberId HAVING COUNT(*) > 1`).
+  2. Asegurar `REDIS_URL` apuntando a la instancia compartida en
+     producción (ya configurada por CLAUDE.md).
+
 ### [x] whatsapp Block E (2026-05-13) — `UserPhoneContact` schema + backfill + dual-write (OTP deferred to E.2)
 
 - **Resolved by**: this commit (fifth block of whatsapp remediation)

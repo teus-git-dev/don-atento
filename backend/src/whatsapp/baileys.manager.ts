@@ -51,6 +51,16 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
     private readonly antiBan: AntiBanService,
   ) {}
 
+  /**
+   * Concurrency cap for auto-connect on boot. Block F change: a
+   * cluster with many Baileys tenants used to fire `connectTenant`
+   * for all of them in parallel inside the loop, which could push
+   * WhatsApp Web heuristics past anti-bot detection on a deploy
+   * spike. We now process them in batches with a Gaussian-distributed
+   * gap between batches (the same anti-ban delay used elsewhere).
+   */
+  private readonly AUTOCONNECT_CONCURRENCY = 3;
+
   async onModuleInit() {
     this.logger.log(
       'Initializing Baileys Manager: Auto-connecting active tenants...',
@@ -60,16 +70,30 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
         where: { whatsappProvider: 'baileys' },
       });
 
-      for (const tenant of activeTenants) {
+      for (
+        let i = 0;
+        i < activeTenants.length;
+        i += this.AUTOCONNECT_CONCURRENCY
+      ) {
+        const batch = activeTenants.slice(i, i + this.AUTOCONNECT_CONCURRENCY);
         this.logger.log(
-          `Auto-starting Baileys session for tenant: ${tenant.id}`,
+          `Auto-starting Baileys batch ${i / this.AUTOCONNECT_CONCURRENCY + 1} (${batch.length} tenants)`,
         );
-        // Lo iniciamos en background para no bloquear el arranque total del servidor
-        this.connectTenant(tenant.id).catch((err) => {
-          this.logger.error(
-            `Failed to auto-connect tenant ${tenant.id}: ${err.message}`,
-          );
-        });
+        await Promise.allSettled(
+          batch.map((tenant) =>
+            this.connectTenant(tenant.id).catch((err) => {
+              this.logger.error(
+                `Failed to auto-connect tenant ${tenant.id}: ${err.message}`,
+              );
+            }),
+          ),
+        );
+        // Humanized gap between batches via AntiBanService's Gaussian
+        // distribution (~5s ± 2s, floor 1.5s).
+        if (i + this.AUTOCONNECT_CONCURRENCY < activeTenants.length) {
+          const gap = this.antiBan.gaussianDelay(5000, 2000);
+          await new Promise((resolve) => setTimeout(resolve, gap));
+        }
       }
     } catch (error) {
       this.logger.error('Error during Baileys auto-connection:', error.message);
@@ -233,11 +257,16 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Obtiene el estado de conexión de un tenant.
+   *
+   * Note: `health` was previously included as a sync Promise (object
+   * coerced because AntiBanService.getHealthMetrics returned sync).
+   * After Block F it's async (Redis-backed), so callers that need
+   * health should call `antiBan.getHealthMetrics` directly. We omit
+   * it here to keep the status response synchronous and cheap.
    */
   getConnectionStatus(tenantId: string): {
     status: WhatsappConnectionStatus;
     qr?: string;
-    health?: any;
   } {
     const adapter = this.adapters.get(tenantId);
     if (!adapter) {
@@ -250,7 +279,6 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
         adapter.getStatus() === 'qr_required'
           ? adapter.getQrCode() || undefined
           : undefined,
-      health: this.antiBan.getHealthMetrics(tenantId),
     };
   }
 
