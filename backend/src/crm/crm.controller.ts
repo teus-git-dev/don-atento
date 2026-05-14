@@ -19,7 +19,9 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CrmService } from './crm.service';
 import { LegalAiService } from '../cognitive/legal-ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { Roles } from '../auth/roles.decorator';
 import { FileUploadService } from '../storage/file-upload.service';
 
 /** Allowed MIME types for contract/document uploads */
@@ -40,7 +42,7 @@ const CONTRACT_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @ApiTags('crm')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('crm')
 export class CrmController {
   constructor(
@@ -50,8 +52,8 @@ export class CrmController {
   ) {}
 
   @Post('prospects')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   create(@Body() data: any, @Req() req: Request) {
-    // Use tenantId from JWT (injected by TenantGuard), not from body
     return this.crmService.createProspect({
       ...data,
       tenantId: req.tenantId!,
@@ -59,42 +61,61 @@ export class CrmController {
   }
 
   @Get('prospects')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   findAll(@Req() req: Request) {
-    // tenantId comes from the JWT via TenantGuard — never from query params
     return this.crmService.findAll(req.tenantId!);
   }
 
   @Patch('prospects/:id')
-  update(@Param('id') id: string, @Body() data: any) {
-    return this.crmService.updateProspect(id, data);
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  update(
+    @Param('id') id: string,
+    @Body() data: any,
+    @Req() req: Request,
+  ) {
+    return this.crmService.updateProspect(id, req.tenantId!, data);
   }
 
   @Get('analytics/funnel')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   getFunnel(@Req() req: Request) {
     return this.crmService.getFunnel(req.tenantId!);
   }
 
   @Get('analytics/sentiment')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   getSentiment(@Req() req: Request) {
     return this.crmService.getSentimentMetrics(req.tenantId!);
   }
 
   @Post('prospects/:id/tasks')
-  createTask(@Param('id') prospectId: string, @Body() data: any) {
-    return this.crmService.createTask(prospectId, data);
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  createTask(
+    @Param('id') prospectId: string,
+    @Body() data: any,
+    @Req() req: Request,
+  ) {
+    return this.crmService.createTask(prospectId, req.tenantId!, data);
   }
 
   @Patch('tasks/:taskId')
-  updateTask(@Param('taskId') taskId: string, @Body() data: any) {
-    return this.crmService.updateTask(taskId, data);
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  updateTask(
+    @Param('taskId') taskId: string,
+    @Body() data: any,
+    @Req() req: Request,
+  ) {
+    return this.crmService.updateTask(taskId, req.tenantId!, data);
   }
 
   @Post('prospects/:id/convert')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   convert(@Param('id') id: string, @Req() req: Request) {
     return this.crmService.convertToClient(id, req.tenantId!);
   }
 
   @Post('prospects/:id/contract')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   startContract(
     @Param('id') prospectId: string,
     @Query('propertyId') propertyId: string,
@@ -110,7 +131,18 @@ export class CrmController {
   }
 
   @Post('contracts/:requestId/generate-draft')
-  generateDraft(@Param('requestId') requestId: string) {
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  async generateDraft(
+    @Param('requestId') requestId: string,
+    @Req() req: Request,
+  ) {
+    // Block A: verify the contract request belongs to the caller's tenant
+    // BEFORE invoking the LLM (which is billable + leaks data of foreign
+    // prospects via the draft if requestId is cross-tenant).
+    await this.crmService.assertContractRequestBelongsToTenant(
+      requestId,
+      req.tenantId!,
+    );
     return this.legalAi.generateContractDraft(requestId);
   }
 
@@ -123,6 +155,7 @@ export class CrmController {
    * - Returns a 7-day signed URL (see CONTRACT_SIGNED_URL_TTL_SECONDS).
    */
   @Post('upload')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -169,10 +202,19 @@ export class CrmController {
   }
 
   @Post('contracts/:requestId/approve')
+  @Roles('ADMIN_TENANT', 'SUPERADMIN')
   approveContract(
     @Param('requestId') requestId: string,
-    @Body('userId') userId: string,
+    @Req() req: Request,
   ) {
-    return this.crmService.approveContract(requestId, userId);
+    // userId is read from the JWT (req.user.id), NOT from the body —
+    // the previous @Body('userId') flow allowed any caller to attribute
+    // the approval to another user (identity spoofing on a legal-binding
+    // action). Block B intentionally moves this to req.user.id.
+    return this.crmService.approveContract(
+      requestId,
+      req.tenantId!,
+      (req as any).user.id,
+    );
   }
 }

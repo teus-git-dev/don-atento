@@ -305,6 +305,125 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] crm Block A (2026-05-14) — RBAC + tenant scoping en operaciones DB
+
+- **Resolved by**: this commit (first block of crm remediation)
+- **What was wrong** (8 CRÍTICOs del audit + parte del #12):
+  - CRÍTICO #1: `CrmController` con `@UseGuards(JwtAuthGuard,
+    TenantGuard)` sin `RolesGuard` ni `@Roles()` — cualquier
+    `TENANT_USER` podía aprobar contratos, ver pipeline, mutar
+    prospects.
+  - CRÍTICO #2: `updateProspect(id, data)` ejecutaba
+    `prisma.prospect.update({ where: { id }, data })` sin filtro
+    `tenantId` — cross-tenant tampering + escape vía
+    `data.tenantId = 'attacker'`.
+  - CRÍTICO #3: `createTask(prospectId, data)` no verificaba
+    pertenencia del prospect — cross-tenant write injection sobre
+    pipelines ajenos.
+  - CRÍTICO #4: `updateTask(taskId, data)` sin tenant filter y con
+    `data: any` — cross-tenant tampering + reassign de `prospectId`.
+  - CRÍTICO #5: `convertToClient` hacía `prospect.findUnique({ id })`
+    sin tenant filter — creaba User en tenant del caller con datos
+    del prospect víctima.
+  - CRÍTICO #6: `startContractProcess` no verificaba que
+    `prospectId`/`propertyId` pertenecieran al tenant — inicia
+    flujo legal-binding sobre recursos ajenos.
+  - CRÍTICO #8: `approveContract` ejecutaba
+    `contractRequest.findUnique({ id })` sin tenant filter —
+    **catastrófico**: aprueba contrato de cualquier tenant, crea
+    User en tenant del request (foreign), marca Property como
+    RENTED en tenant víctima.
+  - CRÍTICO #12: `radar.controller` usaba `req.user.tenantId` en
+    lugar de `req['tenantId']` — bypasea el override SUPERADMIN
+    del TenantGuard (mismo patrón cerrado en workflows Block A).
+  - Adicional ALTO: `generateDraft(requestId)` invocaba el LLM sin
+    verificar pertenencia del ContractRequest — billable + leak de
+    datos del prospect/property foreign en el draft generado.
+- **What was applied**:
+  - **`CrmController`**:
+    - Clase: `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)`.
+    - Per-handler `@Roles()`:
+      - reads (`findAll`, `getFunnel`, `getSentiment`) →
+        `'AGENT','ADMIN_TENANT','SUPERADMIN'`.
+      - writes generales (`create`, `update`, `createTask`,
+        `updateTask`, `startContract`, `generateDraft`,
+        `upload`) → `'AGENT','ADMIN_TENANT','SUPERADMIN'`.
+      - legal-binding / high blast (`convert`, `approveContract`)
+        → `'ADMIN_TENANT','SUPERADMIN'` only.
+    - Todos los handlers que requieren tenant pasan `req.tenantId!`
+      al service.
+    - `update`, `createTask`, `updateTask`, `generateDraft`,
+      `approveContract` ahora inyectan `@Req()` para pasar el
+      tenantId.
+    - `generateDraft` llama `crmService.assertContractRequest
+      BelongsToTenant(requestId, tenantId)` ANTES de invocar
+      el LLM (`legalAi.generateContractDraft`).
+    - `approveContract` lee `userId` de `req.user.id` (el body
+      `userId` queda como noise y `ValidationPipe` lo rechazará
+      tras el DTO de Block B; en Block A el flow ya no lo
+      consume).
+  - **`RadarController`**:
+    - Clase: `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)`.
+    - `GET /crm/radar/scan` → `@Roles('ADMIN_TENANT',
+      'SUPERADMIN')`. Es la operación más sensible del módulo
+      (outbound scraping vía IP del cluster + consume tokens
+      LLM).
+    - `tenantId = req['tenantId']` reemplaza `req.user.tenantId`
+      — alinea con la convención CLAUDE.md.
+    - `@ApiTags('crm-radar')`, `@ApiBearerAuth()`,
+      `@ApiOperation` agregados.
+  - **`CrmService`** — tenant scoping en cada método:
+    - `updateProspect(id, tenantId, data)`: `updateMany({ where:
+      { id, tenantId }, data })`; 404 si `count === 0`. Block B
+      añadirá el DTO con whitelist; en Block A queda `data: any`
+      para minimizar diff pero el `updateMany` ya bloquea el
+      cross-tenant tampering AÚN si el `data` contuviera
+      `tenantId` (el where ya filtró).
+    - `createTask(prospectId, tenantId, data)`: llama
+      `assertProspectBelongsToTenant` antes del create.
+    - `updateTask(taskId, tenantId, data)` y `deleteTask(taskId,
+      tenantId)`: `findFirst({ where: { id, prospect:
+      { tenantId } } })` antes del update/delete (la relación
+      tenant es transitiva).
+    - `convertToClient(prospectId, tenantId)`:
+      `prospect.findFirst({ where: { id, tenantId } })` reemplaza
+      el `findUnique` global.
+    - `startContractProcess(prospectId, propertyId, tenantId,
+      formData)`: dos guards previos —
+      `assertProspectBelongsToTenant` y
+      `assertPropertyBelongsToTenant`.
+    - `approveContract(requestId, tenantId, approvedByUserId)`:
+      firma extendida con `tenantId`; `contractRequest.findFirst({
+      where: { id, tenantId } })` reemplaza el findUnique global.
+      El `userId` ahora viene de `req.user.id` (controller),
+      eliminando la identity-spoofing vector — pero el body
+      `userId` legacy queda permitido por compat; Block B lo
+      retira definitivamente vía DTO.
+  - **Helpers nuevos** en `CrmService`:
+    - `private assertProspectBelongsToTenant(prospectId, tenantId)`
+      — `findFirst({ id, tenantId })`, throw NotFound.
+    - `private assertPropertyBelongsToTenant(propertyId, tenantId)`
+      — idem.
+    - `public assertContractRequestBelongsToTenant(requestId,
+      tenantId)` — public porque `CrmController.generateDraft`
+      lo llama antes de delegar a `LegalAiService`. Throw uniforme
+      404 — never 403, evita enumeración cross-tenant.
+  - `throw new Error(...)` planos (`approveContract`,
+    `convertToClient`) reemplazados por `NotFoundException`.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (el spec del controller no
+    necesita cambios porque sólo cubre `uploadFile` — Block E
+    agregará coverage de los flows de CRUD).
+  - `npm run build` clean
+- **Carryover**: DTOs + retirar `userId` body en
+  `approveContract` definitivamente → Block B. Password sentinel
+  `'PROSPECT_CONVERTED'` + tenant outbound en
+  `whatsappService.sendMessage` + `$transaction` en
+  `approveContract` → Block C. Radar hardening (rate limit, prompt
+  sanitization, LLM output validation) → Block D. Paginación,
+  HTML escape, Logger, constantes nombradas, tests → Block E.
+
 ### [x] whatsapp Block F (2026-05-13) — anti-ban counters → Redis, circadian wireup, log sanitization, batched startup, @unique phoneNumberId
 
 - **Resolved by**: this commit (final block of whatsapp remediation)
