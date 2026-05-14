@@ -305,6 +305,92 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] accounting Block D (2026-05-14) — paginación + filtros + Logger + Swagger + BALANCE_TOLERANCE_COP + PrismaModule
+
+- **Resolved by**: this commit (final block of accounting remediation)
+- **What was wrong** (resto del audit — 5 ALTOs + 4 MEDIOs):
+  - ALTO #4: `getJournalEntries` con `take: 100` hardcodeado sin
+    paginación.
+  - ALTO #6: `getPuc` sin filtro `isActive` por default.
+  - ALTO #8: handlers sin filtros (date range, status, account,
+    documentType) — operativamente débil para un contador.
+  - ALTO #9: sin `Logger` en el service — operaciones contables
+    sin audit trail en stdout.
+  - ALTO #11: sin endpoint ANNULL — cerrado en Block C; Block D
+    completa el flow con paginación que muestra el campo
+    `annulledAt` en el listado.
+  - MEDIO #1: `EPSILON` magic number inline.
+  - MEDIO #2: `PrismaModule` no importado explícitamente.
+  - MEDIO #3: sin `@ApiOperation` per handler.
+- **What was applied**:
+  - **`BALANCE_TOLERANCE_COP`** constante exportada del service —
+    `new Prisma.Decimal('0.0001')`. Reemplaza los dos `EPSILON`
+    inline (create + post revalidate).
+  - **`MAX_PAGE_LIMIT = 100`** alineado con properties / workflows
+    / crm.
+  - **`Logger` privado en `AccountingService`**:
+    - `createJournalEntry`: log `JournalEntry created id=… tenant=…
+      user=… lines=… totalDebit=…`.
+    - `postJournalEntry`: log `JournalEntry posted id=… tenant=…
+      user=…`.
+    - `annulJournalEntry`: `logger.warn` (anulación es evento
+      sensible) con `reason` truncado a 80 chars.
+  - **`getPuc(tenantId, includeInactive = false)`**:
+    - Por default filter `isActive: true`. Si el caller pasa
+      `?includeInactive=true`, retorna todas. Las cuentas
+      desactivadas (que ya no aceptan asientos por la guard de
+      Block B) ya no contaminan el listado del PUC para el
+      frontend.
+  - **`getJournalEntries(tenantId, opts)`** rewrite:
+    - Firma: `opts = { page?, limit?, dateFrom?, dateTo?, status?,
+      accountId?, documentType? }`.
+    - Paginación: `skip = (page - 1) * limit`; `limit` clamp a
+      `MAX_PAGE_LIMIT`; orderBy `[{ date: 'desc' }, { id: 'asc'
+      }]` para estabilidad.
+    - Filtros:
+      - `dateFrom`/`dateTo`: usan el `@@index([tenantId, date])`
+        existente. Fechas inválidas son ignoradas silenciosamente
+        (no rompe el endpoint para queries malformadas).
+      - `status`: validado contra `['DRAFT', 'POSTED', 'ANNULLED']`
+        antes de pasar a Prisma. Usa el `@@index([tenantId,
+        status])` introducido en Block C.
+      - `accountId`: nested `lines.some.accountId`. No usa índice
+        — comentario documenta que un index dedicado es post-v1
+        hardening si tenants grandes lo usan.
+      - `documentType`: filter exacto.
+    - Response shape: `{ data, totalRecords, totalPages,
+      currentPage }` — alineado con properties / workflows / crm.
+    - `Promise.all([findMany, count])` paraleliza.
+  - **Controller**:
+    - `@ApiOperation` per handler (5 handlers).
+    - `@ApiQuery` para los 6 query params de filtros + paginación.
+    - `getPuc` acepta `?includeInactive=true/false`.
+    - `getJournalEntries` lee y forwarda los 6 query params.
+  - **Module**: `PrismaModule` import explícito (consistencia con
+    tickets / properties / workflows / crm / whatsapp post-Block-F).
+  - **Frontend follow-through** (`frontend/src/services/
+    accountingService.ts`):
+    - `getJournalEntries` ahora pasa `?limit=100` y unwrap
+      `res.data` (con fallback a array raw para rolling deploy
+      compat).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean (backend)
+  - `next build` clean (frontend)
+- **Honest carryover** (NOT en este bloque, ya documentado en
+  Block C):
+  - **SQL-level trigger de inmutabilidad post-POSTED** (Postgres
+    `BEFORE UPDATE`) — defense-in-depth post-v1.
+  - **Tests del módulo** (`accounting.controller.spec.ts` no
+    existe) — coverage de doble partida + transitions + ANNULL +
+    cross-tenant FK guards. Commit dedicado separado.
+  - **Multi-currency en `TransactionLine`** (INFO del audit) —
+    requeriría schema change + handling de exchange rates;
+    out-of-scope v1.
+  - **`AccountingAccount.parentId` cycle detection** (INFO) —
+    no se conoce un caso real; defensivo post-v1.
+
 ### [x] accounting Block C (2026-05-14) — schema audit-trail + strict transitions + ANNULL endpoint + backfill
 
 - **Resolved by**: this commit (third block of accounting remediation)

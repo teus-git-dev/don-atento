@@ -1,11 +1,26 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, EntryStatus } from '@prisma/client';
+
+/**
+ * Tolerancia permitida en el chequeo de doble partida. 0.0001 COP =
+ * 1 / 10 000 de peso — suficiente para absorber redondeos de
+ * Prisma.Decimal en operaciones encadenadas, despreciable para
+ * efectos contables / DIAN. Si una operación legítima genera un
+ * descuadre mayor, es bug del caller, no tolerancia que debamos
+ * relajar.
+ */
+const BALANCE_TOLERANCE_COP = new Prisma.Decimal('0.0001');
+
+/** Cap on `?limit=` para `getJournalEntries`. Mirror del cap usado en
+ *  properties / workflows / crm. */
+const MAX_PAGE_LIMIT = 100;
 
 /**
  * Whitelist of User fields safe to expose in accounting responses.
@@ -53,6 +68,8 @@ const PROPERTY_PUBLIC_SELECT = {
 
 @Injectable()
 export class AccountingService {
+  private readonly logger = new Logger(AccountingService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async createJournalEntry(tenantId: string, data: any, userId: string) {
@@ -91,7 +108,6 @@ export class AccountingService {
     }
 
     // 2. Math Validation (Motor Partida Doble)
-    const EPSILON = new Prisma.Decimal('0.0001');
     let totalDebit = new Prisma.Decimal(0);
     let totalCredit = new Prisma.Decimal(0);
 
@@ -103,7 +119,7 @@ export class AccountingService {
     }
 
     const difference = totalDebit.minus(totalCredit).abs();
-    if (difference.greaterThan(EPSILON)) {
+    if (difference.greaterThan(BALANCE_TOLERANCE_COP)) {
       // Block B: generic error. The pre-Block-B message included exact
       // debit/credit/difference totals — useful for an attacker
       // probing balance manipulation (it tells them exactly how much
@@ -117,10 +133,10 @@ export class AccountingService {
     // 3. Transacción Atómica. Block A removes the prior `data.isAutomated
     // ? POSTED : DRAFT` branch — the body cannot promote to POSTED
     // anymore. New entries are ALWAYS DRAFT; the path to POSTED is
-    // exclusively `postJournalEntry` (which Block C will further
-    // constrain with audit-trail fields).
-    return await this.prisma.$transaction(async (tx) => {
-      const journalEntry = await tx.journalEntry.create({
+    // exclusively `postJournalEntry` (which Block C constrains with
+    // audit-trail fields + strict transitions).
+    const journalEntry = await this.prisma.$transaction(async (tx) => {
+      return tx.journalEntry.create({
         data: {
           tenantId,
           date: new Date(data.date || Date.now()),
@@ -142,9 +158,12 @@ export class AccountingService {
         },
         include: { lines: true },
       });
-
-      return journalEntry;
     });
+
+    this.logger.log(
+      `JournalEntry created id=${journalEntry.id} tenant=${tenantId} user=${userId} lines=${journalEntry.lines.length} totalDebit=${totalDebit.toString()}`,
+    );
+    return journalEntry;
   }
 
   /**
@@ -192,20 +211,21 @@ export class AccountingService {
       // Re-validate balance from the current DB state (not from the
       // create-time payload). Belt-and-suspenders against future
       // line-update endpoints that might subvert the create-time check.
-      const EPSILON = new Prisma.Decimal('0.0001');
       let totalDebit = new Prisma.Decimal(0);
       let totalCredit = new Prisma.Decimal(0);
       for (const line of entry.lines) {
         totalDebit = totalDebit.plus(line.debit ?? new Prisma.Decimal(0));
         totalCredit = totalCredit.plus(line.credit ?? new Prisma.Decimal(0));
       }
-      if (totalDebit.minus(totalCredit).abs().greaterThan(EPSILON)) {
+      if (
+        totalDebit.minus(totalCredit).abs().greaterThan(BALANCE_TOLERANCE_COP)
+      ) {
         throw new UnprocessableEntityException(
           'El asiento está descuadrado en DB. No puede postearse.',
         );
       }
 
-      return tx.journalEntry.update({
+      const posted = await tx.journalEntry.update({
         where: { id },
         data: {
           status: EntryStatus.POSTED,
@@ -213,6 +233,10 @@ export class AccountingService {
           postedByUserId,
         },
       });
+      this.logger.log(
+        `JournalEntry posted id=${id} tenant=${tenantId} user=${postedByUserId}`,
+      );
+      return posted;
     });
   }
 
@@ -260,7 +284,7 @@ export class AccountingService {
         );
       }
 
-      return tx.journalEntry.update({
+      const annulled = await tx.journalEntry.update({
         where: { id },
         data: {
           status: EntryStatus.ANNULLED,
@@ -269,37 +293,97 @@ export class AccountingService {
           annullReason: reason,
         },
       });
+      this.logger.warn(
+        `JournalEntry annulled id=${id} tenant=${tenantId} user=${annulledByUserId} reason="${reason.substring(0, 80)}"`,
+      );
+      return annulled;
     });
   }
 
-  async getPuc(tenantId: string) {
+  async getPuc(tenantId: string, includeInactive = false) {
     return this.prisma.accountingAccount.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ...(includeInactive ? {} : { isActive: true }),
+      },
       orderBy: { code: 'asc' },
       include: { children: true },
     });
   }
 
-  async getJournalEntries(tenantId: string) {
-    // Block B closes CRÍTICO #6 (passwordHash leak via createdBy: true)
-    // and the related ALTO (full thirdParty/property/account exposure).
-    // Each include now goes through a whitelist; Block D will add
-    // pagination + filters on top.
-    return this.prisma.journalEntry.findMany({
-      where: { tenantId },
-      orderBy: { date: 'desc' },
-      include: {
-        lines: {
-          include: {
-            account: { select: ACCOUNT_PUBLIC_SELECT },
-            property: { select: PROPERTY_PUBLIC_SELECT },
-            thirdParty: { select: THIRD_PARTY_PUBLIC_SELECT },
+  /**
+   * Lista paginada de asientos con filtros opcionales (Block D).
+   * Status filter usa el `@@index([tenantId, status])` introducido en
+   * Block C; date range usa el `@@index([tenantId, date])` existente.
+   * Filter por `accountId` cae a un nested `lines.some` y no usa
+   * índice — para tenants con muchos asientos por cuenta, considerar
+   * un índice dedicado post-v1.
+   */
+  async getJournalEntries(
+    tenantId: string,
+    opts: {
+      page?: number;
+      limit?: number;
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+      accountId?: string;
+      documentType?: string;
+    } = {},
+  ) {
+    const page = Math.max(1, opts.page ?? 1);
+    const limit = Math.min(Math.max(1, opts.limit ?? 20), MAX_PAGE_LIMIT);
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.JournalEntryWhereInput = { tenantId };
+    if (opts.dateFrom || opts.dateTo) {
+      where.date = {};
+      if (opts.dateFrom) {
+        const from = new Date(opts.dateFrom);
+        if (!isNaN(from.getTime())) where.date.gte = from;
+      }
+      if (opts.dateTo) {
+        const to = new Date(opts.dateTo);
+        if (!isNaN(to.getTime())) where.date.lte = to;
+      }
+    }
+    if (
+      opts.status &&
+      ['DRAFT', 'POSTED', 'ANNULLED'].includes(opts.status)
+    ) {
+      where.status = opts.status as EntryStatus;
+    }
+    if (opts.documentType) where.documentType = opts.documentType;
+    if (opts.accountId) {
+      where.lines = { some: { accountId: opts.accountId } };
+    }
+
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.journalEntry.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { id: 'asc' }],
+        include: {
+          lines: {
+            include: {
+              account: { select: ACCOUNT_PUBLIC_SELECT },
+              property: { select: PROPERTY_PUBLIC_SELECT },
+              thirdParty: { select: THIRD_PARTY_PUBLIC_SELECT },
+            },
           },
+          createdBy: { select: USER_PUBLIC_SELECT },
         },
-        createdBy: { select: USER_PUBLIC_SELECT },
-      },
-      take: 100,
-    });
+        skip,
+        take: limit,
+      }),
+      this.prisma.journalEntry.count({ where }),
+    ]);
+
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page,
+    };
   }
 
   // ── Cross-tenant FK guards ──────────────────────────────────────

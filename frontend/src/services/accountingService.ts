@@ -12,13 +12,19 @@ export const accountingService = {
   },
 
   async getJournalEntries() {
-    const res = await fetch(`${API_URL}/accounting/journal-entries?tenantId=${TENANT_ID}`, {
+    // accounting Block D: backend response is now
+    // { data, totalRecords, totalPages, currentPage }. Unwrap .data so
+    // existing callers keep getting an array. A future page-aware UI
+    // can read the paginated shape directly via a new method.
+    const res = await fetch(`${API_URL}/accounting/journal-entries?tenantId=${TENANT_ID}&limit=100`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
       },
     });
     if (!res.ok) throw new Error('Error fetching Journal Entries');
-    return res.json();
+    const payload = await res.json();
+    if (Array.isArray(payload)) return payload;
+    return Array.isArray(payload?.data) ? payload.data : [];
   },
 
   async createJournalEntry(data: any) {
