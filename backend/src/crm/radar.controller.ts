@@ -1,5 +1,6 @@
 import { Controller, Get, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { RadarService } from './radar.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -18,8 +19,10 @@ export class RadarController {
   // per call. Restricted to ADMIN_TENANT/SUPERADMIN to prevent abuse by
   // lower-privileged tenant users who could otherwise spike outbound
   // traffic, get the cluster banned from fincaraiz.com.co, and burn
-  // through the tenant's token budget.
+  // through the tenant's token budget. Additionally rate-limited to
+  // 10 scans / hour per IP to bound abuse even from authorized roles.
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Throttle({ default: { limit: 10, ttl: 3600000 } })
   @ApiOperation({
     summary: 'Escanear portales externos por leads (rate-limited)',
   })

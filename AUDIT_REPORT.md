@@ -305,6 +305,83 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] crm Block D (2026-05-14) — radar hardening: rate-limit + URL allowlist + prompt sanitization + LLM output validation + Logger
+
+- **Resolved by**: this commit (fourth block of crm remediation)
+- **What was wrong** (CRÍTICO #10 + #11 + ALTOs #10, #11):
+  - CRÍTICO #10 (radar abuse): `GET /crm/radar/scan` disparaba
+    outbound axios contra fincaraiz.com.co sin rate limiting, sin
+    URL allowlist, sin caps de invocaciones por tenant. Cualquier
+    usuario autorizado (en Block A esto se restringió a
+    ADMIN_TENANT/SUPERADMIN, pero aún así múltiples instances en
+    paralelo pueden trigger IP-ban del cluster, cost amplification
+    via LLM tokens, DoS via timeout × concurrencia).
+  - CRÍTICO #11 (prompt injection vía portal externo): el prompt
+    LLM concatenaba `JSON.stringify(rawLeads)` con strings
+    scrapeados de Finca Raíz. Un actor que publica un listing
+    hostil ahí podía inyectar instrucciones que manipularan
+    `captureScore` y `aiScript` — el `aiScript` resultante se
+    devuelve al cliente CRM para que un agente lo envíe via
+    WhatsApp a propietarios reales. Phishing supply-chain.
+  - ALTO #10: timeout 15s en hot path bloquea concurrency budget.
+  - ALTO #11: `console.error` en lugar de Logger; errores
+    silenciados retornando `[]` indistinguible de "no leads".
+- **What was applied**:
+  - **`@Throttle({ default: { limit: 10, ttl: 3600000 } })`** en
+    `GET /crm/radar/scan` — 10 invocaciones por hora por IP/usuario.
+    Defensa adicional al RBAC de Block A.
+  - **URL allowlist** `ALLOWED_PORTAL_URLS = new Set([...])` en
+    `RadarService`. Si un futuro refactor template-iza la URL y
+    apunta a otro dominio, el `if (!ALLOWED_PORTAL_URLS.has(url))`
+    aborta antes del `axios.get`. SSRF defense-in-depth.
+  - **Prompt sanitization**: helper privado `sanitizeForPrompt(raw)`
+    que aplica a cada campo scrapeado antes de inyectarlo en el
+    prompt LLM:
+    - `\r\n` → space (defeats `Ignore previous instructions\n…`).
+    - `[`, `]`, `` ` `` strippeados (defeats `[METADATA]…[/METADATA]`
+      y role markers).
+    - Truncate a `MAX_FIELD_CHARS = 200` por campo.
+    - `propertyTitle`, `ownerName`, `price`, `location` pasan por
+      sanitize. Sólo `id` (generado server-side) no se sanitiza.
+  - **LLM output validation strict**:
+    - Helper privado `parseAndValidateEnrichments(reply, allowedIds)`.
+    - Parsea JSON con try/catch dedicado (warn en lugar de silent
+      tragado).
+    - Para cada entry valida:
+      - `typeof id === 'string'` Y `allowedSet.has(id)` (el LLM no
+        puede inventar ids — sólo enriquecer los que enviamos).
+      - `Number.isInteger(captureScore)` Y `0 ≤ captureScore ≤ 100`.
+      - `typeof aiScript === 'string'` Y `length ≤ 280`.
+      - **Rechaza scripts con `https?://...` o con runs de ≥7
+        dígitos** (heurística anti-phone-number) — un attacker no
+        puede sembrar URLs ni teléfonos en el mensaje saliente
+        del agente.
+    - Cualquier entry inválida se descarta silenciosamente; el
+      caller usa el fallback default (`captureScore: 70`,
+      `aiScript: 'Hola, vi tu propiedad...'`).
+  - **`fallbackEnrich()`** explícito para cuando la llamada al LLM
+    falla — los leads se devuelven con safe defaults, el frontend
+    ve algo útil en lugar de un array vacío.
+  - **Logger reemplaza `console.error`** en los 3 sitios; los logs
+    distinguen `Portal fetch failed`, `AI enrichment failed`,
+    `Failed to parse AI radar enrichment`, `Radar scan returned 0
+    raw leads (scraper may be stale)`.
+  - **Tipos estrictos** en las estructuras: `rawLeads` tipado como
+    `Array<Omit<RadarLead, 'captureScore' | 'aiScript'>>`,
+    enrichments como `Array<{ id, captureScore, aiScript }>`.
+  - **Constantes nombradas**: `MAX_FIELD_CHARS = 200`,
+    `MAX_RAW_LEADS = 8`, `MAX_LLM_LEADS = 5` reemplazan los
+    magic numbers in-line.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover** (Block E): paginación + USER_PUBLIC_SELECT en
+  `findAll`; phone normalization vía libphonenumber-js; HTML
+  escape en welcome email; Swagger annotations; constantes
+  nombradas en `scoreLead`; tests para `convertToClient` y
+  `approveContract`.
+
 ### [x] crm Block C (2026-05-14) — temp password + tenant outbound + `$transaction` en approveContract
 
 - **Resolved by**: this commit (third block of crm remediation)
