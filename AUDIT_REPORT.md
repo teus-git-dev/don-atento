@@ -305,6 +305,82 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] data-import Block B (2026-05-14) — password sentinel removal + email auto-gen rejection + DTOs + MIME filter + silent user overwrite fix
+
+- **Resolved by**: this commit (second block of data-import remediation)
+- **What was wrong** (4 CRÍTICOs + 3 ALTOs):
+  - CRÍTICO data-1 (password sentinel): `passwordHash =
+    'IMPORTED_NO_PASSWORD'` literal en users creados por import.
+    Cuentas zombie con "hash" no-bcrypt.
+  - CRÍTICO data-2 (email auto-gen `@donatento.com`): records sin
+    email recibían `no-reply-${governmentId}@donatento.com` —
+    subdomain no controlado por el proyecto, sin recovery path.
+  - CRÍTICO data-7 (sin MIME filter en FileInterceptor + 50MB
+    limit): zip-bomb DoS vector via XLSX uncompressed expansion.
+  - CRÍTICO data-8 (silent user overwrite via governmentId match):
+    update path overwrote `phone`/`email`/`role` del user existente
+    — atacante con Excel del governmentId víctima reescribía su
+    teléfono (WhatsApp routing hijack) o email (reset-password
+    takeover).
+  - ALTO data-A: `saveTemplate(body: any)` sin DTO.
+  - ALTO data-B: `JSON.parse(mappingRaw)` sin try/catch → 500
+    en input malformado.
+  - ALTO data-O: 50MB limit en MulterModule.
+- **What was applied**:
+  - **Password sentinel retirado**:
+    - `'IMPORTED_NO_PASSWORD'` eliminado.
+    - Cada user nuevo: CSPRNG temp password via
+      `OnboardingService.generateSecureTemporaryPassword()` +
+      `bcrypt.hash(temp, 12)` + `mustChangePassword: true` +
+      `passwordChangedAt: null` + `isActive: true`. Mismo patrón
+      que `UsersService.create` post Block B users/roles/tenants.
+    - El plaintext NO se retorna por design (los users importados
+      son típicamente OWNER/TENANT que recuperan via
+      forgot-password al primer login real).
+  - **Email auto-gen rechazado**:
+    - Si `record.emails` está vacío o no contiene `@`, el record
+      se skip con error en el log: *"Record sin email válido
+      (governmentId=...). Skipped."*.
+    - No más `no-reply-${governmentId}@donatento.com` en DB.
+  - **Silent overwrite mitigated**:
+    - Path de update (cuando `existingUser` encontrado por
+      governmentId): DTO interno limita a SOFT fields
+      (`firstName`, `lastName`, `sourceTag`, `importedAt`).
+    - **Excluye** `phone`, `email`, `role` — campos auth-sensitive
+      que sólo el owner del user o un flow admin explícito debe
+      mutar. Cierra el vector "Excel attacker rewrites victim's
+      phone or email".
+  - **MIME allowlist** en `FileInterceptor`:
+    - `ALLOWED_MIME_TYPES = ['application/vnd.openxml...
+      spreadsheetml.sheet', 'application/vnd.ms-excel',
+      'application/octet-stream']` (octet-stream porque algunos
+      browsers lo envían para XLSX; node-xlsx falla si no es XLSX
+      real).
+    - Aplicado a `@Post('upload')` y `@Post('execute')` per-handler.
+    - Size limit reducido de **50MB a 10MB** — XLSX de 10MB es
+      enough para imports razonables; 50MB era zip-bomb amplifier.
+  - **DTO `SaveTemplateDto`**:
+    - `name @MaxLength(120)`, `categoryId @MaxLength(32)`,
+      `mapping @IsObject`.
+    - Aplicado a `@Post('templates')`.
+  - **`JSON.parse(mappingRaw)` try/catch** en `executeImport`:
+    malformed input ahora throw `BadRequestException` en lugar
+    de SyntaxError 500.
+  - **`MulterModule.register` global retirado** del module — la
+    config per-handler en el controller es single source of truth
+    auditeable por route.
+  - **`TenantsModule` agregado a imports** del `DataImportModule`
+    — `OnboardingService` ya está exported.
+  - **`@ApiOperation` per handler** agregado.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover (Block C)**: `fs.appendFileSync` → `Logger` (7
+  sites); `$transaction` wrap del loop de imports; eliminar
+  hardcodes (`'Sucursal'`, `'Colombia'`, `'APARTMENT'`); truncar
+  el `errors` Json bound; `as any` cast removal.
+
 ### [x] data-import Block A (2026-05-14) — tenant scoping en findUnique + schema migration `Property.@@unique([tenantId, propertyCode])`
 
 - **Resolved by**: this commit (first block of data-import remediation)

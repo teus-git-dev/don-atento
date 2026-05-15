@@ -2,12 +2,17 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, PropertyType, PropertyStatus } from '@prisma/client';
 import { parse as parseXlsx } from 'node-xlsx';
+import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
 import * as path from 'path';
+import { OnboardingService } from '../tenants/onboarding.service';
 
 @Injectable()
 export class DataImportService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private onboardingService: OnboardingService,
+  ) {}
 
   async parseFileAndPreview(
     fileBuffer: Buffer,
@@ -208,11 +213,23 @@ export class DataImportService {
           }
           const governmentId = String(record.contact_id).trim();
 
-          let email = record.emails
+          // Block B: reject auto-generated `@donatento.com` placeholder
+          // emails. Pre-Block-B a record without `emails` produced a
+          // fake `no-reply-${governmentId}@donatento.com` that was
+          // saved on the User row — no recovery path, no real
+          // mailbox, and the subdomain wasn't owned. Now records
+          // without a real email are skipped + logged as errors.
+          const rawEmail = record.emails
             ? String(record.emails).split(',')[0].trim()
-            : `no-reply-${governmentId}@donatento.com`;
-          if (!email.includes('@'))
-            email = `no-reply-${governmentId}@donatento.com`;
+            : '';
+          if (!rawEmail || !rawEmail.includes('@')) {
+            errors.push({
+              record,
+              error: `Record sin email válido (governmentId=${governmentId}). Skipped.`,
+            });
+            continue;
+          }
+          const email = rawEmail;
 
           const existingUser = await this.prisma.user.findFirst({
             where: { tenantId, governmentId },
@@ -220,14 +237,22 @@ export class DataImportService {
 
           const finalSourceTag = `Phase: CLIENT | ${sourceTag}`;
 
+          // Block B: silent-overwrite mitigation. Pre-Block-B the
+          // update path overwrote `firstName`, `lastName`, `phone`,
+          // `email`, `role` of an existing user matched by
+          // governmentId — an attacker uploading an Excel with the
+          // victim's governmentId could rewrite their phone (WhatsApp
+          // routing hijack) or email (reset-password takeover). Now
+          // updates are limited to "soft" descriptive fields and
+          // EXCLUDE phone / email / role. The audit trail (sourceTag
+          // + importedAt) still records the touch.
           const data = {
             tenantId,
             firstName: record.full_name
-              ? String(record.full_name)
+              ? String(record.full_name).substring(0, 120)
               : 'Desconocido',
             lastName: '',
             governmentId,
-            email: existingUser ? existingUser.email : email,
             phone: record.phones
               ? String(record.phones).substring(0, 50)
               : null,
@@ -239,17 +264,44 @@ export class DataImportService {
 
           let user;
           if (existingUser) {
+            // Block B: soft-update only — DO NOT mutate phone / email
+            // / role from the import data. Those fields are
+            // auth-sensitive and only the user owner (or an explicit
+            // admin flow) should change them.
             user = await this.prisma.user.update({
               where: { id: existingUser.id },
-              data,
+              data: {
+                firstName: data.firstName,
+                lastName: data.lastName,
+                sourceTag: data.sourceTag,
+                importedAt: data.importedAt,
+              },
             });
             fs.appendFileSync(
               debugLogPath,
-              `Updated user: ${user.id} (${governmentId})\n`,
+              `Updated user (soft): ${user.id} (${governmentId})\n`,
             );
           } else {
-            (data as any)['passwordHash'] = 'IMPORTED_NO_PASSWORD';
-            user = await this.prisma.user.create({ data: data as any });
+            // Block B: 'IMPORTED_NO_PASSWORD' sentinel retired. Every
+            // new user gets a CSPRNG temp password + bcrypt(12) +
+            // mustChangePassword=true (mirror of UsersService.create
+            // and OnboardingService.provisionNewTenant). The
+            // plaintext is NOT returned (admins manage these users
+            // via the regular admin flow); the user must complete a
+            // password-reset before they can log in.
+            const tempPassword =
+              this.onboardingService.generateSecureTemporaryPassword();
+            const passwordHash = await bcrypt.hash(tempPassword, 12);
+            user = await this.prisma.user.create({
+              data: {
+                ...data,
+                email,
+                passwordHash,
+                mustChangePassword: true,
+                passwordChangedAt: null,
+                isActive: true,
+              },
+            });
             fs.appendFileSync(
               debugLogPath,
               `Created user: ${user.id} (${governmentId})\n`,
