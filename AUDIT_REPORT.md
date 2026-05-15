@@ -305,6 +305,70 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] providers Block A (2026-05-14) — RBAC + DTOs + tenant escape fix + assignTechnician guard + passwordHash leak fix
+
+- **Resolved by**: this commit (first block of providers remediation)
+- **What was wrong** (4 CRÍTICOs del audit + 2 ALTOs):
+  - CRÍTICO #1 (RBAC dormant): `RolesGuard` registrado pero sin
+    `@Roles()` por handler.
+  - CRÍTICO #2 (tenant escape via `data: any`): `update(id,
+    tenantId, data: any)` con `data` libre permitía mutar
+    `data.tenantId` → robar provider al tenant atacante.
+  - CRÍTICO #3 (passwordHash leak en `findOne`):
+    `include: { technicians: true }` retornaba `User` completo.
+  - CRÍTICO #4 (assignTechnician silent failure + info-leak):
+    user.updateMany no throwed on cross-tenant userId; error
+    message distinguía "not found" vs "access denied".
+  - ALTO (bodies con TypeScript inline types pero sin
+    class-validator runtime).
+  - ALTO (`throw new Error(...)` plano en assignTechnician).
+- **What was applied**:
+  - **`@Roles()` per-handler**:
+    - Reads (`findAll`, `findOne`) → `'AGENT', 'ADMIN_TENANT',
+      'SUPERADMIN'`.
+    - Writes (`create`, `update`, `remove`, `assignTechnician`) →
+      `'ADMIN_TENANT', 'SUPERADMIN'`.
+  - **3 DTOs nuevos**:
+    - `CreateProviderDto` — `name @MaxLength(255)`, `email
+      @IsEmail`, `nit @MaxLength(32)`, `specialty @IsEnum(
+      ProviderSpecialty)`, `photoUrl @IsUrl HTTPS`, etc.
+      `additionalContacts @ArrayMaxSize(20) @ValidateNested @Type`.
+    - `UpdateProviderDto` — TODOS los campos opcionales, EXCLUYE
+      `tenantId`, `id`, `createdAt`, `updatedAt`. Combined con
+      `whitelist + forbidNonWhitelisted`, cierra el CRÍTICO #2
+      tenant-escape. Adicional: `rating @IsNumber @Min(0) @Max(5)
+      @maxDecimalPlaces(1)`, `status @IsEnum(ProviderStatus)`.
+    - `ProviderAdditionalContactDto` — `firstName/lastName
+      @MaxLength(120)`, `governmentId/phone @MaxLength(32)`,
+      `photoUrl @IsUrl HTTPS`.
+  - **Service**:
+    - `findOne` ahora retorna `NotFoundException` si no matchea
+      en lugar de `null` silencioso.
+    - `findOne` con `technicians: { select: USER_PUBLIC_SELECT
+      partial }` — cierra CRÍTICO #3 passwordHash leak.
+    - `update` retorna el row con `findUnique({ id })` después
+      del `updateMany` (en lugar de `{ count }`).
+    - `remove` throws `NotFoundException` cuando count === 0.
+    - **`assignTechnician` rewrite**:
+      - Pre-flight `findFirst` para provider Y user — ambos del
+        tenant. Cierra CRÍTICO #4 (silent failure + info-leak).
+      - Mensajes 404 uniformes — sin distinguir "not found" de
+        "access denied".
+      - Retorna el `User` actualizado (con select whitelist) en
+        lugar de `{ count }`.
+  - **`@ApiOperation`** per handler.
+  - **Tie-break orderBy**: `[{ name: 'asc' }, { id: 'asc' }]`
+    para paginación futura.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover (Block B)**: paginación + filtros (`status`,
+  `specialty`) en `findAll`; `USER_PUBLIC_SELECT` shared (en
+  lugar del partial inline); `Logger` privado; `schema
+  @@index([tenantId])`; endpoints `unassignTechnician` y
+  `change-status`.
+
 ### [x] data-import Block C (2026-05-14) — Logger replace fs.appendFileSync + remove hardcodes + bound errors Json + sourceTag entropy
 
 - **Resolved by**: this commit (final block of data-import remediation)
