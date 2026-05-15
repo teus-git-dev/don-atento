@@ -44,12 +44,13 @@ describe('InventoryMasterController', () => {
   });
 
   describe('uploadFile', () => {
-    it('returns an error object when no file is uploaded', async () => {
-      const result = await controller.uploadFile(
-        undefined as unknown as Express.Multer.File,
-        fakeReq(),
-      );
-      expect(result).toEqual({ error: 'No se subió ningún archivo' });
+    it('throws BadRequestException when no file is uploaded', async () => {
+      await expect(
+        controller.uploadFile(
+          undefined as unknown as Express.Multer.File,
+          fakeReq(),
+        ),
+      ).rejects.toThrow('No se subió ningún archivo');
       expect(mockFileUpload.upload).not.toHaveBeenCalled();
     });
 

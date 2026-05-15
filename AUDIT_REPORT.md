@@ -305,6 +305,71 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] inventory-master Block D (2026-05-14) — addEvidence multipart real + BadRequest on missing file + spec update
+
+- **Resolved by**: this commit (final block of inventory-master remediation)
+- **What was wrong** (ALTO #5 / #11 + MEDIO #5):
+  - ALTO #11 (addEvidence body-supplied URL): aunque Block B
+    enforced HTTPS-only en el DTO, el body seguía aceptando una
+    URL que el caller podía manipular (signed URL del attacker en
+    su propio Supabase Storage, p.ej.). Diferente del patrón
+    establecido en tickets / crm / properties / contracts donde
+    el archivo se sube via FileUploadService y la URL es
+    server-generated.
+  - ALTO #5 (flow inconsistency): `/upload` endpoint sube + retorna
+    signed URL; `/item/:itemId/evidence` recibe esa URL en body —
+    flow de 2 pasos con coupling manual entre clients y server.
+  - MEDIO #5 (`if (!file) return { error: ... }` con 200 + error
+    en body): pattern incorrecto vs el del proyecto.
+- **What was applied**:
+  - **`POST /inventory-master/item/:itemId/evidence`** ahora es
+    multipart:
+    - `FileInterceptor('file', { memory, 10MB, fileFilter
+      ALLOWED_MIME_TYPES })`.
+    - Body multipart: `file` (binary) + `evidenceType`
+      (form field, validado por `AddEvidenceDto`).
+    - Handler:
+      1. Valida que se subió un archivo (`BadRequestException`
+         si falta).
+      2. `fileUpload.upload(tenantId, 'inventory', buffer, {...})`
+         → genera signed URL via Supabase Storage + crea
+         `FileAsset` row.
+      3. `inventoryMasterService.addEvidence(itemId, tenantId,
+         evidenceType, url)` persiste `InventoryEvidence` con la
+         signed URL **generada server-side**.
+    - Mismo patrón que contracts Block C — la URL nunca sale del
+      backend, el caller no puede forjarla.
+  - **`AddEvidenceDto`** simplificado: ya no incluye `url`. Solo
+    `evidenceType @IsEnum(EvidenceType)`. El campo URL viene de
+    `FileUploadService`.
+  - **`InventoryMasterService.addEvidence(itemId, tenantId,
+    evidenceType, url)`** firma actualizada — recibe la URL ya
+    generada, no un objeto del body.
+  - **`uploadFile` `BadRequestException` en lugar de `200 + error`**:
+    el spec existente actualizado.
+  - **Standalone `/upload` endpoint preservado**: lo usa el
+    inventory wizard del frontend (`inmuebles/nuevo/page.tsx` y
+    `inventory-master/page.tsx`) para subir archivos ANTES de
+    que el inventario maestro exista — el wizard recolecta files
+    y luego submitea todo el inventario en un único
+    `createInventory` call. La signed URL retornada cae en el
+    payload `data.zones[].items[].evidences[].url` (validada
+    HTTPS-only por Block B's `CreateEvidenceDto`).
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites (incluyendo spec
+    actualizado de inventory-master controller)
+  - `npm run build` clean
+- **Frontend impact**: ningún caller existente usa el endpoint
+  standalone `/item/:itemId/evidence` (todas las evidencias se
+  agregan inline via `createInventory`). El standalone endpoint
+  está disponible para futuras UI flows que necesiten "agregar
+  evidencia a un ítem existente post-creación".
+- **Carryover**: paginación en `getPropertyInventory` (si el
+  payload crece — actualmente bounded por property), tests
+  adicionales para `addEvidence` y `createPropertyInventory`,
+  Swagger `@ApiConsumes('multipart/form-data')` per handler.
+
 ### [x] inventory-master Block C (2026-05-14) — $transaction + tenant outbound WA + USER_PUBLIC_SELECT + dead-code cleanup (createHandover, instantiateFromTemplate, generateInventoryPDF)
 
 - **Resolved by**: this commit (third block of inventory-master remediation)

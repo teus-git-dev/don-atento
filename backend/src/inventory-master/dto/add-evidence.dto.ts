@@ -1,11 +1,17 @@
-import { CreateEvidenceDto } from './create-evidence.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { EvidenceType } from '@prisma/client';
+import { IsEnum } from 'class-validator';
 
 /**
- * Body for `POST /inventory-master/item/:itemId/evidence`.
- *
- * Same shape as `CreateEvidenceDto` — re-exported with an
- * inventory-master-aware name so the controller signature reads
- * cleanly. Block D may replace this with a multipart upload that
- * bypasses the URL field entirely.
+ * Body field for the multipart `POST /inventory-master/item/:itemId/evidence`
+ * endpoint. Block D retired the body-supplied `url`: the file is now
+ * uploaded directly (multipart), passes through `FileUploadService`
+ * (Supabase Storage + FileAsset row + signed URL), and the resulting
+ * URL is generated server-side. The only body field left is
+ * `evidenceType`.
  */
-export class AddEvidenceDto extends CreateEvidenceDto {}
+export class AddEvidenceDto {
+  @ApiProperty({ enum: EvidenceType, example: 'IMAGE' })
+  @IsEnum(EvidenceType)
+  evidenceType!: EvidenceType;
+}

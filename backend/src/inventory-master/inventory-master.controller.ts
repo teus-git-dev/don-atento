@@ -89,23 +89,74 @@ export class InventoryMasterController {
     );
   }
 
+  /**
+   * Multipart upload for inventory evidence attached to an existing
+   * item. Block D migrated this from the previous JSON body
+   * `{ type, url }` shape — the URL is now generated server-side
+   * via FileUploadService, so the caller can no longer supply
+   * arbitrary URLs (closes residual stored-URL-injection vector
+   * even though Block B already enforced HTTPS-only at the pipe).
+   */
   @Post('item/:itemId/evidence')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({
-    summary: 'Agrega evidencia (foto, video, nota de voz) a un ítem',
+    summary: 'Agrega evidencia (foto/video/audio) a un ítem (multipart)',
   })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              `Tipo de archivo no permitido: ${file.mimetype}. Solo se aceptan imágenes, video y audio.`,
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
   async addEvidence(
     @Req() req: Request,
     @Param('itemId') itemId: string,
-    @Body() evidenceData: AddEvidenceDto,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: AddEvidenceDto,
   ) {
+    if (!file) {
+      throw new BadRequestException('No se subió ningún archivo');
+    }
+
+    const { url } = await this.fileUpload.upload(
+      req.tenantId!,
+      'inventory',
+      file.buffer,
+      {
+        mimeType: file.mimetype,
+        originalName: file.originalname,
+        ttlSeconds: INVENTORY_SIGNED_URL_TTL_SECONDS,
+      },
+    );
+
     return this.inventoryMasterService.addEvidence(
       itemId,
       req.tenantId!,
-      evidenceData,
+      body.evidenceType,
+      url,
     );
   }
 
+  /**
+   * Standalone upload — used by the inventory wizard to attach files
+   * BEFORE the master inventory record exists (the wizard collects
+   * files and then submits the whole inventory in one `createInventory`
+   * call). The signed URL returned here lands in the
+   * `createInventory` payload under `data.zones[].items[].evidences[]
+   * .url` (validated HTTPS-only via Block B's CreateEvidenceDto).
+   */
   @Post('upload')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({
@@ -115,7 +166,7 @@ export class InventoryMasterController {
     FileInterceptor('file', {
       storage: memoryStorage(),
       limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
-      fileFilter: (req, file, cb) => {
+      fileFilter: (_req, file, cb) => {
         if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
           cb(null, true);
         } else {
@@ -133,7 +184,9 @@ export class InventoryMasterController {
     @UploadedFile() file: Express.Multer.File,
     @Req() req: Request,
   ) {
-    if (!file) return { error: 'No se subió ningún archivo' };
+    if (!file) {
+      throw new BadRequestException('No se subió ningún archivo');
+    }
 
     const { url, filename } = await this.fileUpload.upload(
       req.tenantId!,

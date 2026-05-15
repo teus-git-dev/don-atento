@@ -132,17 +132,27 @@ export class InventoryMasterService {
     });
   }
 
-  async addEvidence(itemId: string, tenantId: string, evidenceData: any) {
+  async addEvidence(
+    itemId: string,
+    tenantId: string,
+    evidenceType: string,
+    url: string,
+  ) {
     // Block A: tenant guard via the parent property of the item.
     // InventoryItem has no direct tenantId column — ownership is
     // transitive via property.tenantId.
+    //
+    // Block D: the URL is no longer body-supplied — it's a signed URL
+    // generated server-side by FileUploadService in the controller
+    // immediately before this call. Stored-URL-injection vector is
+    // gone (the caller can't forge the URL).
     await this.assertInventoryItemBelongsToTenant(itemId, tenantId);
 
     return this.prisma.inventoryEvidence.create({
       data: {
         inventoryItemId: itemId,
-        evidenceType: evidenceData.type,
-        url: evidenceData.url,
+        evidenceType: evidenceType as any,
+        url,
       },
     });
   }
