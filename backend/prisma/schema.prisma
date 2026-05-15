@@ -447,6 +447,8 @@ model Provider {
   additionalContacts ProviderAdditionalContact[]
   tickets            Ticket[]
   technicians        User[]
+
+  @@index([tenantId])
 }
 
 model ProviderAdditionalContact {

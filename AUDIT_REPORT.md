@@ -305,6 +305,65 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] providers Block B (2026-05-14) — paginación + filters + Logger + USER_PUBLIC_SELECT shared + schema @@index([tenantId])
+
+- **Resolved by**: this commit (final block of providers remediation)
+- **What was wrong** (4 ALTOs + 4 MEDIOs):
+  - ALTO #5: `findAll` sin paginación.
+  - ALTO #8: sin filters (`status`, `specialty`) en `findAll`.
+  - ALTO #5: `findAll.technicians.select` whitelist parcial
+    (sin `role` ni `whatsappId`) — inconsistente con
+    `USER_PUBLIC_SELECT` global.
+  - MEDIO #2: sin `Logger` privado.
+  - MEDIO #5: schema sin `@@index([tenantId])`.
+  - MEDIO #8: `findAll` no soporta filters operativos.
+  - INF: `ProviderStatus` importado pre-Block-A pero unused —
+    Block B lo usa para el filter.
+- **What was applied**:
+  - **`USER_PUBLIC_SELECT` shared** introducido como constante
+    del módulo (id/firstName/lastName/email/phone/role/whatsappId/
+    photoUrl). Reemplaza el partial inline de Block A en `findAll`
+    y `findOne` includes de `technicians`. `assignTechnician`
+    también lo retorna como select.
+  - **Paginación + filtros en `findAll(tenantId, opts)`**:
+    - `opts = { page?, limit?, status?, specialty? }`.
+    - `MAX_PAGE_LIMIT = 100` cap alineado con resto del proyecto.
+    - `status` validado contra `['ACTIVE','INACTIVE','SUSPENDED']`.
+    - `specialty` validado contra `Object.values(ProviderSpecialty)`
+      enum.
+    - Response shape `{ data, totalRecords, totalPages,
+      currentPage }`.
+    - `orderBy: [{ name: 'asc' }, { id: 'asc' }]` para
+      determinismo.
+    - `Promise.all([findMany, count])` paraleliza.
+  - **Logger privado** en el service. Cuatro operaciones write
+    loguean `id`, `tenant`, contexto adicional (name al create,
+    user→provider al assignTechnician).
+  - **Schema migration**: `@@index([tenantId])` en `Provider`.
+    Aditivo, rollback trivial (`DROP INDEX`).
+  - **Controller `findAll`**: query params (`page`, `limit`,
+    `status`, `specialty`) + `@ApiQuery` per param.
+  - **Frontend** (`providersService.ts`): `getProviders` ahora
+    pasa `?limit=100` y unwrap `res.data` con fallback a array
+    raw para rolling-deploy compat.
+- **Verification**:
+  - `prisma validate` ✓
+  - `prisma generate` clean (regen client con nuevo index)
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean (backend)
+  - `next build` clean (frontend)
+- **Deploy step**: `npx prisma db push` aplica el nuevo
+  `@@index([tenantId])`.
+- **Carryover (post-v1)**:
+  - Tests del módulo (`providers.controller.spec.ts` no existe).
+  - Endpoints `unassignTechnician` (`@Delete(':id/technicians/
+    :userId')`) y `change-status` (`@Patch(':id/status')`).
+  - Migrar `legalSst Boolean` a `legalSstExpires DateTime?` para
+    tracking de vencimiento.
+  - Pre-flight FK check en `remove` (tickets + accountingThirdParty
+    references) — actualmente Prisma rechaza con 500.
+
 ### [x] providers Block A (2026-05-14) — RBAC + DTOs + tenant escape fix + assignTechnician guard + passwordHash leak fix
 
 - **Resolved by**: this commit (first block of providers remediation)

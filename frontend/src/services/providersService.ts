@@ -61,7 +61,14 @@ export interface Provider {
 
 export const providersService = {
   async getProviders() {
-    return apiClient.get<Provider[]>(`/providers?tenantId=${TENANT_ID}`);
+    // providers Block B: backend now returns
+    // { data, totalRecords, totalPages, currentPage }. Unwrap .data
+    // with fallback to raw array for rolling-deploy compat.
+    const res = await apiClient.get<{ data?: Provider[] } | Provider[]>(
+      `/providers?tenantId=${TENANT_ID}&limit=100`,
+    );
+    if (Array.isArray(res)) return res;
+    return Array.isArray(res?.data) ? res.data : [];
   },
 
   async getProvider(id: string) {
