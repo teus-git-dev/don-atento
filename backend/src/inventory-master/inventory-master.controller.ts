@@ -16,7 +16,9 @@ import { memoryStorage } from 'multer';
 import { InventoryMasterService } from './inventory-master.service';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
+import { Roles } from '../auth/roles.decorator';
 import { FileUploadService } from '../storage/file-upload.service';
 
 /**
@@ -47,7 +49,7 @@ const INVENTORY_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @ApiTags('inventory-master')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('inventory-master')
 export class InventoryMasterController {
   constructor(
@@ -56,37 +58,54 @@ export class InventoryMasterController {
   ) {}
 
   @Post('property/:propertyId')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Crea un inventario maestro completo para un inmueble',
   })
   async createInventory(
+    @Req() req: Request,
     @Param('propertyId') propertyId: string,
     @Body() data: any,
   ) {
     return this.inventoryMasterService.createPropertyInventory(
       propertyId,
+      req.tenantId!,
       data,
     );
   }
 
   @Get('property/:propertyId')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Obtiene el inventario maestro de un inmueble' })
-  async getInventory(@Param('propertyId') propertyId: string) {
-    return this.inventoryMasterService.getPropertyInventory(propertyId);
+  async getInventory(
+    @Req() req: Request,
+    @Param('propertyId') propertyId: string,
+  ) {
+    return this.inventoryMasterService.getPropertyInventory(
+      propertyId,
+      req.tenantId!,
+    );
   }
 
   @Post('item/:itemId/evidence')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Agrega evidencia (foto, video, nota de voz) a un ítem',
   })
   async addEvidence(
+    @Req() req: Request,
     @Param('itemId') itemId: string,
     @Body() evidenceData: any,
   ) {
-    return this.inventoryMasterService.addEvidence(itemId, evidenceData);
+    return this.inventoryMasterService.addEvidence(
+      itemId,
+      req.tenantId!,
+      evidenceData,
+    );
   }
 
   @Post('upload')
+  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Sube un archivo de evidencia (imagen, video, audio)',
   })

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryReportService } from './inventory-report.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -6,6 +6,10 @@ import { InventoryTemplatesService } from '../inventory-templates/inventory-temp
 
 @Injectable()
 export class InventoryMasterService {
+  // Block C will retire `templatesService` and `ticketsService` along
+  // with the dead `instantiateFromTemplate` and `createHandover`
+  // methods that consume them. They stay injected here only so the
+  // intermediate Block A / B states compile.
   constructor(
     private prisma: PrismaService,
     private inventoryReport: InventoryReportService,
@@ -13,7 +17,16 @@ export class InventoryMasterService {
     private templatesService: InventoryTemplatesService,
   ) {}
 
-  async createPropertyInventory(propertyId: string, data: any) {
+  async createPropertyInventory(
+    propertyId: string,
+    tenantId: string,
+    data: any,
+  ) {
+    // Block A: cross-tenant write guard. Pre-Block-A the controller
+    // accepted propertyId from the URL and persisted zones / items /
+    // meterReadings / accessItems against it with no ownership
+    // check — Prisma only validates that the Property FK exists.
+    await this.assertPropertyBelongsToTenant(propertyId, tenantId);
     // 1. Create Zones and Items
     const zones = await Promise.all(
       data.zones.map(async (zoneData: any) => {
@@ -80,9 +93,16 @@ export class InventoryMasterService {
     return { zones, propertyId };
   }
 
-  async getPropertyInventory(propertyId: string) {
-    return this.prisma.property.findUnique({
-      where: { id: propertyId },
+  async getPropertyInventory(propertyId: string, tenantId: string) {
+    // Block A: findFirst with composite (id, tenantId) replaces the
+    // pre-Block-A findUnique({ id }) that leaked any property of any
+    // tenant by enumerated id. Returns null when foreign — caller can
+    // turn that into 404 (or we throw here; for now we preserve the
+    // legacy nullable return so the frontend keeps rendering).
+    await this.assertPropertyBelongsToTenant(propertyId, tenantId);
+
+    return this.prisma.property.findFirst({
+      where: { id: propertyId, tenantId },
       include: {
         zones: {
           include: { items: { include: { evidences: true } } },
@@ -93,7 +113,14 @@ export class InventoryMasterService {
     });
   }
 
-  async addEvidence(itemId: string, evidenceData: any) {
+  async addEvidence(itemId: string, tenantId: string, evidenceData: any) {
+    // Block A: tenant guard via the parent property of the item.
+    // InventoryItem has no direct tenantId column — ownership is
+    // transitive via property.tenantId. Pre-Block-A any caller could
+    // attach evidence (with arbitrary URL — addressed further in
+    // Blocks B/D) to any item by enumerated id.
+    await this.assertInventoryItemBelongsToTenant(itemId, tenantId);
+
     return this.prisma.inventoryEvidence.create({
       data: {
         inventoryItemId: itemId,
@@ -101,6 +128,39 @@ export class InventoryMasterService {
         url: evidenceData.url,
       },
     });
+  }
+
+  /**
+   * Uniform-404 ownership guard. Mirror of the helper added in crm /
+   * accounting / contracts Block A. Throws NotFoundException whether
+   * the property doesn't exist OR belongs to a different tenant —
+   * never 403 (avoids cross-tenant id enumeration).
+   */
+  private async assertPropertyBelongsToTenant(
+    propertyId: string,
+    tenantId: string,
+  ): Promise<void> {
+    const p = await this.prisma.property.findFirst({
+      where: { id: propertyId, tenantId },
+      select: { id: true },
+    });
+    if (!p) throw new NotFoundException('Propiedad no encontrada.');
+  }
+
+  /**
+   * Ownership guard for InventoryItem via the parent property's
+   * tenantId. The item itself carries no tenantId column — the
+   * relation is transitive.
+   */
+  private async assertInventoryItemBelongsToTenant(
+    itemId: string,
+    tenantId: string,
+  ): Promise<void> {
+    const item = await this.prisma.inventoryItem.findFirst({
+      where: { id: itemId, property: { tenantId } },
+      select: { id: true },
+    });
+    if (!item) throw new NotFoundException('Ítem de inventario no encontrado.');
   }
 
   async instantiateFromTemplate(

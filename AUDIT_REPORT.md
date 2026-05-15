@@ -305,6 +305,80 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] inventory-master Block A (2026-05-14) — RBAC + tenant scoping en 4 endpoints + helpers assertPropertyBelongsToTenant / assertInventoryItemBelongsToTenant
+
+- **Resolved by**: this commit (first block of inventory-master remediation)
+- **What was wrong** (4 CRÍTICOs del audit del módulo + cierra el
+  pending ALTO previo *"inventory-master service-level tenant
+  scoping still missing post-Phase 2.4"*):
+  - CRÍTICO #1 (RBAC dormant): `@UseGuards(JwtAuthGuard,
+    TenantGuard)` sin `RolesGuard` ni `@Roles()`. Cualquier
+    `TENANT_USER`/`OWNER`/`MAINTENANCE` podía crear inventarios
+    completos, leerlos, adjuntar evidencias y subir archivos.
+  - CRÍTICO #2 (createInventory cross-tenant write): el service
+    persistía zones/items/meterReadings/accessItems con `propertyId`
+    del path SIN verificar pertenencia al tenant.
+  - CRÍTICO #3 (getInventory cross-tenant read): `prisma.property
+    .findUnique({ id: propertyId })` sin filtro tenantId —
+    cualquier usuario autenticado leía inventario + relations
+    (con PII del owner/tenant) de cualquier tenant del cluster.
+  - CRÍTICO #4 (addEvidence cross-tenant write): `prisma
+    .inventoryEvidence.create({ inventoryItemId })` sin verificar
+    que el item pertenece al tenant del caller. URL injection
+    cubierto separado (Block B / D).
+- **What was applied**:
+  - **`InventoryMasterController`**:
+    - Clase: `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)`.
+    - Per-handler `@Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')`
+      en los 4 endpoints (`createInventory`, `getInventory`,
+      `addEvidence`, `uploadFile`). Inventory master es flow
+      operativo de agente — `AGENT` legítimamente lo necesita;
+      lower-privilege roles no.
+    - `createInventory`, `getInventory`, `addEvidence` ahora
+      inyectan `@Req()` y pasan `req.tenantId!` al service.
+      `uploadFile` ya lo hacía pre-Block-A.
+  - **`InventoryMasterService`** — firmas extendidas con `tenantId`
+    + 2 helpers privados nuevos:
+    - `createPropertyInventory(propertyId, tenantId, data)`:
+      llama `assertPropertyBelongsToTenant` antes de cualquier
+      write. Cierra CRÍTICO #2.
+    - `getPropertyInventory(propertyId, tenantId)`: llama el
+      guard; el `findUnique({ id })` cambia a `findFirst({ id,
+      tenantId })` — belt-and-suspenders. Cierra CRÍTICO #3.
+    - `addEvidence(itemId, tenantId, evidenceData)`: llama
+      `assertInventoryItemBelongsToTenant`. Cierra CRÍTICO #4.
+    - **`assertPropertyBelongsToTenant(propertyId, tenantId)`**
+      (private): `findFirst({ id, tenantId })` + uniform 404.
+      Mismo patrón crm / accounting / contracts Block A.
+    - **`assertInventoryItemBelongsToTenant(itemId, tenantId)`**
+      (private): `findFirst({ id: itemId, property: { tenantId }
+      })` — ownership transitiva (InventoryItem no tiene columna
+      tenantId directa; depende de la property parent).
+  - **Imports y constructor preservados**: `TicketsService` y
+    `InventoryTemplatesService` siguen inyectados aunque sólo
+    los consumen métodos dead (`instantiateFromTemplate`,
+    `createHandover`) — Block C eliminará los dead methods y
+    los injects en un solo paso.
+  - **Frontend**: ningún caller existente del frontend rompe; los
+    handlers existentes mantienen la URL shape (`POST /inventory
+    -master/property/:propertyId`, etc.). Cualquier consumer
+    actual seguirá funcionando sin cambios.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**:
+  - DTOs + identity spoofing fix + URL allowlist en addEvidence
+    → Block B.
+  - `$transaction` en createPropertyInventory + tenant outbound
+    WA + USER_PUBLIC_SELECT en relations + **eliminación de
+    código muerto** (`instantiateFromTemplate`, `createHandover`,
+    `generateInventoryPDF`) + claim "validez contractual" + log
+    sanitization → Block C. Confirmado con el dueño: dead code
+    se ELIMINA (no se preserva).
+  - addEvidence multipart real via FileUploadService + paginación
+    + Swagger annotations + Logger → Block D.
+
 ### [x] contracts Block C (2026-05-14) — FileUploadService multipart + paginación + DELETE + schema index + processor cleanup
 
 - **Resolved by**: this commit (final block of contracts remediation)
