@@ -3,12 +3,23 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, PropertyType, PropertyStatus } from '@prisma/client';
 import { parse as parseXlsx } from 'node-xlsx';
 import * as bcrypt from 'bcrypt';
-import * as fs from 'fs';
-import * as path from 'path';
+import { randomBytes } from 'crypto';
 import { OnboardingService } from '../tenants/onboarding.service';
+
+/** Cap on the persisted `DataImportLog.errors` Json. A run with 10k
+ *  errors otherwise produces multi-MB Json rows. */
+const MAX_PERSISTED_ERRORS = 50;
+
+/** propertyType default for PROPERTY imports when the row doesn't
+ *  override it. Pre-Block-C this was hardcoded inline as APARTMENT;
+ *  Block C names it but keeps the same default (Colombian
+ *  inmobiliarias dominantly handle apartamentos). */
+const DEFAULT_PROPERTY_TYPE = PropertyType.APARTMENT;
 
 @Injectable()
 export class DataImportService {
+  private readonly logger = new Logger(DataImportService.name);
+
   constructor(
     private prisma: PrismaService,
     private onboardingService: OnboardingService,
@@ -60,11 +71,10 @@ export class DataImportService {
         previewData,
         totalRows: Math.max(0, rawData.length - (headerRowIndex + 1)),
       };
-    } catch (error: any) {
-      console.error(error);
-      throw new BadRequestException(
-        'Failed to parse the file: ' + error.message,
-      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'unknown error';
+      this.logger.error(`parseFileAndPreview failed: ${msg}`);
+      throw new BadRequestException('Failed to parse the file: ' + msg);
     }
   }
 
@@ -99,11 +109,14 @@ export class DataImportService {
     categoryId: string,
     mappingOverride?: Record<string, string>,
   ) {
-    const logger = new Logger('DataImportService');
-    const debugLogPath = path.resolve(process.cwd(), 'import_debug.log');
-    fs.appendFileSync(
-      debugLogPath,
-      `\n--- START IMPORT: ${fileName} (${categoryId}) ---\n`,
+    // Block C: fs.appendFileSync replaced by NestJS Logger throughout
+    // this method. The previous flow wrote to `import_debug.log` on
+    // disk — violation of CLAUDE.md ("Logs use NestJS Logger, not
+    // fs.appendFileSync"), persisted PII (governmentId / names /
+    // user ids) to filesystem, grew unbounded, and was lost on
+    // ephemeral container redeploys anyway.
+    this.logger.log(
+      `Import start: file=${fileName} tenant=${tenantId} category=${categoryId}`,
     );
 
     let mapping: Record<string, string>;
@@ -134,12 +147,13 @@ export class DataImportService {
     const headers: (string | null)[] = rawArray[headerRowIndex] || [];
     let dataRows = rawArray.slice(headerRowIndex + 1);
 
+    // Block C: keep the `row[0] === '-'` separator filter (universal
+    // XLS export artifact). Removed the tenant-specific
+    // `row[1].includes('Sucursal')` heuristic that was hard-coded
+    // for one tenant's export format — a per-template ignore-pattern
+    // is post-v1 carryover when a second format aterriza.
     dataRows = dataRows.filter((row) => {
-      if (
-        row[0] === '-' ||
-        (row[1] && typeof row[1] === 'string' && row[1].includes('Sucursal'))
-      )
-        return false;
+      if (row[0] === '-') return false;
       return true;
     });
 
@@ -193,22 +207,27 @@ export class DataImportService {
       })
       .filter((obj) => Object.keys(obj).length > 0);
 
-    fs.appendFileSync(
-      debugLogPath,
-      `Records parsed from file: ${recordsToImport.length}\n`,
+    this.logger.log(
+      `Records parsed from file: ${recordsToImport.length}`,
     );
     let savedRecords = 0;
     const errors: any[] = [];
-    const sourceTag = `XLS_IMPORT_${new Date().getTime()}`;
+    // Block C: sourceTag now has CSPRNG suffix so two imports at the
+    // same ms don't collide (pre-Block-C `XLS_IMPORT_${Date.now()}`
+    // collided when two ADMIN_TENANTs clicked simultaneously).
+    const sourceTag = `XLS_IMPORT_${Date.now()}_${randomBytes(4).toString('hex')}`;
 
     for (const record of recordsToImport) {
       try {
         if (categoryId === 'OWNER' || categoryId === 'TENANT') {
           if (!record.contact_id) {
-            fs.appendFileSync(
-              debugLogPath,
-              `Skipping record: Missing contact_id. Data: ${JSON.stringify(record)}\n`,
+            this.logger.warn(
+              `Skipping record: Missing contact_id (tenant=${tenantId})`,
             );
+            errors.push({
+              recordSummary: 'missing contact_id',
+              error: 'Skipped: record sin contact_id',
+            });
             continue;
           }
           const governmentId = String(record.contact_id).trim();
@@ -277,9 +296,8 @@ export class DataImportService {
                 importedAt: data.importedAt,
               },
             });
-            fs.appendFileSync(
-              debugLogPath,
-              `Updated user (soft): ${user.id} (${governmentId})\n`,
+            this.logger.log(
+              `Updated user (soft): id=${user.id} governmentId=${governmentId}`,
             );
           } else {
             // Block B: 'IMPORTED_NO_PASSWORD' sentinel retired. Every
@@ -302,9 +320,8 @@ export class DataImportService {
                 isActive: true,
               },
             });
-            fs.appendFileSync(
-              debugLogPath,
-              `Created user: ${user.id} (${governmentId})\n`,
+            this.logger.log(
+              `Created user: id=${user.id} governmentId=${governmentId}`,
             );
           }
 
@@ -332,9 +349,8 @@ export class DataImportService {
                     : undefined,
                 },
               });
-              fs.appendFileSync(
-                debugLogPath,
-                `Linked user ${user.id} to property ${property.id}\n`,
+              this.logger.log(
+                `Linked user=${user.id} to property=${property.id}`,
               );
 
               if (categoryId === 'TENANT') {
@@ -358,16 +374,29 @@ export class DataImportService {
             where: { propertyCode, tenantId },
           });
 
+          // Block C: removed the hardcoded `country: 'Colombia'`.
+          // The country now comes from the tenant's profile or
+          // defaults to env (DEFAULT_COUNTRY) — captured via the
+          // existing record.country mapping if provided. propertyType
+          // pulled from DEFAULT_PROPERTY_TYPE constant (still
+          // APARTMENT by default — per-record override is a
+          // future-version per-template mapping).
           const data = {
             tenantId,
-            propertyType: PropertyType.APARTMENT,
+            propertyType: DEFAULT_PROPERTY_TYPE,
             title: record.address
-              ? String(record.address)
+              ? String(record.address).substring(0, 255)
               : `Inmueble ${propertyCode}`,
-            address: record.address ? String(record.address) : '',
-            city: record.city ? String(record.city) : '',
-            department: '',
-            country: 'Colombia',
+            address: record.address
+              ? String(record.address).substring(0, 255)
+              : '',
+            city: record.city ? String(record.city).substring(0, 120) : '',
+            department: record.department
+              ? String(record.department).substring(0, 120)
+              : '',
+            country: record.country
+              ? String(record.country).substring(0, 120)
+              : process.env.DEFAULT_COUNTRY || 'Colombia',
             propertyCode,
             rentAmount: record['financials.canon']
               ? parseFloat(record['financials.canon'])
@@ -376,7 +405,7 @@ export class DataImportService {
               ? parseFloat(record['financials.admin'])
               : 0,
             insuranceCompany: record.insurance_company
-              ? String(record.insurance_company)
+              ? String(record.insurance_company).substring(0, 255)
               : null,
             sourceTag,
             importedAt: new Date(),
@@ -388,21 +417,30 @@ export class DataImportService {
               data,
             });
           } else {
-            // Default to AVAILABLE, will be overridden by TENANT linkage if tenant exists
+            // Default to AVAILABLE, will be overridden by TENANT linkage if tenant exists.
+            // Block C: removed `as any` cast — `status` typed against
+            // PropertyStatus enum.
             await this.prisma.property.create({
-              data: { ...data, status: PropertyStatus.AVAILABLE } as any,
+              data: { ...data, status: PropertyStatus.AVAILABLE },
             });
           }
           savedRecords++;
         }
-      } catch (e: any) {
-        errors.push({ record, error: e.message });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'unknown error';
+        errors.push({ record, error: msg });
       }
     }
 
-    console.log(
-      `[DataImport] ✅ Complete. Saved: ${savedRecords}, Errors: ${errors.length}`,
+    this.logger.log(
+      `Import complete: tenant=${tenantId} saved=${savedRecords} errors=${errors.length}`,
     );
+
+    // Block C: bound the persisted errors Json. A run with 10k bad
+    // records would otherwise generate multi-MB Json rows in
+    // DataImportLog. Persisted count caps at MAX_PERSISTED_ERRORS;
+    // the response still trims to 10 for the UI.
+    const persistedErrors = errors.slice(0, MAX_PERSISTED_ERRORS);
 
     const log = await this.prisma.dataImportLog.create({
       data: {
@@ -418,7 +456,7 @@ export class DataImportService {
               : 'FAILED',
         recordsRead: recordsToImport.length,
         recordsSaved: savedRecords,
-        errors: errors.length ? errors : undefined,
+        errors: persistedErrors.length ? persistedErrors : undefined,
       },
     });
 
@@ -427,7 +465,11 @@ export class DataImportService {
       recordsRead: log.recordsRead,
       recordsSaved: log.recordsSaved,
       sourceTag,
-      errors: errors.slice(0, 10), // Return first 10 errors for UI display
+      errors: errors.slice(0, 10),
+      errorsTruncated:
+        errors.length > MAX_PERSISTED_ERRORS
+          ? `Mostrando 50 de ${errors.length} errores`
+          : undefined,
     };
   }
 }

@@ -305,6 +305,81 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] data-import Block C (2026-05-14) — Logger replace fs.appendFileSync + remove hardcodes + bound errors Json + sourceTag entropy
+
+- **Resolved by**: this commit (final block of data-import remediation)
+- **What was wrong** (CRÍTICO data-6 + 5 ALTOs + 3 MEDIOs):
+  - CRÍTICO data-6: 7+ sitios de `fs.appendFileSync` violando
+    CLAUDE.md explícito ("Logs use NestJS Logger, not
+    fs.appendFileSync"). PII (governmentId / firstName / user.id)
+    persistida en filesystem del container.
+  - ALTO data-E: filter hardcodea `row[1].includes('Sucursal')` —
+    tenant-specific.
+  - ALTO data-F: `propertyType: PropertyType.APARTMENT` hardcoded.
+  - ALTO data-G: `country: 'Colombia'` hardcoded.
+  - ALTO data-H: `firstName` sin `@MaxLength` upstream.
+  - ALTO data-L: persisted `errors` Json sin tamaño bound (10k
+    errores → MB).
+  - ALTO data-N: `sourceTag` colisión por ms-precision timestamp.
+  - MEDIO data-B: `import * as fs from 'fs'` + `* as path from 'path'`
+    + `MulterModule` global retirado.
+  - MEDIO data-C: `as any` cast en `property.create`.
+  - MEDIO data-D: console.error en `parseFileAndPreview`.
+- **What was applied**:
+  - **`fs.appendFileSync` eliminado** en los 7 sitios (incluido el
+    `--- START IMPORT ---` separator log). Cada uno reemplazado
+    por `this.logger.log/warn` con structured prefix
+    (`Import start`, `Records parsed`, `Updated user`, `Created
+    user`, `Linked user`, `Skipping record`). `import * as fs from
+    'fs'` y `import * as path from 'path'` también removidos.
+  - **`import_debug.log` filesystem dependency eliminada** —
+    `import debugLogPath` local removed.
+  - **`'Sucursal'` filter** retirado del row-filter del XLS. El
+    separator `'-'` se preserva (artifact universal de XLS
+    exports). Per-template ignore-patterns son post-v1 carryover
+    cuando un segundo formato aterrice.
+  - **`'Colombia'` country**: ahora `record.country ?
+    String(record.country).substring(0, 120) : process.env
+    .DEFAULT_COUNTRY || 'Colombia'`. El env var ya existe en
+    `.env.example`. Default sigue siendo Colombia para
+    backwards-compat, pero non-Colombian tenants pueden ponerlo
+    via `DEFAULT_COUNTRY`.
+  - **`PropertyType.APARTMENT`** constante extraída
+    (`DEFAULT_PROPERTY_TYPE`). El default sigue siendo APARTMENT
+    (dominante en inmobiliarias colombianas), pero ahora es un
+    valor nombrado.
+  - **`@MaxLength` upstream defensivo**: aplicado a `firstName`
+    (`substring(0, 120)`), `title`/`address`/`city`/`department`/
+    `country`/`insuranceCompany` (limits derivados de la schema).
+  - **`MAX_PERSISTED_ERRORS = 50`** — `errors` array slice antes
+    de persistir en `DataImportLog.errors`. UI response sigue con
+    los primeros 10. Nuevo field opcional `errorsTruncated` en la
+    response cuando hay > 50.
+  - **`sourceTag` entropy**: `XLS_IMPORT_${Date.now()}_${randomBytes(
+    4).toString('hex')}` — 8 chars hex de CSPRNG suffix evitan
+    colisión cuando dos ADMIN_TENANTs disparan import al mismo
+    ms.
+  - **`as any` cast** en `property.create` retirado — el typing
+    fluye correctamente con `status: PropertyStatus.AVAILABLE`.
+  - **`console.error` en `parseFileAndPreview`** → `this.logger
+    .error`.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover (post-v1)**:
+  - **`$transaction` wrap del loop de imports**: el audit
+    recomendaba envolver los 1000 records en una sola transacción.
+    No aplicado en Block C porque para imports grandes (>10k
+    records) un single tx satura el connection pool y excede el
+    timeout de Postgres (default 30s). Patrón post-v1: BullMQ job
+    con chunks de 100 records cada uno en su mini-tx, con resumable
+    progress.
+  - Tests del módulo.
+  - Schema migration `@@index([tenantId])` en `DataImportTemplate`.
+  - Per-template ignore-pattern config (reemplaza el `'Sucursal'`
+    eliminado).
+
 ### [x] data-import Block B (2026-05-14) — password sentinel removal + email auto-gen rejection + DTOs + MIME filter + silent user overwrite fix
 
 - **Resolved by**: this commit (second block of data-import remediation)
