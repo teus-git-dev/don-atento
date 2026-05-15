@@ -14,6 +14,8 @@ import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { InventoryMasterService } from './inventory-master.service';
+import { AddEvidenceDto } from './dto/add-evidence.dto';
+import { CreatePropertyInventoryDto } from './dto/create-property-inventory.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -65,7 +67,7 @@ export class InventoryMasterController {
   async createInventory(
     @Req() req: Request,
     @Param('propertyId') propertyId: string,
-    @Body() data: any,
+    @Body() data: CreatePropertyInventoryDto,
   ) {
     return this.inventoryMasterService.createPropertyInventory(
       propertyId,
@@ -95,7 +97,7 @@ export class InventoryMasterController {
   async addEvidence(
     @Req() req: Request,
     @Param('itemId') itemId: string,
-    @Body() evidenceData: any,
+    @Body() evidenceData: AddEvidenceDto,
   ) {
     return this.inventoryMasterService.addEvidence(
       itemId,

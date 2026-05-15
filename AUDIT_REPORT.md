@@ -305,6 +305,67 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] inventory-master Block B (2026-05-14) — DTOs nested + URL allowlist en addEvidence
+
+- **Resolved by**: this commit (second block of inventory-master remediation)
+- **What was wrong** (CRÍTICO #5 URL injection + ALTOs #1, #7, #8 +
+  partial ALTOs #4, #5):
+  - CRÍTICO #5 (stored URL injection en addEvidence): el body
+    `evidenceData.url` se persistía raw — un caller podía inyectar
+    `javascript:`, phishing URLs, tracking pixels en evidencias de
+    items.
+  - ALTO #1 (bodies `data: any` / `evidenceData: any`): sin DTO,
+    sin `class-validator`, `whitelist+forbidNonWhitelisted` no
+    aplicaba.
+  - ALTO #7 / #8 (enum validation ausente): `meterReading.type`,
+    `accessItem.type`, `evidence.type`, `item.condition`,
+    `item.category` se pasaban a Prisma sin `@IsEnum` —
+    valores fuera del enum producían P2009 ⇒ HTTP 500.
+- **What was applied**:
+  - **6 DTOs nuevos** en `src/inventory-master/dto/`:
+    - `CreateEvidenceDto`: `type @IsEnum(EvidenceType)`,
+      `url @IsUrl({ protocols: ['https'], require_protocol: true })
+      @MaxLength(2048)`. HTTPS-only — `javascript:`, `file:`,
+      `http://` rechazados al pipe.
+    - `CreateInventoryItemDto`: `category @IsEnum(
+      InventoryCategory)`, `name @MaxLength(255)`, `condition
+      @IsOptional @IsEnum(InventoryCondition)`, todos los strings
+      con `@MaxLength`, `expectedLifespanMonths @IsInt @Min(0)
+      @Max(1200)`, `technicalDetails @IsObject` (rejecta arrays/
+      primitives), `evidences @ArrayMaxSize(20)
+      @ValidateNested({each:true}) @Type(() => CreateEvidenceDto)`.
+    - `CreateZoneDto`: `name @MaxLength(120)`, `type @IsEnum(
+      ZoneType)`, `items @ArrayMaxSize(200) @ValidateNested
+      @Type(() => CreateInventoryItemDto)`.
+    - `CreateMeterReadingDto`: `type @IsEnum(MeterType)`, `value
+      @MaxLength(32)`, `photoUrl @IsUrl HTTPS`.
+    - `CreatePropertyAccessItemDto`: `type @IsEnum(AccessType)`,
+      `description @MaxLength(255)`, `quantity @IsInt @Min(1)
+      @Max(100)`, `photoUrl @IsUrl HTTPS`.
+    - `CreatePropertyInventoryDto`: `zones @ArrayMinSize(1)
+      @ArrayMaxSize(50) @ValidateNested @Type(() =>
+      CreateZoneDto)`; `meterReadings @ArrayMaxSize(20)`;
+      `accessItems @ArrayMaxSize(50)`. **NO** incluye `tenantId`
+      ni `propertyId` — el controller inyecta `tenantId` del JWT
+      y `propertyId` viene del path.
+    - `AddEvidenceDto extends CreateEvidenceDto`: re-export con
+      nombre inventory-master-aware. Block D puede reemplazarlo
+      con un body multipart.
+  - **Controller** tipa los 2 bodies con DTOs:
+    - `createInventory(@Body() data: CreatePropertyInventoryDto)`.
+    - `addEvidence(@Body() evidenceData: AddEvidenceDto)`.
+    - Combinado con el global `ValidationPipe({whitelist,
+      forbidNonWhitelisted})`, cualquier field extra (incluído
+      `tenantId` smuggled via body) produce 400.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**: `$transaction` + tenant outbound WA +
+  USER_PUBLIC_SELECT + dead-code cleanup + "validez contractual"
+  removal → Block C. addEvidence multipart real + Swagger
+  + Logger → Block D.
+
 ### [x] inventory-master Block A (2026-05-14) — RBAC + tenant scoping en 4 endpoints + helpers assertPropertyBelongsToTenant / assertInventoryItemBelongsToTenant
 
 - **Resolved by**: this commit (first block of inventory-master remediation)
