@@ -305,6 +305,83 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] inventory-master Block C (2026-05-14) — $transaction + tenant outbound WA + USER_PUBLIC_SELECT + dead-code cleanup (createHandover, instantiateFromTemplate, generateInventoryPDF)
+
+- **Resolved by**: this commit (third block of inventory-master remediation)
+- **What was wrong** (CRÍTICOs #6, #7, #8 + ALTOs #2, #3, #4, #5 +
+  MEDIOs varios):
+  - CRÍTICO #6 (`createHandover` dead code con 3 bugs: cross-tenant
+    write + ticket creation downstream + identity spoofing vía
+    `handoverData.userId`).
+  - CRÍTICO #7 (`generateInventoryPDF` dead code con
+    cross-tenant read + `passwordHash` leak + claim legal
+    "validez contractual" sin firma real).
+  - CRÍTICO #8 (`sendInventoryReport` invocaba
+    `whatsapp.sendMessage` SIN tenantId → fallback al pool
+    global del cluster).
+  - ALTO #2 (`createPropertyInventory` ejecutaba 3 grupos de
+    writes secuenciales sin `$transaction`).
+  - ALTO #3 (side effects `sendInventoryReport` bloquean el flow
+    de persist).
+  - ALTO #4 + MEDIO (PDF y `sendInventoryReport` con
+    `relations.include.user: true` → passwordHash leak en
+    serialization).
+  - MEDIO (`console.log('Notifying Incasa...')` hardcoded
+    tenant-specific value en log).
+- **What was applied**:
+  - **Eliminación de código muerto** (aprobado por el dueño con
+    *"menos código es menos superficie"*):
+    - `InventoryMasterService.instantiateFromTemplate(...)` →
+      eliminado.
+    - `InventoryMasterService.createHandover(...)` → eliminado.
+    - `InventoryReportService.generateInventoryPDF(...)` →
+      eliminado (144 líneas de pdfkit layout sin caller, con 3
+      bugs activos).
+    - `TicketsModule` y `InventoryTemplatesModule` imports
+      retirados de `inventory-master.module.ts` — ya no hay
+      caller.
+    - `ticketsService` y `templatesService` injects retirados
+      del constructor del `InventoryMasterService`.
+    - Si esos flows vuelven, se re-implementan desde cero con la
+      cadena completa de guards (RBAC + tenant scoping +
+      `$transaction` + audit trail) aplicada desde día 1.
+  - **`createPropertyInventory` envuelto en `$transaction`**:
+    - Los 3 grupos de writes (zones con items+evidences nested,
+      meterReadings, accessItems) corren en una única transacción
+      interactiva. Pre-Block-C un fallo de `accessItems` después
+      de `meterReadings` dejaba inventario parcial.
+    - El paralelismo per-zone (`Promise.all` sobre `data.zones`)
+      se preserva dentro del tx.
+  - **Side effect post-tx**:
+    - `sendInventoryReport(propertyId, 'CHECK_IN', tenantId)`
+      ahora se llama fire-and-forget DESPUÉS del transaction
+      commit. Un fallo de WhatsApp no aborta el persist; se
+      loguea con `logger.warn`.
+  - **`sendInventoryReport(propertyId, type, tenantId)`** firma
+    extendida:
+    - `whatsapp.sendMessage(target, message, tenantId)` ahora
+      recibe el tenantId — alinea con whatsapp Block A strict
+      mode. Outbound va por las credenciales del tenant, no por
+      el pool global.
+    - `property.findFirst({ where: { id, tenantId } })` reemplaza
+      el `findUnique({ id })` leaky.
+    - **`USER_PUBLIC_SELECT`** aplicado a `relations.include.user`
+      (id / firstName / lastName / email / phone / role /
+      whatsappId). PasswordHash leak cerrado.
+    - `console.log('Notifying Incasa...')` → `this.logger.log(
+      'CHECK_OUT inventory report ready for tenant=... property=...'
+      )`. Tenant-specific magic string eliminado.
+  - **`Logger`** privado agregado a `InventoryMasterService` —
+    loguea creates con `propertyId`, `tenantId`, `zones.length`.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover** (Block D): `addEvidence` multipart real via
+  `FileUploadService` (mismo patrón contracts Block C); Logger en
+  el report service para CHECK_OUT internal surface; Swagger
+  annotations adicionales.
+
 ### [x] inventory-master Block B (2026-05-14) — DTOs nested + URL allowlist en addEvidence
 
 - **Resolved by**: this commit (second block of inventory-master remediation)
