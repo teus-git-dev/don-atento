@@ -10,6 +10,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -73,9 +74,11 @@ export class UsersController {
   }
 
   @Post()
-  async create(@Req() req: any, @Body() data: any) {
-    data.tenantId = req['tenantId'];
-    return this.usersService.create(data);
+  async create(@Req() req: any, @Body() data: CreateUserDto) {
+    return this.usersService.create({
+      ...data,
+      tenantId: req['tenantId'],
+    });
   }
 
   @Delete(':id')

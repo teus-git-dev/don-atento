@@ -305,6 +305,88 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] users/roles/tenants Block A (2026-05-14) — USER_PUBLIC_SELECT + DTOs (passwordHash leak masivo + body validation)
+
+- **Resolved by**: this commit (first block of users/roles/tenants
+  consolidated remediation)
+- **What was wrong** (5 CRÍTICOs + 5 ALTOs):
+  - CRÍTICO users-1, users-3, users-5: `findAllByTenant`,
+    `getUserDetails`, `findAdmin` retornaban User completo con
+    `passwordHash`, `refreshTokenHash`, etc.
+  - CRÍTICO roles-1: `findAllByTenant` con `include: { users: true }`
+    → leak N×M (cada role × cada user con hash).
+  - CRÍTICO roles-3: `delete` sin pre-flight check de users
+    assigned → FK constraint 500.
+  - CRÍTICO tenants-1: `changePassword` body inline sin DTO ni
+    `@MinLength` upstream.
+  - CRÍTICO tenants-2: `saveWhatsappConfig` body inline + retorna
+    200 con error en body.
+  - CRÍTICO tenants-3: `provisionTenant` con `ProvisionTenantInput`
+    interface (compile-time only), runtime sin validar.
+  - ALTOs users-A / roles-B / tenants-A relacionados con bodies
+    `any` + `@MaxLength`.
+- **What was applied**:
+  - **`USER_PUBLIC_SELECT`** introducido en `users.service` (con
+    fields adicionales del module: `tenantId`, `roleId`,
+    `governmentId`, `isActive`, `createdAt`) y `roles.service` (set
+    base estándar). Aplicado en:
+    - `users.findByRole`, `findAllByTenant`, `findAdmin`,
+      `getUserDetails`, `create` — todos los métodos que retornan
+      User rows.
+    - `roles.findAllByTenant` — `users.select: USER_PUBLIC_SELECT`.
+  - **6 DTOs nuevos**:
+    - `CreateUserDto` — `email @IsEmail`, `firstName`/`lastName`
+      `@MaxLength(120)`, `role @IsEnum(UserRole)`, `roleId
+      @MaxLength(64)`. **NO incluye `password`** — Block B retira
+      el body-supplied password path por completo.
+    - `CreateRoleDto` — `name @MaxLength(120)`, `description
+      @MaxLength(500)`, `permissions @IsObject`.
+    - `ProvisionTenantDto` — `companyName @MaxLength(255)`,
+      `nit @MaxLength(32)`, `adminEmail @IsEmail`, `adminFirstName/
+      LastName @MaxLength(120)`, `adminPhone @MaxLength(32)`.
+      Reemplaza el interface `ProvisionTenantInput` (compile-time
+      only).
+    - `UpdateTenantAdminDto` — espejo del provision para admin
+      updates.
+    - `ChangePasswordDto` — `newPassword @MinLength(12) @MaxLength(
+      128)`, `confirmPassword` idem. La validación de complejidad
+      (mayúscula/minúscula/símbolo) sigue server-side en
+      `OnboardingService.validatePasswordStrength`.
+    - `SaveWhatsappConfigDto` — `whatsappPhoneNumberId @MaxLength(
+      64)`, `whatsappAccessToken @MaxLength(2048)`.
+  - **Controllers** tipan los bodies con DTOs:
+    - `users.controller.create` → `CreateUserDto`.
+    - `roles.controller.create` → `CreateRoleDto`.
+    - `tenants.controller.provisionTenant` → `ProvisionTenantDto`.
+    - `tenants.controller.updateTenantAdmin` →
+      `UpdateTenantAdminDto`.
+    - `tenants.controller.changePassword` → `ChangePasswordDto`.
+    - `tenants.controller.saveWhatsappConfig` →
+      `SaveWhatsappConfigDto`. **Eliminado** el `return { success:
+      false, message: 'Faltan...' }` con HTTP 200 — el DTO
+      `@MinLength(1)` rechaza al pipe con 400 estándar.
+  - **`roles.service.delete`** — pre-flight `user.count({ where: {
+    roleId: id, tenantId } })`; throw `ConflictException` si > 0
+    con mensaje claro. Idempotency on count===0 (`NotFoundException`).
+  - **`users.service.delete`** — retorna `{ deleted: true }` con
+    `NotFoundException` si count===0 (en lugar de Prisma
+    BatchPayload silencioso).
+  - **`roles.service.create`** — `permissions` cast a
+    `Prisma.InputJsonValue` (Prisma client requiere type-cast
+    explícito para columnas Json).
+  - **`roles.findAllByTenant`** — `orderBy [{ name: 'asc' }, { id:
+    'asc' }]` con tie-break determinístico.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover (Block B)**: `users.create` rewrite con CSPRNG temp
+  password + bcrypt(12) + `mustChangePassword: true` (cierra
+  CRÍTICO users-2: literal `'TemporaryPassword123!'`); last-admin
+  guard en `users.delete` (cierra CRÍTICO users-4); `$transaction`
+  en `provisionNewTenant` para que tenant+user creates sean
+  atómicos.
+
 ### [x] inventory-master Block D (2026-05-14) — addEvidence multipart real + BadRequest on missing file + spec update
 
 - **Resolved by**: this commit (final block of inventory-master remediation)

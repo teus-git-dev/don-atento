@@ -1,10 +1,38 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
+/**
+ * Whitelist of User fields safe to expose. Mirrors the constant
+ * used in properties / tickets / workflows / crm / accounting /
+ * contracts / inventory-master / whatsapp. Excludes `passwordHash`,
+ * `refreshTokenHash`, `mustChangePassword`, `passwordChangedAt` and
+ * any other internal credential field.
+ */
+const USER_PUBLIC_SELECT = {
+  id: true,
+  tenantId: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  whatsappId: true,
+  role: true,
+  roleId: true,
+  governmentId: true,
+  isActive: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async findByRole(
@@ -18,9 +46,10 @@ export class UsersService {
     const [data, totalRecords] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where: { role, tenantId },
+        select: USER_PUBLIC_SELECT,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       }),
       this.prisma.user.count({ where: { role, tenantId } }),
     ]);
@@ -36,17 +65,22 @@ export class UsersService {
   async findAllByTenant(tenantId: string) {
     return this.prisma.user.findMany({
       where: { tenantId },
-      include: { roleRef: true },
+      select: {
+        ...USER_PUBLIC_SELECT,
+        roleRef: { select: { id: true, name: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
   }
 
   async findAdmin(tenantId: string) {
-    console.log(`[UsersService] Finding admin for tenant: ${tenantId}`);
     const admin = await this.prisma.user.findFirst({
       where: { tenantId, role: UserRole.ADMIN_TENANT },
+      select: USER_PUBLIC_SELECT,
     });
-    if (!admin)
-      console.warn(`[UsersService] NO ADMIN FOUND for tenant: ${tenantId}`);
+    if (!admin) {
+      this.logger.warn(`No ADMIN_TENANT found for tenant: ${tenantId}`);
+    }
     return admin;
   }
 
@@ -57,14 +91,23 @@ export class UsersService {
     lastName: string;
     role: UserRole;
     roleId?: string;
+    /**
+     * Optional explicit plaintext password. Block A keeps the legacy
+     * signature so the existing controller flow compiles; Block B
+     * replaces it with a CSPRNG temp password helper and
+     * mustChangePassword=true.
+     */
     password?: string;
   }) {
+    // bcrypt cost factor 10 in Block A's intermediate state; Block B
+    // raises to 12 (consistent with OnboardingService) along with the
+    // password sentinel removal.
     const passwordHash = await bcrypt.hash(
       data.password || 'TemporaryPassword123!',
       10,
     );
 
-    return this.prisma.user.create({
+    const created = await this.prisma.user.create({
       data: {
         tenantId: data.tenantId,
         email: data.email,
@@ -74,79 +117,79 @@ export class UsersService {
         roleId: data.roleId || null,
         passwordHash,
       },
+      select: USER_PUBLIC_SELECT,
     });
+    return created;
   }
 
   async delete(id: string, tenantId: string) {
-    return this.prisma.user.deleteMany({
+    const result = await this.prisma.user.deleteMany({
       where: { id, tenantId },
     });
+    if (result.count === 0) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+    return { deleted: true };
   }
 
   async getUserDetails(id: string, tenantId: string) {
-    try {
-      const user = await this.prisma.user.findFirst({
-        where: { id, tenantId },
-        include: {
-          relations: {
-            include: {
-              property: true,
-            },
-          },
-          Ticket_Ticket_reportedByUserIdToUser: {
-            include: {
-              property: true,
-            },
-          },
-        },
-      });
-
-      if (!user) return null;
-
-      // Filter properties by relation type
-      const ownedProperties = user.relations
-        .filter((r) => r.relationType === 'OWNER')
-        .map((r) => {
-          const { property, ...relationContext } = r;
-          return { ...property, relationContext };
-        });
-
-      const rentedProperties = user.relations
-        .filter((r) => r.relationType === 'TENANT')
-        .map((r) => {
-          const { property, ...relationContext } = r;
-          return { ...property, relationContext };
-        });
-
-      // For tickets, we want tickets reported by the user OR tickets associated with their properties.
-      const propertyIds = user.relations.map((r) => r.propertyId);
-
-      let associatedTickets =
-        (user as any).Ticket_Ticket_reportedByUserIdToUser || [];
-
-      if (propertyIds.length > 0) {
-        const propertyTickets = await this.prisma.ticket.findMany({
-          where: {
-            tenantId,
-            propertyId: { in: propertyIds },
-            reportedByUserId: { not: id }, // don't duplicate
-          },
+    const user = await this.prisma.user.findFirst({
+      where: { id, tenantId },
+      select: {
+        ...USER_PUBLIC_SELECT,
+        relations: {
           include: {
             property: true,
           },
-        });
-        associatedTickets = [...associatedTickets, ...propertyTickets];
-      }
+        },
+        Ticket_Ticket_reportedByUserIdToUser: {
+          include: {
+            property: true,
+          },
+        },
+      },
+    });
 
-      return {
-        ...user,
-        ownedProperties,
-        rentedProperties,
-        associatedTickets,
-      };
-    } catch (error: any) {
-      console.error('[getUserDetails] Error:', error.message);
-      throw error;
+    if (!user) return null;
+
+    const ownedProperties = user.relations
+      .filter((r) => r.relationType === 'OWNER')
+      .map((r) => {
+        const { property, ...relationContext } = r;
+        return { ...property, relationContext };
+      });
+
+    const rentedProperties = user.relations
+      .filter((r) => r.relationType === 'TENANT')
+      .map((r) => {
+        const { property, ...relationContext } = r;
+        return { ...property, relationContext };
+      });
+
+    const propertyIds = user.relations.map((r) => r.propertyId);
+
+    let associatedTickets =
+      (user as any).Ticket_Ticket_reportedByUserIdToUser || [];
+
+    if (propertyIds.length > 0) {
+      const propertyTickets = await this.prisma.ticket.findMany({
+        where: {
+          tenantId,
+          propertyId: { in: propertyIds },
+          reportedByUserId: { not: id },
+        },
+        include: {
+          property: true,
+        },
+      });
+      associatedTickets = [...associatedTickets, ...propertyTickets];
     }
+
+    return {
+      ...user,
+      ownedProperties,
+      rentedProperties,
+      associatedTickets,
+    };
   }
 }

@@ -11,6 +11,7 @@ import {
 import type { Request } from 'express';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
+import { CreateRoleDto } from './dto/create-role.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -30,8 +31,7 @@ export class RolesController {
   }
 
   @Post()
-  async create(@Req() req: Request, @Body() data: any) {
-    // Tenant must come from the JWT (TenantGuard), never from the body.
+  async create(@Req() req: Request, @Body() data: CreateRoleDto) {
     return this.rolesService.create({ ...data, tenantId: req.tenantId! });
   }
 

@@ -16,11 +16,11 @@ import { Roles } from '../auth/roles.decorator';
 import { BypassTenantGuard } from '../auth/tenant-bypass.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
-import {
-  OnboardingService,
-  ProvisionTenantInput,
-  UpdateTenantAdminInput,
-} from './onboarding.service';
+import { OnboardingService } from './onboarding.service';
+import { ProvisionTenantDto } from './dto/provision-tenant.dto';
+import { UpdateTenantAdminDto } from './dto/update-tenant-admin.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { SaveWhatsappConfigDto } from './dto/save-whatsapp-config.dto';
 import {
   encryptWhatsappSecret,
   isEncrypted,
@@ -43,7 +43,7 @@ export class TenantsController {
     summary:
       'SUPERADMIN: Provision a new Inmobiliaria (Tenant + Admin User + Welcome Email)',
   })
-  async provisionTenant(@Body() body: ProvisionTenantInput) {
+  async provisionTenant(@Body() body: ProvisionTenantDto) {
     const result = await this.onboardingService.provisionNewTenant(body);
 
     // ⚠ The temporaryPassword is returned ONCE here for the SuperAdmin to copy.
@@ -62,10 +62,7 @@ export class TenantsController {
   // ─── Auth: Forced Password Change on First Login ──────────────────────────
   @Patch('change-password')
   @ApiOperation({ summary: 'Complete mandatory first-login password reset' })
-  async changePassword(
-    @Req() req: any,
-    @Body() body: { newPassword: string; confirmPassword: string },
-  ) {
+  async changePassword(@Req() req: any, @Body() body: ChangePasswordDto) {
     const userId = req.user?.id;
     if (!userId) throw new ForbiddenException('No autenticado.');
 
@@ -93,7 +90,7 @@ export class TenantsController {
   })
   async updateTenantAdmin(
     @Param('id') tenantId: string,
-    @Body() body: Omit<UpdateTenantAdminInput, 'tenantId'>,
+    @Body() body: UpdateTenantAdminDto,
   ) {
     const result = await this.onboardingService.updateTenantAdmin({
       ...body,
@@ -169,14 +166,9 @@ export class TenantsController {
   @ApiOperation({ summary: 'Save WhatsApp credentials for the current tenant' })
   async saveWhatsappConfig(
     @Req() req: any,
-    @Body()
-    body: { whatsappPhoneNumberId: string; whatsappAccessToken: string },
+    @Body() body: SaveWhatsappConfigDto,
   ) {
     const tenantId = req['tenantId'];
-
-    if (!body.whatsappPhoneNumberId || !body.whatsappAccessToken) {
-      return { success: false, message: 'Faltan campos requeridos.' };
-    }
 
     // Encrypt the Meta access token before persisting. The token is a
     // long-lived bearer credential — anyone with read access to the row
