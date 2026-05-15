@@ -106,8 +106,12 @@ export class DataImportService {
     if (mappingOverride && Object.keys(mappingOverride).length > 0) {
       mapping = mappingOverride;
     } else {
-      const template = await this.prisma.dataImportTemplate.findUnique({
-        where: { id: templateId },
+      // Block A: cross-tenant template guard. Pre-Block-A
+      // findUnique({ id }) global retornaba cualquier template del
+      // cluster — un ADMIN_TENANT podía ejecutar el mapping del
+      // tenant víctima sobre su Excel.
+      const template = await this.prisma.dataImportTemplate.findFirst({
+        where: { id: templateId, tenantId },
       });
       if (!template) {
         throw new BadRequestException(
@@ -254,8 +258,13 @@ export class DataImportService {
 
           if (record.property_id) {
             const propertyCode = String(record.property_id).trim();
-            const property = await this.prisma.property.findUnique({
-              where: { propertyCode },
+            // Block A: lookup scoped to tenant. Pre-Block-A
+            // findUnique({ propertyCode }) global retornaba la
+            // property del tenant víctima si compartía el code —
+            // el attacker vinculaba sus users locales a propiedades
+            // ajenas y mutaba el status a RENTED cross-tenant.
+            const property = await this.prisma.property.findFirst({
+              where: { propertyCode, tenantId },
             });
 
             if (property) {
@@ -289,8 +298,12 @@ export class DataImportService {
         } else if (categoryId === 'PROPERTY') {
           if (!record.property_id) continue;
           const propertyCode = String(record.property_id).trim();
-          const existingProp = await this.prisma.property.findUnique({
-            where: { propertyCode },
+          // Block A: tenant-scoped lookup. Pre-Block-A
+          // findUnique({ propertyCode }) global permitía modificar
+          // título / dirección / rentAmount de propiedades del
+          // tenant víctima via Excel upload.
+          const existingProp = await this.prisma.property.findFirst({
+            where: { propertyCode, tenantId },
           });
 
           const data = {

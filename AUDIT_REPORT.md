@@ -305,6 +305,86 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] data-import Block A (2026-05-14) — tenant scoping en findUnique + schema migration `Property.@@unique([tenantId, propertyCode])`
+
+- **Resolved by**: this commit (first block of data-import remediation)
+- **What was wrong** (3 CRÍTICOs del audit del módulo):
+  - CRÍTICO data-3 (cross-tenant Property lookup en OWNER/TENANT
+    flow): `prisma.property.findUnique({ where: { propertyCode } })`
+    sin filtro tenantId — `propertyCode` era `@unique` global en
+    schema. Un atacante con XLS manufacturado vinculaba sus users
+    a propiedades del tenant víctima y mutaba `status` a RENTED.
+  - CRÍTICO data-4 (cross-tenant Property lookup en PROPERTY flow):
+    mismo patrón pero modificaba `title`, `address`, `city`,
+    `rentAmount`, `adminAmount`, `insuranceCompany` de propiedades
+    ajenas.
+  - CRÍTICO data-5 (cross-tenant Template lookup):
+    `dataImportTemplate.findUnique({ where: { id: templateId } })`
+    sin tenant filter — un ADMIN_TENANT del attacker ejecutaba el
+    mapping del tenant víctima.
+- **Plan de migración** (aprobado implícitamente por el plan
+  previo presentado al dueño):
+  - Schema change:
+    - `Property.propertyCode String? @unique` → `String?` (drop
+      global unique).
+    - Agregar `@@unique([tenantId, propertyCode])` (partial
+      unique scoped per tenant — Postgres allows NULL repeats).
+  - Sin destrucción de datos. Rollback trivial: revertir el
+    schema y `npx prisma db push`.
+  - **Pre-flight check requerido en prod**: dos propiedades de
+    distintos tenants con mismo `propertyCode` actualmente
+    coexistirían bajo el nuevo unique. Si en prod ya hay
+    colisiones cross-tenant del campo (improbable porque era
+    global unique antes), `db push` falla. Verificar antes con:
+    ```sql
+    SELECT "tenantId", "propertyCode", COUNT(*)
+    FROM "Property"
+    WHERE "propertyCode" IS NOT NULL
+    GROUP BY "tenantId", "propertyCode"
+    HAVING COUNT(*) > 1;
+    ```
+- **What was applied**:
+  - **Schema** (`prisma/schema.prisma`):
+    - `Property.propertyCode` ya no es `@unique` global.
+    - Nuevo `@@unique([tenantId, propertyCode])` con docstring
+      explicando el cierre del cross-tenant write injection.
+  - **`prisma generate`** regenera client; el tipo
+    `PropertyWhereUniqueInput` ya no acepta `{ propertyCode }`
+    suelto, fuerza migración de callers.
+  - **`data-import.service.ts`** — 3 lookups migrados:
+    - `template.findUnique({ id })` →
+      `findFirst({ id: templateId, tenantId })`. Cierra
+      CRÍTICO data-5.
+    - `property.findUnique({ propertyCode })` (OWNER/TENANT flow)
+      → `findFirst({ propertyCode, tenantId })`. Cierra
+      CRÍTICO data-3.
+    - `property.findUnique({ propertyCode })` (PROPERTY flow)
+      → `findFirst({ propertyCode, tenantId })`. Cierra
+      CRÍTICO data-4.
+  - **`properties/bulk-import.service.ts`** ya usaba
+    `findFirst({ tenantId, propertyCode })` (post-Phase 2.x
+    properties remediation) — no requiere cambio.
+- **Verification**:
+  - `prisma validate` ✓
+  - `prisma generate` clean (regen tipo `PropertyWhereUniqueInput`)
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Deploy steps**:
+  1. Pre-flight SQL check (ver arriba) — debe retornar 0 rows
+     antes de aplicar el schema change. Si hay colisiones, son
+     bug pre-existente y deben resolverse manualmente.
+  2. `npx prisma db push` (operación aditiva: drop unique global,
+     add compound unique).
+  3. Deploy backend.
+- **Carryover (Block B)**: `'IMPORTED_NO_PASSWORD'` sentinel
+  removal + email auto-gen `@donatento.com` rechazo + DTOs +
+  MIME filter en FileInterceptor + zip-bomb limit reduce.
+- **Carryover (Block C)**: `fs.appendFileSync` → `Logger` (7
+  sites); `$transaction` wrap del loop de imports; eliminar
+  hardcodes `'Sucursal'`/`'Colombia'`/`'APARTMENT'`; truncar
+  `errors` Json bound.
+
 ### [x] users/roles/tenants Block C (2026-05-14) — paginación + HTML escape + Logger sanitization
 
 - **Resolved by**: this commit (final block of users/roles/tenants

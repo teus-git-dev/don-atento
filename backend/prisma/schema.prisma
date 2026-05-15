@@ -286,7 +286,7 @@ model Property {
   rooms            Int?
   bathrooms        Int?
   status           PropertyStatus @default(AVAILABLE)
-  propertyCode     String?        @unique
+  propertyCode     String?
   isVip            Boolean        @default(false)
   isActive         Boolean        @default(true)
   rentAmount       Decimal?
@@ -328,6 +328,13 @@ model Property {
   lines                      TransactionLine[]
   zones                      Zone[]
   Prospect                   Prospect[]                @relation("PropertyInterests")
+
+  /// Block A (data-import): partial unique scoped per tenant. Pre-
+  /// Block-A `propertyCode @unique` was global, which let an
+  /// attacker's Excel import upsert into the victim tenant's row by
+  /// matching propertyCode. Now two tenants can share the same
+  /// propertyCode without collision and updates stay tenant-scoped.
+  @@unique([tenantId, propertyCode])
 }
 
 model PropertyAccessItem {
