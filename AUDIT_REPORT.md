@@ -305,6 +305,59 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] users/roles/tenants Block C (2026-05-14) — paginación + HTML escape + Logger sanitization
+
+- **Resolved by**: this commit (final block of users/roles/tenants
+  consolidated remediation)
+- **What was wrong** (3 ALTOs + 2 MEDIOs):
+  - ALTO users-B: `findAllByTenant` sin paginación (mientras
+    `findByRole` sí pagina). Inconsistencia.
+  - ALTO tenants-D: `validatePasswordStrength` con `throw new
+    Error(...)` plano → 500.
+  - ALTO tenants-E: `email dispatch failed` logueaba el `err`
+    completo → posible leak de SMTP credentials / recipient PII.
+  - MEDIO tenants-B: HTML email body interpolaba `${firstName}`,
+    `${companyName}`, `${email}`, `${temporaryPassword}`,
+    `${loginUrl}` sin HTML escape.
+- **What was applied**:
+  - **`findAllByTenant` paginación**: `(tenantId, page=1, limit=20)`
+    con `MAX_PAGE_LIMIT=100` cap; shape `{ data, totalRecords,
+    totalPages, currentPage }` alineado con el resto del proyecto.
+    Controller acepta `?page=&limit=`.
+  - **Frontend follow-through**:
+    `frontend/src/app/(dashboard)/configuracion/page.tsx` —
+    `fetchUsers` ahora pasa `?limit=100` y unwrap `res.data`
+    con fallback a array raw para rolling-deploy compat.
+  - **HTML escape en welcome email**:
+    - Nuevo helper privado `escapeHtml(input)` (5 chars HTML
+      reservados).
+    - Aplicado a `firstNameSafe`, `companyNameSafe`, `emailSafe`,
+      `temporaryPasswordSafe`, `loginUrlSafe` antes de
+      interpolación.
+    - El template HTML usa los `*Safe` variants — companyName /
+      email del SUPERADMIN input es confianza limitada pero
+      defense-in-depth.
+  - **`validatePasswordStrength`** lanza `BadRequestException` en
+    lugar de `Error` plano → 400 con mensaje, no 500.
+  - **`onboarding.service.ts` error logs sanitizados**:
+    - Welcome email failure y re-onboarding email failure: solo
+      loguean `err.message` (string), no el `err` object completo.
+      Evita potencial leak de SMTP credentials / recipient PII si
+      el `err` los carga en alguna failure path de Nodemailer.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean (backend)
+- **Carryover declarado** (post-v1):
+  - Tests del módulo (`users.controller.spec.ts`,
+    `roles.controller.spec.ts`, `tenants.controller.spec.ts` no
+    existen).
+  - `roles.update` endpoint nuevo (hoy solo create/delete/list).
+  - Refactor del `buildWelcomeEmailHtml` a template engine para
+    futuras locales i18n.
+  - Refresh-token invalidation post `changePassword` (cierre de
+    sessions previas tras cambio forzado).
+
 ### [x] users/roles/tenants Block B (2026-05-14) — users.create rewrite + last-admin guard + provisionTenant $transaction
 
 - **Resolved by**: this commit (second block of users/roles/tenants

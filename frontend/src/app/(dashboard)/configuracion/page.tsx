@@ -49,8 +49,11 @@ export default function ConfiguracionPage() {
 
   const fetchUsers = async () => {
     try {
-      const data = await apiClient.get<any[]>('/users');
-      setUsers(Array.isArray(data) ? data : []);
+      // users Block C: findAll now returns { data, totalRecords, ... }.
+      // Unwrap .data with fallback to raw array for rolling-deploy compat.
+      const res = await apiClient.get<{ data?: unknown[] } | unknown[]>('/users?limit=100');
+      const arr = Array.isArray(res) ? res : (res?.data || []);
+      setUsers(Array.isArray(arr) ? arr : []);
     } catch (e) {
       console.error("Fetch users error", e);
     }

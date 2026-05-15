@@ -69,8 +69,19 @@ export class UsersController {
   }
 
   @Get()
-  async findAll(@Req() req: any) {
-    return this.usersService.findAllByTenant(req['tenantId']);
+  async findAll(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
+    const requestedLimit = limit ? parseInt(limit, 10) : 20;
+    const limitNum = Math.max(1, isNaN(requestedLimit) ? 20 : requestedLimit);
+    return this.usersService.findAllByTenant(
+      req['tenantId'],
+      pageNum,
+      limitNum,
+    );
   }
 
   @Post()

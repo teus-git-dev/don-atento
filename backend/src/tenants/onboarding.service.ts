@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../cognitive/email.service';
 import * as bcrypt from 'bcrypt';
@@ -192,8 +197,12 @@ export class OnboardingService {
         `[Onboarding] Welcome email dispatched to ${input.adminEmail}`,
       );
     } catch (err) {
-      // Email failure is non-blocking — the account still exists
-      this.logger.error('[Onboarding] Email dispatch failed:', err);
+      // Email failure is non-blocking — the account still exists.
+      // Block C: log only the error message string. The err object
+      // can carry SMTP credentials / recipient PII in some failure
+      // paths; the message alone is enough for debugging.
+      const msg = err instanceof Error ? err.message : 'unknown error';
+      this.logger.error(`[Onboarding] Email dispatch failed: ${msg}`);
     }
 
     // ── 5. Return result (temp password visible ONLY here — NEVER stored in logs) ──
@@ -281,7 +290,10 @@ export class OnboardingService {
           `[Onboarding] Re-onboarding email sent to ${input.adminEmail}`,
         );
       } catch (err) {
-        this.logger.error('[Onboarding] Re-onboarding email failed:', err);
+        // Block C: log only message; the error object can carry
+        // SMTP credentials / recipient PII.
+        const msg = err instanceof Error ? err.message : 'unknown error';
+        this.logger.error(`[Onboarding] Re-onboarding email failed: ${msg}`);
       }
     } else {
       // Only update name and phone — no email/password changes
@@ -340,10 +352,29 @@ export class OnboardingService {
       errors.push('Debe contener al menos un símbolo (@, #, $, !, %, etc.).');
 
     if (errors.length > 0) {
-      throw new Error(
+      // Block C: BadRequestException reemplaza el throw new Error(...)
+      // — el caller (changePassword controller) ahora recibe 400 con
+      // mensaje claro en lugar de 500.
+      throw new BadRequestException(
         `Contraseña no cumple estándares de seguridad: ${errors.join(' ')}`,
       );
     }
+  }
+
+  /**
+   * Block C: minimal HTML escape applied to every field interpolated
+   * into the welcome email body. Layer-1 defense — `companyName`
+   * comes from the SUPERADMIN input which is trusted, but
+   * defense-in-depth recommends escaping at the boundary. Mirrors
+   * the escapeHtml helper introduced in crm Block E sendWelcomeKit.
+   */
+  private escapeHtml(input: string): string {
+    return input
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // ─── Welcome Email HTML Template ──────────────────────────────────────────
@@ -356,6 +387,14 @@ export class OnboardingService {
   }): string {
     const { firstName, companyName, email, temporaryPassword, loginUrl } =
       params;
+
+    // Block C: escape all interpolated values. companyName / email
+    // come from SUPERADMIN input (trusted-ish) but defense-in-depth.
+    const firstNameSafe = this.escapeHtml(firstName);
+    const companyNameSafe = this.escapeHtml(companyName);
+    const emailSafe = this.escapeHtml(email);
+    const temporaryPasswordSafe = this.escapeHtml(temporaryPassword);
+    const loginUrlSafe = this.escapeHtml(loginUrl);
 
     return /* html */ `
 <!DOCTYPE html>
@@ -446,11 +485,11 @@ export class OnboardingService {
       <!-- Body -->
       <div class="body">
 
-        <h1>Hola, ${firstName}.<br>Tu cuenta está lista.</h1>
+        <h1>Hola, ${firstNameSafe}.<br>Tu cuenta está lista.</h1>
 
         <p>
           Bienvenido/a a <span class="highlight">Teus</span>. Hemos creado y configurado el acceso administrativo
-          para <span class="highlight">${companyName}</span>. A continuación encontrarás
+          para <span class="highlight">${companyNameSafe}</span>. A continuación encontrarás
           tus credenciales de acceso inicial.
         </p>
 
@@ -468,11 +507,11 @@ export class OnboardingService {
         <div class="credential-box">
           <div class="cred-row">
             <div class="cred-label">Correo de acceso</div>
-            <div class="cred-value">${email}</div>
+            <div class="cred-value">${emailSafe}</div>
           </div>
           <div class="cred-row">
             <div class="cred-label">Contraseña Temporal</div>
-            <div class="cred-value">${temporaryPassword}</div>
+            <div class="cred-value">${temporaryPasswordSafe}</div>
           </div>
           <div class="cred-note">
             Esta contraseña fue generada con entropía criptográfica de 128 bits.
@@ -501,19 +540,19 @@ export class OnboardingService {
             <div class="step-num">3</div>
             <div class="step-text">
               Una vez confirmado el cambio, tendrás acceso completo a tu panel de administración de
-              <strong>${companyName}</strong> en la plataforma Don IQ.
+              <strong>${companyNameSafe}</strong> en la plataforma Don IQ.
             </div>
           </div>
         </div>
 
         <!-- CTA -->
         <div class="cta-wrapper">
-          <a href="${loginUrl}" class="cta-button">
+          <a href="${loginUrlSafe}" class="cta-button">
             Activar Mi Cuenta &rarr;
           </a>
           <div class="cta-sub">
             O copia esta URL en tu navegador:<br>
-            <span style="font-family: monospace; font-size: 11px; color: #7a7a7a;">${loginUrl}</span>
+            <span style="font-family: monospace; font-size: 11px; color: #7a7a7a;">${loginUrlSafe}</span>
           </div>
         </div>
 

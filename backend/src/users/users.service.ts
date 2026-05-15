@@ -67,15 +67,34 @@ export class UsersService {
     };
   }
 
-  async findAllByTenant(tenantId: string) {
-    return this.prisma.user.findMany({
-      where: { tenantId },
-      select: {
-        ...USER_PUBLIC_SELECT,
-        roleRef: { select: { id: true, name: true } },
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-    });
+  async findAllByTenant(tenantId: string, page = 1, limit = 20) {
+    // Block C: paginación añadida (pre-Block-C retornaba todos los
+    // users del tenant sin cap). Cap MAX_PAGE_LIMIT=100 alineado
+    // con el resto de listados del proyecto.
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { tenantId },
+        select: {
+          ...USER_PUBLIC_SELECT,
+          roleRef: { select: { id: true, name: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip,
+        take: safeLimit,
+      }),
+      this.prisma.user.count({ where: { tenantId } }),
+    ]);
+
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / safeLimit),
+      currentPage: safePage,
+    };
   }
 
   async findAdmin(tenantId: string) {
