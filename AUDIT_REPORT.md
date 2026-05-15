@@ -305,6 +305,71 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] users/roles/tenants Block B (2026-05-14) — users.create rewrite + last-admin guard + provisionTenant $transaction
+
+- **Resolved by**: this commit (second block of users/roles/tenants
+  consolidated remediation)
+- **What was wrong** (2 CRÍTICOs + 1 ALTO):
+  - CRÍTICO users-2: `users.service.create` con `'TemporaryPassword123!'`
+    literal default + bcrypt(10) sin `mustChangePassword: true`. Cualquier
+    ADMIN_TENANT podía crear users con backdoor password conocida.
+  - CRÍTICO users-4: `users.service.delete` sin guard del último
+    ADMIN_TENANT activo. Admin podía borrarse a sí mismo o al
+    único otro admin → tenant lockout permanente.
+  - ALTO tenants-B: `provisionNewTenant` ejecutaba tenant.create
+    + user.create secuenciales sin `$transaction`. Si user.create
+    fallaba (duplicate email), tenant quedaba huérfano sin admin
+    — inaccesible sin intervención manual de DB.
+- **What was applied**:
+  - **`OnboardingService.generateSecureTemporaryPassword()`** relajado
+    de `private` a package-public — `UsersService.create` ahora lo
+    reutiliza. Mismo helper que `provisionNewTenant`: 16 chars,
+    mandatory uppercase/lowercase/digit/symbol, sin chars
+    confusables, Fisher-Yates shuffle con `crypto.randomInt`.
+  - **`UsersService.create`** rewrite:
+    - Eliminado el `password?: string` opcional del body path.
+    - Genera `temporaryPassword` via el helper de Onboarding.
+    - `bcrypt.hash(temporaryPassword, 12)` — sube cost factor de
+      10 a 12 (consistente con provisioning).
+    - Setea `mustChangePassword: true`, `passwordChangedAt: null`,
+      `isActive: true`.
+    - Retorna `{ user, temporaryPassword }` — el admin recibe el
+      plaintext **una sola vez** en la respuesta para compartir
+      via canal seguro (Slack DM, password manager, etc.).
+      Mismo patrón que `provisionTenant`.
+  - **`UsersService.delete`** rewrite — last-admin guard:
+    - `findFirst({ id, tenantId })` para inspeccionar `role` e
+      `isActive` antes de borrar.
+    - Si target es `ADMIN_TENANT` activo, contar otros
+      `ADMIN_TENANT` activos del tenant excluyendo el target. Si
+      `count === 0`, throw `ConflictException` con mensaje claro:
+      *"No se puede eliminar el último ADMIN_TENANT activo del
+      tenant. Crea otro admin primero."*
+    - Si el guard pasa, `prisma.user.delete({ where: { id } })`
+      (single-row delete después de validar pertenencia tenant).
+    - `Logger` loguea la deletion con `id` + `tenantId`.
+  - **`OnboardingService.provisionNewTenant`** atomicity:
+    - `tenant.create` + `user.create` envueltos en un
+      `prisma.$transaction(async (tx) => {...})`. Si user.create
+      falla (unique violation en email, FK error, etc.), todo
+      rollback. Tenant huérfano impossible.
+    - `subscriptionPlan.findFirst({ orderBy: { createdAt: 'asc' } })`
+      con orden determinístico (pre-Block-B era no-determinístico).
+    - `throw new Error(...)` para "no subscription plan" reemplazado
+      por `NotFoundException`.
+  - **`UsersModule.imports`** ahora incluye `TenantsModule` —
+    `OnboardingService` ya es `exports` en `TenantsModule` desde
+    su declaración original.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover (Block C)**: `console.log/warn/error` → `Logger` en
+  `users.service` (3 sites), `data-import` etc.; paginación en
+  `users.findAllByTenant` y `roles.findAllByTenant`; HTML escape
+  en `buildWelcomeEmailHtml`; `roles.update` endpoint nuevo;
+  consistency de error handling.
+
 ### [x] users/roles/tenants Block A (2026-05-14) — USER_PUBLIC_SELECT + DTOs (passwordHash leak masivo + body validation)
 
 - **Resolved by**: this commit (first block of users/roles/tenants

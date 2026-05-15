@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -6,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { OnboardingService } from '../tenants/onboarding.service';
 
 /**
  * Whitelist of User fields safe to expose. Mirrors the constant
@@ -33,7 +35,10 @@ const USER_PUBLIC_SELECT = {
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private onboardingService: OnboardingService,
+  ) {}
 
   async findByRole(
     role: UserRole,
@@ -91,21 +96,16 @@ export class UsersService {
     lastName: string;
     role: UserRole;
     roleId?: string;
-    /**
-     * Optional explicit plaintext password. Block A keeps the legacy
-     * signature so the existing controller flow compiles; Block B
-     * replaces it with a CSPRNG temp password helper and
-     * mustChangePassword=true.
-     */
-    password?: string;
   }) {
-    // bcrypt cost factor 10 in Block A's intermediate state; Block B
-    // raises to 12 (consistent with OnboardingService) along with the
-    // password sentinel removal.
-    const passwordHash = await bcrypt.hash(
-      data.password || 'TemporaryPassword123!',
-      10,
-    );
+    // Block B retires the body-supplied password path. Every new user
+    // receives a CSPRNG temp password (same helper used by tenant
+    // provisioning) + bcrypt(12) + mustChangePassword=true. The
+    // plaintext is returned ONCE in the response so the admin can
+    // share it via secure channel (Slack DM, password manager, etc.) —
+    // never logged, never persisted in plaintext.
+    const temporaryPassword =
+      this.onboardingService.generateSecureTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
     const created = await this.prisma.user.create({
       data: {
@@ -116,19 +116,56 @@ export class UsersService {
         role: data.role,
         roleId: data.roleId || null,
         passwordHash,
+        mustChangePassword: true,
+        passwordChangedAt: null,
+        isActive: true,
       },
       select: USER_PUBLIC_SELECT,
     });
-    return created;
+
+    this.logger.log(
+      `User created id=${created.id} tenant=${data.tenantId} role=${data.role} (mustChangePassword=true)`,
+    );
+
+    return {
+      user: created,
+      // Admin must record this somewhere secure — it will not be
+      // shown again.
+      temporaryPassword,
+    };
   }
 
   async delete(id: string, tenantId: string) {
-    const result = await this.prisma.user.deleteMany({
+    // Block B: last-admin guard. If the user being deleted is an
+    // ADMIN_TENANT, ensure at least one other active admin remains —
+    // otherwise the delete locks the tenant out (only SUPERADMIN
+    // could rescue via OnboardingService.updateTenantAdmin).
+    const target = await this.prisma.user.findFirst({
       where: { id, tenantId },
+      select: { id: true, role: true, isActive: true },
     });
-    if (result.count === 0) {
+    if (!target) {
       throw new NotFoundException('Usuario no encontrado.');
     }
+
+    if (target.role === UserRole.ADMIN_TENANT && target.isActive) {
+      const otherActiveAdmins = await this.prisma.user.count({
+        where: {
+          tenantId,
+          role: UserRole.ADMIN_TENANT,
+          isActive: true,
+          id: { not: id },
+        },
+      });
+      if (otherActiveAdmins === 0) {
+        throw new ConflictException(
+          'No se puede eliminar el último ADMIN_TENANT activo del tenant. Crea otro admin primero.',
+        );
+      }
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+    this.logger.log(`User deleted id=${id} tenant=${tenantId}`);
     return { deleted: true };
   }
 

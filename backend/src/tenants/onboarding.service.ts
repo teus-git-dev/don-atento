@@ -55,8 +55,14 @@ export class OnboardingService {
    *  - Minimum 16 characters
    *  - At least 2 uppercase, 2 lowercase, 2 digits, 2 symbols
    *  - No dictionary words or sequential patterns
+   *
+   * Block B (users-roles-tenants): visibility relaxed from `private`
+   * to package-public so `UsersService.create` reuses the same
+   * helper instead of the literal `'TemporaryPassword123!'` sentinel
+   * (which gave any admin a backdoor for users created without an
+   * explicit password).
    */
-  private generateSecureTemporaryPassword(): string {
+  generateSecureTemporaryPassword(): string {
     const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // No I, O (confusable)
     const lower = 'abcdefghjkmnpqrstuvwxyz'; // No i, l, o
     const digits = '23456789'; // No 0, 1 (confusable)
@@ -110,44 +116,52 @@ export class OnboardingService {
     // ── 1. Get or create a Subscription Plan ──────────────────────────────
     let planId = input.subscriptionPlanId;
     if (!planId) {
-      const defaultPlan = await this.prisma.subscriptionPlan.findFirst();
+      const defaultPlan = await this.prisma.subscriptionPlan.findFirst({
+        orderBy: { createdAt: 'asc' },
+      });
       planId = defaultPlan?.id;
     }
 
     if (!planId) {
-      throw new Error(
+      throw new NotFoundException(
         'No subscription plan provided and no default plan found in the database.',
       );
     }
 
-    // ── 2. Create Tenant record ────────────────────────────────────────────
-    const tenant = await this.prisma.tenant.create({
-      data: {
-        name: input.companyName,
-        nit: input.nit,
-        status: 'ACTIVE',
-        subscriptionPlanId: planId,
-      },
+    // ── 2. Block B: tenant + admin user creates atomically. Pre-Block-B
+    // a user-create failure (e.g. duplicate email unique violation)
+    // left a tenant ghost without admin — inaccessible without manual
+    // DB intervention. $transaction guarantees both succeed together
+    // or neither persists.
+    const { tenant, user } = await this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: {
+          name: input.companyName,
+          nit: input.nit,
+          status: 'ACTIVE',
+          subscriptionPlanId: planId!,
+        },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: input.adminEmail,
+          firstName: input.adminFirstName,
+          lastName: input.adminLastName,
+          phone: input.adminPhone ?? null,
+          role: 'ADMIN_TENANT',
+          passwordHash,
+          isActive: true,
+          mustChangePassword: true,
+          passwordChangedAt: null,
+        },
+      });
+
+      return { tenant, user };
     });
 
     this.logger.log(`[Onboarding] Tenant created: ${tenant.id}`);
-
-    // ── 3. Create Admin User with mustChangePassword = true ────────────────
-    const user = await this.prisma.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: input.adminEmail,
-        firstName: input.adminFirstName,
-        lastName: input.adminLastName,
-        phone: input.adminPhone ?? null,
-        role: 'ADMIN_TENANT',
-        passwordHash,
-        isActive: true,
-        mustChangePassword: true, // ← Force-reset on first login
-        passwordChangedAt: null, // ← Not yet changed
-      },
-    });
-
     this.logger.log(
       `[Onboarding] Admin user created: ${user.id} (mustChangePassword=true)`,
     );
