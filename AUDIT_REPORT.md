@@ -305,6 +305,81 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] contracts Block A (2026-05-14) — RBAC + tenant scoping (propertyId) + DTO + req['tenantId']
+
+- **Resolved by**: this commit (first block of contracts remediation)
+- **What was wrong** (3 CRÍTICOs + 1 ALTO from the contracts audit):
+  - CRÍTICO #1: `ContractsController` con `@UseGuards(JwtAuthGuard,
+    TenantGuard)` sin `RolesGuard` ni `@Roles()`. Cualquier
+    `TENANT_USER` podía subir y listar documentos legales —
+    contratos son surface administrativa por diseño.
+  - CRÍTICO #2: `uploadContract` aceptaba `propertyId` del body
+    sin verificar pertenencia al tenant. Prisma checkea la FK
+    existe, no la tenancy — cross-tenant write injection:
+    documento creado en tenant A con `propertyId` de tenant B.
+  - CRÍTICO #4: `tenantId = req.user.tenantId` en lugar de
+    `req['tenantId']`. Mismo anti-patrón cerrado en workflows /
+    baileys / crm / accounting — bypasea el override SUPERADMIN
+    del TenantGuard.
+  - ALTO #1: `@Body('propertyId')` y `@Body('fileUrl')` extraen
+    fields individuales — `ValidationPipe({whitelist: true,
+    forbidNonWhitelisted: true})` NO aplica con la string-key
+    form de `@Body`. Bodies pasaban sin validar.
+  - ALTO (parcial — getDocuments validation): el filter
+    `where: { tenantId, propertyId }` retornaba `[]` silencioso
+    para propertyId foreign — UX confuso.
+- **What was applied**:
+  - **`ContractsController`**:
+    - `@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)` a nivel
+      clase.
+    - Per-handler `@Roles()`:
+      - reads (`getDocuments`) → `'AGENT','ADMIN_TENANT',
+        'SUPERADMIN'`.
+      - writes (`uploadContract`) → `'ADMIN_TENANT','SUPERADMIN'`
+        only (contratos son acción administrativa legal-binding).
+    - `tenantId = req['tenantId']` reemplaza
+      `req.user.tenantId` en ambos handlers.
+    - Body de `uploadContract` tipado con `UploadContractDto`
+      (en lugar de `@Body('propertyId')`/`@Body('fileUrl')`
+      string-key extraction). `ValidationPipe` ahora aplica.
+    - `@ApiTags('contracts')`, `@ApiBearerAuth()`, `@ApiOperation`
+      per handler (defensa adicional vs el ALTO de Swagger
+      ausente; el cleanup completo viene en Block C).
+  - **Nuevo `UploadContractDto`**:
+    - `propertyId @IsString @MinLength(1) @MaxLength(64)`.
+    - `fileUrl @IsUrl({ protocols: ['https'], require_protocol:
+      true }) @MaxLength(2048)`. Rechaza `javascript:`, `file:`,
+      `http://`, y cualquier URL malformada — defensa
+      transitoria hasta que Block C migre a multipart upload.
+    - **NO incluye `tenantId`** — el controller usa
+      `req['tenantId']` y whitelist strip si el cliente lo envía.
+  - **`ContractsService`**:
+    - Nuevo helper privado `assertPropertyBelongsToTenant(
+      propertyId, tenantId)` — `findFirst({ id, tenantId })`,
+      throw uniform `NotFoundException` (404, no 403 — evita
+      enumeración cross-tenant). Mirror del patrón crm Block A
+      / accounting Block A.
+    - `createDocumentRecord` llama el guard ANTES del create —
+      cross-tenant write injection cerrado.
+    - `getDocumentsByProperty` llama el guard ANTES del findMany
+      — propertyId foreign produce 404 explícito en lugar de
+      `[]` silencioso. El filter `where: { tenantId, propertyId
+      }` del findMany permanece como belt-and-suspenders.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover**:
+  - **CRÍTICO #5** (mock AI verdict siempre COMPLIANT) → Block B.
+    Severidad regulatoria singular — el "legalVerdict" se
+    elimina en favor de `null` + status `PENDING_AI` explícito.
+  - **CRÍTICO #3** (stored URL injection via `fileUrl` body) →
+    Block C. Migración a `FileUploadService` multipart (alinea
+    con properties / tickets / crm). El DTO de Block A acepta
+    HTTPS-only como defensa transitoria.
+  - Paginación + filtros + schema index + dead-code processor
+    cleanup + tie-break orderBy → Block C.
+
 ### [x] accounting Block D (2026-05-14) — paginación + filtros + Logger + Swagger + BALANCE_TOLERANCE_COP + PrismaModule
 
 - **Resolved by**: this commit (final block of accounting remediation)
