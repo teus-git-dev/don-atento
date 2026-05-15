@@ -305,6 +305,79 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] contracts Block B (2026-05-14) — retire mock AI verdict + FAILED status handling
+
+- **Resolved by**: this commit (second block of contracts remediation)
+- **What was wrong** (CRÍTICO #5 + 2 ALTOs from the contracts audit):
+  - CRÍTICO #5 (regulatory liability): `processContractAsync`
+    simulaba OCR + LLM con `setTimeout(5000)` y luego persistía:
+    - `extractedData = { contractStart: today, contractEnd: today
+      + 1y }` — fechas hardcodeadas, **no extraídas del
+      documento**.
+    - `legalVerdict = { status: 'COMPLIANT', issuesFound: [],
+      summary: 'El contrato cumple con la Ley 820 de 2003...' }`
+      — afirmación legal específica generada por mock, persistida
+      como evidencia de "análisis" para cualquier contrato subido.
+    Riesgo: el tenant cree haber hecho debida diligencia y firma
+    contratos con cláusulas abusivas confiado en un verdict
+    falso; cuando hay reclamación, el sistema tiene el "verdict
+    COMPLIANT" en DB como evidencia — pero la evidencia es
+    inventada. Mismo patrón cerrado en tickets Block E
+    (quote-items hardcoded en cotizaciones firmadas).
+  - ALTO #4 (status `FAILED` dead): el `.catch` del fire-and-forget
+    sólo logueaba; el valor `FAILED` del enum
+    `DocumentStatus` no se seteaba por ningún path. Documentos
+    quedaban en `PENDING_AI` permanentemente al fallar.
+  - ALTO #8 (`setTimeout(5000)` síncrono): parte del mock —
+    desaparece junto con él.
+- **What was applied**:
+  - **`processContractAsync` convertido en no-op explícito**:
+    - **NO escribe nada al row**.
+    - **NO simula delay**.
+    - **NO setea `extractedData` ni `legalVerdict`**.
+    - Solo loguea: `Doc {id} created in PENDING_AI; real AI
+      processing is post-v1 carryover.`
+    - Docstring detallado en el método explica:
+      1. Por qué se eliminó (mock vendido como legal review).
+      2. Qué requiere la integración real (extract + rule-based
+         legal checks + per-clause issues + confidence scores +
+         status: PROCESSED solo cuando los 3 pasos corrieron de
+         verdad).
+      3. Que el LegalAiService de cognitive/ tiene scaffolding
+         pero la integración completa queda post-v1.
+      4. Que la UI **NO** debe mostrar ningún "verdict" en este
+         estado — sólo fileUrl + status.
+  - **Handler del `.catch`** del fire-and-forget extendido:
+    - Si `processContractAsync` lanza (no debería ahora, pero
+      defensivo para cuando se reactive), actualiza el row a
+      `status: FAILED` con `extractedData: { error: msg }`
+      truncado a 500 chars.
+    - Try/catch interno: si el write de FAILED también falla, log
+      y rendirse — el row permanece en `PENDING_AI`, que sigue
+      siendo honest signal (no false PROCESSED claim).
+  - **`setTimeout(5000)` eliminado** junto con el mock.
+- **Verification**:
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean
+- **Carryover post-v1** (NO en este bloque, documentado para
+  trazabilidad):
+  - **Integración real con LegalAiService**: `cognitive/legal-ai.service.ts`
+    ya tiene scaffolding (`generateContractDraft` existe). Para
+    cerrar el flow completo se requiere:
+    - Endpoint que dispare `legalAi.analyzeContract(documentId)`
+      explícitamente (post procesamiento OCR de PDF/DOCX).
+    - Persistir `extractedData` con campos confiados (no fechas
+      hardcoded) y `legalVerdict` con `issuesFound` real por
+      cláusula.
+    - Sólo entonces `status: PROCESSED`.
+  - **OCR pipeline**: requiere selección de proveedor (Textract,
+    Google Document AI, etc.) — fuera de scope v1.
+  - **Tests del flow** una vez integrado el LLM real.
+- **Carryover Block C**: `fileUrl` body-supplied → multipart vía
+  `FileUploadService`. Paginación + schema index + processor.ts
+  cleanup + tie-break orderBy + DELETE endpoint.
+
 ### [x] contracts Block A (2026-05-14) — RBAC + tenant scoping (propertyId) + DTO + req['tenantId']
 
 - **Resolved by**: this commit (first block of contracts remediation)

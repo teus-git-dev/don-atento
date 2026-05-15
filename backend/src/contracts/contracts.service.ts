@@ -29,53 +29,72 @@ export class ContractsService {
       },
     });
 
-    // Fire-and-forget async AI processing (Block B replaces the
-    // mock implementation with a no-op + FAILED status on real errors).
-    this.processContractAsync(document.id).catch((err) =>
+    // Fire-and-forget async post-processing. Block B retired the
+    // hardcoded "AI legal verdict" mock that previously always
+    // returned status: COMPLIANT — a regulatory liability nightmare
+    // (tenants believed the system performed real Ley 820 / Código
+    // de Comercio review when it merely persisted a hardcoded
+    // string). The row now stays in PENDING_AI until either:
+    //   (a) real LegalAiService integration ships (carryover, post-v1),
+    //   (b) an operator manually flips status from the admin UI.
+    // The catch updates the row to FAILED so the UI can distinguish
+    // "still pending" from "errored out".
+    this.processContractAsync(document.id).catch(async (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `AI processing failed for doc ${document.id}: ${err.message}`,
-      ),
-    );
+        `Post-processing failed for doc ${document.id}: ${msg}`,
+      );
+      try {
+        await this.prisma.contractDocument.update({
+          where: { id: document.id },
+          data: {
+            status: 'FAILED',
+            extractedData: { error: msg.substring(0, 500) },
+          },
+        });
+      } catch (innerErr) {
+        // If the FAILED-status write also fails, log and give up —
+        // the document remains in PENDING_AI, which is at least
+        // honest (no false PROCESSED claim).
+        this.logger.error(
+          `Could not record FAILED status for doc ${document.id}: ${(innerErr as Error).message}`,
+        );
+      }
+    });
 
     return document;
   }
 
-  private async processContractAsync(documentId: string) {
+  /**
+   * Post-processing slot for contract documents.
+   *
+   * Block B deliberately turned this into a no-op: the previous
+   * implementation simulated OCR + LLM with a setTimeout(5000) and
+   * then persisted a hardcoded `extractedData` (today / today+1y)
+   * plus a hardcoded `legalVerdict: COMPLIANT` claiming Ley 820 de
+   * 2003 compliance. That was not analysis — it was a string
+   * masquerading as legal review, with serious liability if the
+   * tenant relied on it.
+   *
+   * Real integration must:
+   *   1. Extract fields with an OCR / LLM pipeline (LegalAiService
+   *      in cognitive/ already has the scaffolding).
+   *   2. Run rule-based legal checks on extracted clauses.
+   *   3. Persist BOTH the extraction confidence AND the per-clause
+   *      issues (not just an aggregate verdict).
+   *   4. Only set status: PROCESSED when steps 1-3 actually ran.
+   *
+   * Until that ships (carryover post-v1), documents stay in
+   * PENDING_AI; the UI must NOT display any "verdict" — only the
+   * raw fileUrl + status. Block C will tighten the fileUrl handling
+   * via FileUploadService.
+   */
+  private async processContractAsync(documentId: string): Promise<void> {
     this.logger.log(
-      `[ContractProcessor] Starting AI analysis for doc: ${documentId}`,
+      `[ContractProcessor] Doc ${documentId} created in PENDING_AI; real AI processing is post-v1 carryover.`,
     );
-
-    // Simulate OCR + LLM delay
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-
-    const today = new Date();
-    const nextYear = new Date();
-    nextYear.setFullYear(today.getFullYear() + 1);
-
-    const extractedData = {
-      contractStart: today.toISOString().split('T')[0],
-      contractEnd: nextYear.toISOString().split('T')[0],
-    };
-
-    const legalVerdict = {
-      status: 'COMPLIANT',
-      issuesFound: [],
-      summary:
-        'El contrato cumple con la Ley 820 de 2003. No se detectaron cláusulas abusivas ni depósitos ilegales en dinero.',
-    };
-
-    await this.prisma.contractDocument.update({
-      where: { id: documentId },
-      data: {
-        status: 'PROCESSED',
-        extractedData,
-        legalVerdict,
-      },
-    });
-
-    this.logger.log(
-      `[ContractProcessor] Finished processing doc: ${documentId}`,
-    );
+    // Intentional no-op. Do NOT touch the row — leaving status at
+    // PENDING_AI is the honest signal that no analysis has run.
   }
 
   async getDocumentsByProperty(tenantId: string, propertyId: string) {
