@@ -186,13 +186,18 @@ export default function EditarInmueblePage() {
             console.error("Error fetching property data", e);
         }
 
-        // Fetch Contracts
+        // Fetch Contracts. contracts Block C: response is now
+        // { data, totalRecords, totalPages, currentPage }. Unwrap .data;
+        // keep a fallback to raw array for rolling-deploy compat.
         try {
-            const fetchedContracts = await apiClient.get<any[]>(`/contracts/property/${id}`);
-            setContracts(fetchedContracts || []);
-            
+            const contractsRes = await apiClient.get<unknown>(`/contracts/property/${id}?limit=100`);
+            const fetchedContracts = Array.isArray(contractsRes)
+                ? contractsRes
+                : (contractsRes as { data?: unknown[] })?.data || [];
+            setContracts(fetchedContracts as any[]);
+
             // If there's a processed contract, auto-fill dates
-            const processed = fetchedContracts?.find(c => c.status === 'PROCESSED');
+            const processed = (fetchedContracts as any[]).find(c => c.status === 'PROCESSED');
             if (processed && processed.extractedData) {
                 if (processed.extractedData.contractStart) setContractStart(processed.extractedData.contractStart);
                 if (processed.extractedData.contractEnd) setContractEnd(processed.extractedData.contractEnd);
@@ -212,57 +217,62 @@ export default function EditarInmueblePage() {
     if (file) {
         setIsSaving(true);
         try {
-            // 1. Upload file
+            const token = authService.getToken();
+
+            // contracts Block C: for contract documents, multipart upload
+            // goes directly to /contracts/upload (file + propertyId as
+            // form fields). The previous two-step "upload to /tickets,
+            // then POST URL to /contracts" pattern is retired — bypassed
+            // FileAsset/tenant scoping and was open to stored URL
+            // injection.
+            if (type === 'DOC') {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('propertyId', String(id));
+                const contractUploadRes = await fetch(`${API_URL}/contracts/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                if (!contractUploadRes.ok) throw new Error('Error al subir contrato');
+                const contractRes = await contractUploadRes.json();
+
+                // Add to local state
+                setUploadedFiles(prev => [...prev, {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: file.name,
+                    type,
+                    status: 'SUCCESS' as const,
+                }]);
+                setContracts(prev => [contractRes, ...prev]);
+
+                // contracts Block B retired the mock AI verdict. Documents
+                // now stay in PENDING_AI until real LegalAiService
+                // integration ships — no false COMPLIANT claim, no auto-
+                // populated contract dates. The dashboard should display
+                // the document as "pendiente de análisis manual" until
+                // post-v1 integration.
+                alert("Documento subido. Análisis legal automático llegará en próximas versiones — por ahora revisa manualmente.");
+                return;
+            }
+
+            // Non-contract uploads (images / videos) keep the /tickets/upload
+            // path — Block C only migrates the contracts side.
             const formData = new FormData();
             formData.append('file', file);
-            
-            // Use native fetch since apiClient doesn't support FormData directly
-            const token = authService.getToken();
             const uploadRes = await fetch(`${API_URL}/tickets/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            
             if (!uploadRes.ok) throw new Error('Error al subir archivo');
-            const fileData = await uploadRes.json();
-            
-            // 2. Add to local state (for images)
-            const fileId = Math.random().toString(36).substr(2, 9);
-            const newFile = {
-                id: fileId,
+            await uploadRes.json();
+            setUploadedFiles(prev => [...prev, {
+                id: Math.random().toString(36).substr(2, 9),
                 name: file.name,
                 type,
-                status: 'SUCCESS' as const
-            };
-            setUploadedFiles(prev => [...prev, newFile]);
-
-            // 3. If it's a contract, send to AI Processor
-            if (type === 'DOC') {
-                const contractRes = await apiClient.post<any>('/contracts/upload', {
-                    propertyId: id,
-                    fileUrl: fileData.url
-                });
-                
-                // Add to local contracts state as PENDING_AI
-                setContracts(prev => [contractRes, ...prev]);
-                
-                alert("Documento subido. La IA Don Atento está analizando el contrato...");
-                
-                // Poll for completion after 6 seconds (since our mock takes 5s)
-                setTimeout(async () => {
-                    const fetchedContracts = await apiClient.get<any[]>(`/contracts/property/${id}`);
-                    setContracts(fetchedContracts || []);
-                    
-                    const processed = fetchedContracts?.find(c => c.id === contractRes.id && c.status === 'PROCESSED');
-                    if (processed && processed.extractedData) {
-                        if (processed.extractedData.contractStart) setContractStart(processed.extractedData.contractStart);
-                        if (processed.extractedData.contractEnd) setContractEnd(processed.extractedData.contractEnd);
-                        setTenantContractNumber(`CONTRATO-${Math.floor(Math.random() * 9000) + 1000}`);
-                        alert("✨ IA Don Atento: He extraído automáticamente las fechas de inicio y fin del documento. Se han configurado las alarmas inteligentes de vencimiento y el veredicto legal está disponible.");
-                    }
-                }, 6000);
-            }
+                status: 'SUCCESS' as const,
+            }]);
         } catch (e) {
             console.error(e);
             alert("Error al procesar el documento.");

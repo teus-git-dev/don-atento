@@ -1,6 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Cap on `?limit=` for paginated document listings. Mirror del cap
+ *  usado en properties / workflows / crm / accounting. */
+const MAX_PAGE_LIMIT = 100;
+
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
@@ -97,16 +101,60 @@ export class ContractsService {
     // PENDING_AI is the honest signal that no analysis has run.
   }
 
-  async getDocumentsByProperty(tenantId: string, propertyId: string) {
+  async getDocumentsByProperty(
+    tenantId: string,
+    propertyId: string,
+    page = 1,
+    limit = 20,
+  ) {
     // Block A: pre-validate property ownership so a foreign propertyId
     // gets a uniform 404 instead of silently returning []. The where
     // clause below still filters by tenantId — belt-and-suspenders.
     await this.assertPropertyBelongsToTenant(propertyId, tenantId);
 
-    return this.prisma.contractDocument.findMany({
-      where: { tenantId, propertyId },
-      orderBy: { createdAt: 'desc' },
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_LIMIT);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.contractDocument.findMany({
+        where: { tenantId, propertyId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip,
+        take: safeLimit,
+      }),
+      this.prisma.contractDocument.count({
+        where: { tenantId, propertyId },
+      }),
+    ]);
+
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / safeLimit),
+      currentPage: safePage,
+    };
+  }
+
+  /**
+   * Delete a contract document row. Block C addition — pre-Block-C
+   * there was no way to remove an erroneous upload via the API.
+   *
+   * NOTE: this only deletes the DB row. The underlying file in
+   * Supabase Storage stays (referenced via `fileUrl` / FileAsset).
+   * A separate cleanup job that removes orphaned FileAssets is
+   * post-v1 carryover. Tenants who want the file gone today must
+   * coordinate with ops.
+   */
+  async deleteDocument(id: string, tenantId: string) {
+    const result = await this.prisma.contractDocument.deleteMany({
+      where: { id, tenantId },
     });
+    if (result.count === 0) {
+      throw new NotFoundException('Documento de contrato no encontrado.');
+    }
+    this.logger.log(`ContractDocument deleted id=${id} tenant=${tenantId}`);
+    return { deleted: true };
   }
 
   /**

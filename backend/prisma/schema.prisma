@@ -970,6 +970,8 @@ model ContractDocument {
   property           Property          @relation(fields: [propertyId], references: [id])
   propertyRelation   PropertyRelation? @relation(fields: [propertyRelationId], references: [id])
   tenant             Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, propertyId])
 }
 
 model TenantSubscription {

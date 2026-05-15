@@ -305,6 +305,115 @@ Close items with a checkbox once resolved (commit hash next to it).
   caller wires it up, files persist across Render redeploys. The
   signature and shape are now consistent with the rest of the migration.
 
+### [x] contracts Block C (2026-05-14) — FileUploadService multipart + paginación + DELETE + schema index + processor cleanup
+
+- **Resolved by**: this commit (final block of contracts remediation)
+- **What was wrong** (CRÍTICO #3 + 5 ALTOs + MEDIOs varios):
+  - CRÍTICO #3 (stored URL injection): `fileUrl: string` body-supplied
+    sin allowlist de dominios — el módulo bypaseaba la infra
+    Supabase Storage de Phases 1-4 (que el resto del proyecto usa
+    vía `FileUploadService` con `FileAsset` rows + signed URLs +
+    tenant-scoped buckets). Bloque A redujo el blast vía `@IsUrl`
+    transitorio; Block C lo retira definitivamente.
+  - ALTO #5 (sin paginación): `getDocumentsByProperty` retornaba
+    todos los documentos sin paginar.
+  - ALTO #7 (sin signed URL con TTL): el `fileUrl` quedaba
+    permanente — el patrón establecido es signed URL con TTL.
+  - ALTO #9 (Swagger ausente) — completado.
+  - ALTO #10 (sin índice schema `(tenantId, propertyId)`):
+    findMany recorría por scan.
+  - ALTO #11 (processor.ts dead): archivo placeholder de 12
+    líneas con clase vacía + provider declarado en el módulo.
+  - MEDIO (no DELETE endpoint): no había forma de eliminar un
+    documento subido por error vía API.
+  - MEDIO (`orderBy` sin tie-break).
+- **What was applied**:
+  - **Controller multipart real**:
+    - `@Post('upload')` ahora usa `FileInterceptor('file',
+      { storage: memoryStorage(), limits: { fileSize: 10MB,
+      files: 1 }, fileFilter: ALLOWED_MIME_TYPES })`.
+    - `ALLOWED_MIME_TYPES = ['application/pdf', '...docx',
+      'application/msword', 'image/jpeg', 'image/png']`.
+    - Body: `@UploadedFile() file` + `@Body('propertyId')`
+      string. El `UploadContractDto` de Block A se elimina —
+      el body es ahora multipart form-data.
+    - `FileUploadService.upload(tenantId, 'contracts',
+      file.buffer, { mimeType, originalName, ttlSeconds })`
+      maneja el upload a Supabase Storage + crea el
+      `FileAsset` row atómicamente + retorna signed URL con
+      TTL de 7 días (`CONTRACT_SIGNED_URL_TTL_SECONDS = 7 *
+      24 * 60 * 60`).
+    - `createDocumentRecord` recibe la signed URL ya generada.
+    - Response shape `{ ...document, filename, signedUrl }`.
+    - El `'contracts'` category ya existía en `StorageCategory`
+      enum desde Phases 1-4 — alineación cero-friction.
+  - **Service paginación**:
+    - `getDocumentsByProperty(tenantId, propertyId, page, limit)`
+      con clamp a `MAX_PAGE_LIMIT = 100`.
+    - `orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]` —
+      tie-break determinístico (cierra el MEDIO).
+    - Response shape `{ data, totalRecords, totalPages,
+      currentPage }` alineado con el resto del proyecto.
+    - `Promise.all([findMany, count])` paraleliza.
+  - **Nuevo endpoint** `DELETE /contracts/:id` con
+    `@Roles('ADMIN_TENANT', 'SUPERADMIN')`:
+    - `deleteDocument(id, tenantId)` usa `deleteMany({ id,
+      tenantId })` para defense-in-depth; 404 si `count === 0`.
+    - **Solo elimina el row de DB** — el archivo en Supabase
+      Storage permanece (carryover: orphaned FileAsset cleanup
+      job post-v1).
+  - **Schema**: `@@index([tenantId, propertyId])` agregado a
+    `ContractDocument`. Aditivo. `prisma db push` aplica sin
+    pre-flight check (no es unique).
+  - **`contracts.processor.ts` eliminado** + provider removido del
+    módulo. El comentario propio admitía ser placeholder;
+    cuando BullMQ aterrice se crea uno nuevo con `@Processor`
+    real.
+  - **`StorageModule`** agregado a `imports` del módulo (alinea
+    con tickets / crm).
+  - **`UploadContractDto`** de Block A eliminado — el body ya
+    no lleva `fileUrl`. Directorio `dto/` vacío también
+    removido.
+  - **Frontend follow-through**
+    (`frontend/src/app/(dashboard)/inmuebles/[id]/editar/page.tsx`):
+    - El flujo de 2 pasos (upload to `/tickets/upload`, luego
+      POST URL a `/contracts/upload`) se reemplaza por un
+      único multipart directo a `/contracts/upload` con
+      `propertyId` como form field. El bypass de
+      tenant-scoped Supabase Storage queda cerrado en
+      frontend también.
+    - Alert legacy de "IA Don Atento está analizando..."
+      reemplazado por "Análisis legal automático llegará en
+      próximas versiones — por ahora revisa manualmente"
+      (alinea con Block B: el verdict mock se eliminó).
+    - El polling de 6s también se elimina (ya no hay status
+      PROCESSED que esperar).
+    - `getDocumentsByProperty` consumer migrado a unwrap
+      `.data` con fallback a array raw para rolling-deploy
+      compat.
+- **Verification**:
+  - `prisma validate` ✓
+  - `prisma generate` clean
+  - `tsc --noEmit` clean
+  - `npm test` 133/133 across 20 suites
+  - `npm run build` clean (backend)
+  - `next build` clean (frontend)
+- **Deploy steps**:
+  1. `npx prisma db push` para aplicar el nuevo `@@index`
+     (aditivo, rollback trivial vía `DROP INDEX`).
+  2. Deploy del backend.
+  3. Deploy del frontend (depende de la nueva endpoint shape).
+- **Carryover** (consolidado, no se cierra en v1):
+  - Integración real LegalAiService (Block B carryover).
+  - OCR provider selection (Block B carryover).
+  - Schema extraction de `contractStart`/`contractEnd` a
+    columnas tipadas (Block B carryover).
+  - Orphaned FileAsset cleanup job cuando `DELETE
+    /contracts/:id` se llama.
+  - Tests del módulo.
+  - `propertyRelationId` field unused — evaluar uso real o
+    eliminar.
+
 ### [x] contracts Block B (2026-05-14) — retire mock AI verdict + FAILED status handling
 
 - **Resolved by**: this commit (second block of contracts remediation)
