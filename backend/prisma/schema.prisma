@@ -397,8 +397,16 @@ model Prospect {
   interestedProperties Property[]            @relation("PropertyInterests")
 }
 
+/// P0.1 — `tenantId` denormalized on the child table. Pre-P0.1 the row
+/// only carried `prospectId`; any code path that wrote a ProspectInteraction
+/// without joining through Prospect.tenantId (e.g. `addInteraction` in
+/// crm.service.ts pre-Block-P0.2) could cross tenants. With this column
+/// + FK + index, writes are tenant-scoped at the DB level and `@@index`
+/// keeps the foreign-tenant scans cheap. Backfilled from
+/// `Prospect.tenantId` in `backfill-tenant-id-children.ts`.
 model ProspectInteraction {
   id         String             @id @default(cuid())
+  tenantId   String
   prospectId String
   userId     String?
   channel    InteractionChannel
@@ -407,10 +415,19 @@ model ProspectInteraction {
   createdAt  DateTime           @default(now())
   prospect   Prospect           @relation(fields: [prospectId], references: [id])
   user       User?              @relation(fields: [userId], references: [id])
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([prospectId])
 }
 
+/// P0.1 — `tenantId` denormalized. See ProspectInteraction note. Tasks
+/// were already cascade-deleted with the parent prospect, but writes
+/// pre-P0.1 trusted the controller layer; this column closes the
+/// defense-in-depth gap. Backfilled from `Prospect.tenantId`.
 model ProspectTask {
   id          String    @id @default(cuid())
+  tenantId    String
   prospectId  String
   title       String
   description String?
@@ -419,6 +436,9 @@ model ProspectTask {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   prospect    Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model Provider {
@@ -518,6 +538,10 @@ model Tenant {
   tenantSubscription     TenantSubscription?
   tokenUsageLogs         TokenUsageLog[]
   fileAssets             FileAsset[]
+  // P0.1 — inverse relations for denormalized `tenantId` on child tables.
+  prospectInteractions   ProspectInteraction[]
+  prospectTasks          ProspectTask[]
+  ticketInteractions     TicketInteraction[]
 }
 
 model Ticket {
@@ -563,8 +587,14 @@ model Ticket {
   @@index([resolvedAt])
 }
 
+/// P0.1 — `tenantId` denormalized. See ProspectInteraction note.
+/// TicketInteraction is the most-written child in the system (every
+/// WhatsApp message creates one); the `@@index([ticketId])` is added
+/// here too because the JOIN was already a seq scan pre-P0.1.
+/// Backfilled from `Ticket.tenantId`.
 model TicketInteraction {
   id                String             @id @default(cuid())
+  tenantId          String
   ticketId          String
   userId            String?
   channel           InteractionChannel
@@ -573,6 +603,10 @@ model TicketInteraction {
   sentAt            DateTime           @default(now())
   ticket            Ticket             @relation(fields: [ticketId], references: [id])
   user              User?              @relation(fields: [userId], references: [id])
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([ticketId])
 }
 
 model TicketStateLog {

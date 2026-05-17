@@ -9,6 +9,101 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ---
 
+## P0 — Multi-tenant scalability hardening (in progress)
+
+Branch: `feature/p0-tenant-scalability`. Plan derived from the
+architectural audit dated 2026-05-17 (chat transcript). Five items;
+each ships as a focused commit. Do **not** push the branch until all
+five items are merged into it locally.
+
+### Items
+
+- [ ] **P0.1** — Denormalize `tenantId` on `ProspectInteraction`,
+      `ProspectTask`, `TicketInteraction`. Closes the only actively
+      exploitable cross-tenant write vector. Two commits:
+      schema + backfill, then `crm.service.ts` refactor.
+- [ ] **P0.2** — Sweep `findUnique({ where: { id } })` → `findFirst`
+      with `tenantId` in `crm.service.ts` (`sendWelcomeKit`) and
+      `providers.service.ts:132-135`. Mark legitimate exceptions with
+      `// safe:` comments so re-sweeps are idempotent.
+- [ ] **P0.3** — Add `@@index([tenantId, …])` to Ticket, Property,
+      Prospect, User, Workflow, TokenUsageLog. Indexes must be created
+      `CONCURRENTLY` in prod (separate hand-written SQL).
+- [ ] **P0.4** — Tune `pg.Pool` in `prisma.service.ts` (`max`,
+      `idleTimeoutMillis`, `connectionTimeoutMillis`,
+      `statement_timeout`).
+- [ ] **P0.5** — Mandatory pagination in
+      `tickets.controller.ts:62-66`. Two-phase deploy (optional
+      `?page=&limit=`, deprecation warn, then enforce) to avoid
+      breaking the frontend in a single push.
+
+### P0.1 commit 1 — schema + backfill (status: shipped locally)
+
+**Changes**
+
+- `backend/prisma/schema.prisma`: `tenantId String` + `tenant Tenant`
+  FK (ON DELETE CASCADE) + `@@index([tenantId])` on the 3 child
+  tables. Also `@@index([prospectId])` on `ProspectInteraction` and
+  `@@index([ticketId])` on `TicketInteraction` — the JOINs were
+  seq-scans pre-P0.1. Inverse relations added to `Tenant`.
+- `backend/prisma/backfill-tenant-id-children.ts`: data-only backfill,
+  `--dry-run`, `--batch-size=N` (default 1000), `--table=X`,
+  fail-fast on residual NULLs. Adapter pattern mirrors
+  `backfill-file-assets-to-supabase.ts` (the one Prisma-7 backfill
+  script that's not broken — see the Pending item below).
+- `backend/prisma/sql/p0-tenant-id-children.sql`: hand-written DDL in
+  three sections — A (ADD COLUMN nullable), B (SET NOT NULL + FK),
+  C (`CREATE INDEX CONCURRENTLY`). Section C is the only one that
+  must not run inside a transaction; the file is idempotent
+  end-to-end.
+
+**Runbook (apply to prod Supabase)**
+
+```bash
+# 0. Pre-flight — verify all 3 child tables have rows with a resolvable
+#    parent.tenantId (no orphans).  If this count is non-zero, fix
+#    orphans first (delete or reassign) — Section B will refuse to run.
+psql "$DIRECT_URL" -At -c "
+  SELECT
+    (SELECT COUNT(*) FROM \"ProspectInteraction\" pi LEFT JOIN \"Prospect\" p ON pi.\"prospectId\"=p.id WHERE p.\"tenantId\" IS NULL) +
+    (SELECT COUNT(*) FROM \"ProspectTask\"        pt LEFT JOIN \"Prospect\" p ON pt.\"prospectId\"=p.id WHERE p.\"tenantId\" IS NULL) +
+    (SELECT COUNT(*) FROM \"TicketInteraction\"   ti LEFT JOIN \"Ticket\"   t ON ti.\"ticketId\"  =t.id WHERE t.\"tenantId\" IS NULL)
+  AS orphans;"
+
+# 1. Section A — add nullable columns (metadata-only, instant)
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 < backend/prisma/sql/p0-tenant-id-children.sql
+# (or paste just Section A if you prefer manual control)
+
+# 2. Backfill — preview, then apply
+cd backend
+npx ts-node prisma/backfill-tenant-id-children.ts --dry-run
+npx ts-node prisma/backfill-tenant-id-children.ts             # idempotent
+
+# 3. Section B + C — NOT NULL + FK + indexes CONCURRENTLY
+#    (Section C cannot be in a transaction — psql autocommits per
+#    statement so this is fine as-is; do NOT wrap in BEGIN/COMMIT.)
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 < backend/prisma/sql/p0-tenant-id-children.sql
+
+# 4. Sync the local schema state — should be a no-op now.
+cd backend && npx prisma db push --skip-generate
+```
+
+**Known follow-ups after this commit lands**
+
+- `npx tsc --noEmit` will FAIL on `backend/src/crm/crm.service.ts`
+  and any other site that does `prospectInteraction.create({ data: {
+  prospectId, ... } })` without `tenantId`. This is intentional and
+  resolved by P0.1 commit 2 (service refactor). CI will be red between
+  the two commits — land them together in the PR.
+- `prisma generate` must be run after this commit (CI does it; locally
+  do `cd backend && npx prisma generate`).
+
+### P0.1 commit 2 — `crm.service.ts` refactor (status: pending)
+
+To be filled when commit 2 lands.
+
+---
+
 ## Pending
 
 ### [ ] 🟡 MEDIO: 3 backfill scripts broken on Prisma 7 — `new PrismaClient()` requires adapter
