@@ -26,16 +26,19 @@ five items are merged into it locally.
       with `tenantId` in `crm.service.ts` (`sendWelcomeKit`) and
       `providers.service.ts:132-135`. Mark legitimate exceptions with
       `// safe:` comments so re-sweeps are idempotent.
-- [ ] **P0.3** — Add `@@index([tenantId, …])` to Ticket, Property,
-      Prospect, User, Workflow, TokenUsageLog. Indexes must be created
-      `CONCURRENTLY` in prod (separate hand-written SQL).
-- [ ] **P0.4** — Tune `pg.Pool` in `prisma.service.ts` (`max`,
-      `idleTimeoutMillis`, `connectionTimeoutMillis`,
-      `statement_timeout`).
-- [ ] **P0.5** — Mandatory pagination in
-      `tickets.controller.ts:62-66`. Two-phase deploy (optional
-      `?page=&limit=`, deprecation warn, then enforce) to avoid
-      breaking the frontend in a single push.
+- [ ] **P0.2 (was P0.3 in the original plan)** — Add
+      `@@index([tenantId, …])` to Ticket, Property, Prospect, User,
+      Workflow, TokenUsageLog. Indexes must be created `CONCURRENTLY`
+      in prod (separate hand-written SQL). Bundled with what was P0.4
+      (pool tuning) — two commits, indexes first.
+- [ ] **P0.2 commit 2** — Tune `pg.Pool` in `prisma.service.ts`
+      (`max`, `min`, `idleTimeoutMillis`, `connectionTimeoutMillis`,
+      `statement_timeout`). Document env vars in `.env.example` with
+      free-tier vs paid-plan recommendations.
+- [ ] **P0.3 (was P0.5 in the original plan)** — Mandatory
+      pagination in `tickets.controller.ts:62-66`. Two-phase deploy
+      (optional `?page=&limit=`, deprecation warn, then enforce) to
+      avoid breaking the frontend in a single push.
 
 ### P0.1 commit 1 — schema + backfill (status: shipped locally)
 
@@ -186,6 +189,95 @@ and committing as a separate `chore(style)`.
       None of those changes are scope, but they represent low-risk
       pre-existing debt that should land as a focused
       `chore(style): eslint --fix sweep` once P0 is done.
+
+### P0.2 commit 1 — tenant-scoping indexes (status: shipped locally)
+
+13 new B-tree indexes across 6 models. Source of truth is
+`schema.prisma`; hand-written SQL in `backend/prisma/sql/` is the
+production application path because Prisma can't emit
+`CREATE INDEX CONCURRENTLY` and the team uses `prisma db push`
+(which would take an AccessExclusiveLock).
+
+**Indexes (Prisma default naming convention: `<Table>_<col(s)>_idx`)**
+
+| Table          | Columns                              | Hot query                                       |
+| -------------- | ------------------------------------ | ----------------------------------------------- |
+| Ticket         | (tenantId)                           | findAllByTenant                                 |
+| Ticket         | (tenantId, assignedTechnicianId)     | findAllByTechnician                             |
+| Ticket         | (tenantId, createdAt)                | Paginated chronological lists                   |
+| Property       | (tenantId, status)                   | AVAILABLE/RENTED/etc filter                     |
+| Property       | (tenantId, isActive)                 | Active properties listing                       |
+| Prospect       | (tenantId)                           | findAll paginated                               |
+| Prospect       | (tenantId, status)                   | getFunnel groupBy                               |
+| Prospect       | (tenantId, updatedAt)                | findAll orderBy updatedAt                       |
+| Prospect       | (tenantId, sentiment)                | getSentimentMetrics + future sentiment dashes   |
+| User           | (tenantId)                           | Users-by-tenant listing                         |
+| User           | (tenantId, role)                     | Technician/agent lookup during ticket assign    |
+| Workflow       | (tenantId)                           | Workflow config queries                         |
+| TokenUsageLog  | (tenantId, createdAt)                | Monthly quota / billing window                  |
+
+**Not created (intentional)**
+
+- `Property(tenantId)` — `@@unique([tenantId, propertyCode])` already
+  supports left-prefix scans on `tenantId` alone.
+
+**Files**
+
+- `backend/prisma/schema.prisma`: 13 `@@index([...])` declarations
+  added across the 6 models. No structural changes.
+- `backend/prisma/sql/p0.2-tenant-indexes.sql`: hand-written SQL
+  with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` for each index.
+  Idempotent — re-runnable. Names match Prisma's default convention
+  so a post-merge `prisma db push --skip-generate` against prod is a
+  true no-op (Prisma sees them, skips DDL).
+- `AUDIT_REPORT.md`: this section.
+
+**Runbook (apply to prod Supabase)**
+
+```bash
+# 1. Pre-flight — look for any INVALID indexes from prior interrupted
+#    CONCURRENTLY attempts.  Drop them first if present.
+psql "$DIRECT_URL" -At -c "
+  SELECT c.relname FROM pg_index i
+   JOIN pg_class c ON c.oid = i.indexrelid
+   WHERE NOT i.indisvalid
+     AND c.relname LIKE ANY (ARRAY['Ticket_tenantId%','Property_tenantId%',
+         'Prospect_tenantId%','User_tenantId%','Workflow_tenantId%',
+         'TokenUsageLog_tenantId%']);"
+# Expected output: empty.  Any name returned needs:
+#   DROP INDEX CONCURRENTLY \"<name>\";
+
+# 2. Apply the SQL.  Each CONCURRENTLY scans the table without blocking
+#    writes; total wall time depends on table sizes.  Idempotent.
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 \
+  -f backend/prisma/sql/p0.2-tenant-indexes.sql
+
+# 3. Verify — all 13 must show indisvalid = true.
+#    SELECT block at the bottom of the SQL file does this.
+
+# 4. Merge the PR.  Post-merge `prisma db push --skip-generate`
+#    (if anyone runs it) sees the indexes match the schema and is a
+#    true no-op.  Sqlite dev DBs will recreate them locally without
+#    CONCURRENTLY semantics — fine in that environment.
+```
+
+**Performance expectation** (rough, depends on row counts and Postgres
+version; benchmark in staging post-apply):
+
+| Query                                | Before    | After   | Speedup |
+| ------------------------------------ | --------- | ------- | ------- |
+| `tickets.findAllByTenant` (50k rows) | ~500 ms   | ~20 ms  | ~25×    |
+| `crm.findAll` paginated (10k rows)   | ~200 ms   | ~15 ms  | ~13×    |
+| `properties` by tenant+status filter | ~150 ms   | ~10 ms  | ~15×    |
+
+Write overhead: ~3-5% per insert/update on these tables (one B-tree
+write per new index). Acceptable given the read profile dominates.
+Disk overhead: ~1-2% of table size per index → ~10-15% extra in
+aggregate for the 6 tables.
+
+### P0.2 commit 2 — pool tuning (status: pending)
+
+To be filled when commit 2 lands.
 
 ---
 

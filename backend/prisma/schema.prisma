@@ -335,6 +335,12 @@ model Property {
   /// matching propertyCode. Now two tenants can share the same
   /// propertyCode without collision and updates stay tenant-scoped.
   @@unique([tenantId, propertyCode])
+  // P0.2 — tenant-scoping. Plain (tenantId) is intentionally omitted
+  // because the @@unique above already supports left-prefix scans on
+  // tenantId alone. (tenantId, status) covers the AVAILABLE/RENTED/etc
+  // filter; (tenantId, isActive) covers the "active properties" list.
+  @@index([tenantId, status])
+  @@index([tenantId, isActive])
 }
 
 model PropertyAccessItem {
@@ -395,6 +401,16 @@ model Prospect {
   interactions         ProspectInteraction[]
   tasks                ProspectTask[]
   interestedProperties Property[]            @relation("PropertyInterests")
+
+  // P0.2 — tenant-scoping. (tenantId) base index; (tenantId, status)
+  // serves getFunnel groupBy; (tenantId, updatedAt) supports findAll's
+  // orderBy updatedAt; (tenantId, sentiment) is preventative — the CRM
+  // module is set to grow and getSentimentMetrics + future sentiment
+  // dashboards will hit it.
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, updatedAt])
+  @@index([tenantId, sentiment])
 }
 
 /// P0.1 — `tenantId` denormalized on the child table. Pre-P0.1 the row
@@ -585,6 +601,13 @@ model Ticket {
 
   @@index([reportedByUserPhone])
   @@index([resolvedAt])
+  // P0.2 — tenant-scoping. (tenantId) is the base for findAllByTenant;
+  // (tenantId, assignedTechnicianId) covers the technician dashboard;
+  // (tenantId, createdAt) supports paginated chronological lists (the
+  // shape P0.5 will lean on).
+  @@index([tenantId])
+  @@index([tenantId, assignedTechnicianId])
+  @@index([tenantId, createdAt])
 }
 
 /// P0.1 — `tenantId` denormalized. See ProspectInteraction note.
@@ -695,6 +718,12 @@ model User {
 
   @@index([phone])
   @@index([whatsappId])
+  // P0.2 — tenant-scoping. tenantId is nullable here (SUPERADMIN has
+  // no tenant); Postgres handles NULLs natively in the B-tree and the
+  // SUPERADMIN row is one in N. (tenantId, role) speeds up technician/
+  // agent lookups during ticket assignment.
+  @@index([tenantId])
+  @@index([tenantId, role])
 }
 
 /**
@@ -731,6 +760,10 @@ model Workflow {
   tickets              Ticket[]
   tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   states               WorkflowState[]
+
+  // P0.2 — tenant-scoping. Single index suffices; workflow config
+  // queries are always full-tenant scans (list all workflows of a tenant).
+  @@index([tenantId])
 }
 
 model WorkflowState {
@@ -1042,6 +1075,11 @@ model TokenUsageLog {
   costUsd      Float
   createdAt    DateTime @default(now())
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  // P0.2 — tenant-scoping with chronological prefix. The monthly
+  // billing/quota query is the hot path: `WHERE tenantId = ? AND
+  // createdAt >= billingCycleStart` — covered exactly by this index.
+  @@index([tenantId, createdAt])
 }
 
 model RefreshToken {
