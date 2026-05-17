@@ -415,6 +415,7 @@ export class WhatsappService {
         const selectedTicket = activeTickets[choice - 1];
         await this.cognitiveService.logInteraction(
           selectedTicket.id,
+          resolvedTenantId,
           user.id,
           `[Client WA] ${originalText}`,
           InteractionChannel.WHATSAPP,
@@ -438,11 +439,7 @@ export class WhatsappService {
 
     if (!relation || !relation.property) {
       const noPropertyMsg = `Hola ${user.firstName}. Soy Daniel. Reconozco tu número, pero actualmente no veo ningún contrato o inmueble activo vinculado a ti. Para poder registrar cualquier ticket de mantenimiento, necesito primero confirmar tu inmueble. Por favor comunícate con nuestras oficinas para revisar tu estado.`;
-      return this.sendMessage(
-        from,
-        noPropertyMsg,
-        resolvedTenantId,
-      );
+      return this.sendMessage(from, noPropertyMsg, resolvedTenantId);
     }
 
     const propertyName = relation.property.title || relation.property.address;
@@ -689,6 +686,7 @@ export class WhatsappService {
       if (latestTicket) {
         await this.cognitiveService.logInteraction(
           latestTicket.id,
+          resolvedTenantId,
           user.id,
           `[Client WA] ${text}`,
           InteractionChannel.WHATSAPP,
@@ -696,6 +694,7 @@ export class WhatsappService {
         );
         await this.cognitiveService.logInteraction(
           latestTicket.id,
+          resolvedTenantId,
           null,
           `[Daniel AI] ${finalResponse} (Intensity: ${parsedMetadata.intensity || 0})`,
           InteractionChannel.WHATSAPP,

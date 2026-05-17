@@ -184,8 +184,16 @@ export class CognitiveService {
     };
   }
 
+  /**
+   * P0.1 — tenantId is now required and persisted on TicketInteraction.
+   * Pre-P0.1 the row only carried ticketId, so writes trusted whatever
+   * ticketId the caller passed. Both callers (whatsapp.service.ts) have
+   * resolvedTenantId in scope; thread it through here so the row is
+   * denormalized for downstream tenant-scoped queries.
+   */
   async logInteraction(
     ticketId: string,
+    tenantId: string,
     userId: string | null,
     message: string,
     channel: InteractionChannel,
@@ -193,6 +201,7 @@ export class CognitiveService {
   ) {
     return this.prisma.ticketInteraction.create({
       data: {
+        tenantId,
         ticketId,
         userId,
         message,

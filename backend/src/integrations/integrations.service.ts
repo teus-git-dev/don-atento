@@ -64,6 +64,12 @@ export class IntegrationsService {
         status: 'NEW',
         interactions: {
           create: {
+            // P0.1 — `tenantId` must be set on the nested ProspectInteraction
+            // even though it lives under a Prospect being created in the same
+            // statement. The FK from ProspectInteraction → Prospect uses
+            // `prospectId` only, so the child row doesn't auto-inherit the
+            // parent's tenantId.
+            tenantId,
             channel: 'SYSTEM_AI',
             message: `Lead automatically created from Finca Raiz webhook. Interest in listing: ${leadData.listingId || 'N/A'}`,
           },

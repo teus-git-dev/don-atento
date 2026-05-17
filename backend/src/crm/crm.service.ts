@@ -194,6 +194,7 @@ export class CrmService {
 
     return this.prisma.prospectTask.create({
       data: {
+        tenantId,
         prospectId,
         title: data.title,
         description: data.description,
@@ -250,12 +251,23 @@ export class CrmService {
     if (result.count === 0) {
       throw new NotFoundException('Prospect no encontrado.');
     }
-    return this.prisma.prospect.findUnique({ where: { id } });
+    // findFirst with composite where instead of findUnique: the row was
+    // just validated by the updateMany above, so this is mostly cosmetic,
+    // but the codebase standard is `(id, tenantId)` lookups everywhere
+    // — keeping it consistent avoids drift the next time someone copies
+    // this pattern.
+    return this.prisma.prospect.findFirst({ where: { id, tenantId } });
   }
 
-  async scoreLead(prospectId: string) {
-    const prospect = await this.prisma.prospect.findUnique({
-      where: { id: prospectId },
+  /**
+   * P0.1 — tenantId is now required. The pre-P0.1 signature
+   * (`scoreLead(prospectId)`) used findUnique without scoping, so a
+   * caller knowing any prospectId could read a foreign tenant's lead +
+   * full interaction history. `findFirst({ id, tenantId })` closes that.
+   */
+  async scoreLead(prospectId: string, tenantId: string) {
+    const prospect = await this.prisma.prospect.findFirst({
+      where: { id: prospectId, tenantId },
       include: { interactions: true },
     });
 
@@ -286,15 +298,31 @@ export class CrmService {
     };
   }
 
-  async addInteraction(prospectId: string, message: string, channel: any) {
-    const prospect = await this.prisma.prospect.findUnique({
-      where: { id: prospectId },
+  /**
+   * P0.1 — tenantId is now required. Pre-P0.1 the lookup was a bare
+   * findUnique by prospectId, so anyone who could call this method (or
+   * leak a prospectId through it) could write a ProspectInteraction
+   * under a foreign tenant's prospect AND mutate that prospect's
+   * sentiment. The TenantGuard only filtered HTTP input, not internal
+   * service calls. Now the method demands tenantId explicitly and every
+   * DB touch is scoped on `(id, tenantId)`. The channel parameter is
+   * also tightened from `any` to `InteractionChannel`.
+   */
+  async addInteraction(
+    prospectId: string,
+    tenantId: string,
+    message: string,
+    channel: InteractionChannel,
+  ) {
+    const prospect = await this.prisma.prospect.findFirst({
+      where: { id: prospectId, tenantId },
+      select: { id: true },
     });
-    if (!prospect) throw new Error('Prospect not found');
+    if (!prospect) throw new NotFoundException('Prospect no encontrado.');
 
     const alignment = await this.brandBrain.getToneAlignmentScore(
       message,
-      prospect.tenantId,
+      tenantId,
     );
     let sentiment: SentimentAnalysis = SentimentAnalysis.NEUTRAL;
     if (alignment.score > 0.8) sentiment = SentimentAnalysis.POSITIVE;
@@ -302,15 +330,19 @@ export class CrmService {
 
     const interaction = await this.prisma.prospectInteraction.create({
       data: {
+        tenantId,
         prospectId,
         message,
         channel,
-        sentiment: sentiment,
+        sentiment,
       },
     });
 
-    await this.prisma.prospect.update({
-      where: { id: prospectId },
+    // updateMany with composite where so the second touch stays scoped
+    // even if a concurrent delete removed the prospect between the
+    // findFirst above and here — update-by-id would 500 in that case.
+    await this.prisma.prospect.updateMany({
+      where: { id: prospectId, tenantId },
       data: { sentiment },
     });
 
@@ -546,9 +578,17 @@ export class CrmService {
       await this.whatsappService.sendMessage(waTarget, waMessage, tenantId);
     }
 
-    // Log the welcome interaction
+    // Log the welcome interaction.
+    //
+    // Pre-existing landmine surfaced by P0.1: `tenantUserId` here is the
+    // newly-created User.id (passed as `result.id` from approveContract),
+    // NOT a Prospect.id — so addInteraction's findFirst returns null and
+    // the call has always thrown. Behavior preserved (still throws) to
+    // keep this commit narrowly scoped to tenantId plumbing. Tracked as a
+    // follow-up in AUDIT_REPORT.md → P0.1 commit 2 follow-ups.
     await this.addInteraction(
       tenantUserId,
+      tenantId,
       'ENVÍO KIT DE BIENVENIDA AUTOMÁTICO (EMAIL/WA)',
       InteractionChannel.SYSTEM_AI,
     );

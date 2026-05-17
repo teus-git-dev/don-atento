@@ -98,9 +98,94 @@ cd backend && npx prisma db push --skip-generate
 - `prisma generate` must be run after this commit (CI does it; locally
   do `cd backend && npx prisma generate`).
 
-### P0.1 commit 2 — `crm.service.ts` refactor (status: pending)
+### P0.1 commit 2 — service-layer refactor (status: shipped locally)
 
-To be filled when commit 2 lands.
+Scope expanded beyond just `crm.service.ts` because `npx prisma
+generate` (post-commit-1) made `tenantId` a required field on the 3
+child models' `*CreateInput` types, so every `.create()` and every
+nested `interactions: { create: {...} }` had to thread `tenantId`
+through. Five files touched in total.
+
+**Changes**
+
+- `backend/src/crm/crm.service.ts`:
+  - `addInteraction(prospectId, tenantId, message, channel)` — was
+    `(prospectId, message, channel)`. Switches the lookup to
+    `findFirst({ id, tenantId })`, throws `NotFoundException`,
+    persists `tenantId` on the `ProspectInteraction.create`, and uses
+    `updateMany({ id, tenantId })` for the sentiment write so the
+    second touch stays scoped even under a concurrent delete. The
+    `channel` parameter is also tightened from `any` to
+    `InteractionChannel`.
+  - `scoreLead(prospectId, tenantId)` — was `(prospectId)`. Same
+    scoping fix; previously any caller could read a foreign tenant's
+    lead + full interaction history.
+  - `createTask(...)` — adds `tenantId` to the
+    `prospectTask.create({ data })`.
+  - `updateProspect(...)` — switches the post-update `findUnique` to
+    `findFirst({ id, tenantId })` for codebase consistency.
+  - `sendWelcomeKit(...)` — threads `tenantId` into the
+    `addInteraction` call to satisfy the new signature. See the
+    pre-existing landmine below.
+
+- `backend/src/cognitive/cognitive.service.ts`:
+  - `logInteraction(ticketId, tenantId, userId, message, channel,
+    sentiment?)` — was `(ticketId, userId, message, channel,
+    sentiment?)`. Persists `tenantId` on the
+    `TicketInteraction.create`.
+
+- `backend/src/whatsapp/whatsapp.service.ts`:
+  - 3 call sites (around `:418`, `:689`, `:697` post-edit) updated to
+    pass `resolvedTenantId` as the new 2nd argument. All sites
+    already had `resolvedTenantId` resolved earlier in the same
+    request handler, so this is a pure plumbing change.
+
+- `backend/src/integrations/integrations.service.ts`:
+  - `handleNewLead` writes a `Prospect` with a nested
+    `interactions: { create: {...} }` for Finca Raiz webhooks. The
+    nested create does NOT auto-inherit the parent's `tenantId` (the
+    FK is `prospectId` only), so `tenantId` is added explicitly to
+    the nested payload. Surfaced by `tsc --noEmit` — would have been
+    silently missed by the grep sweep for `prospectInteraction.create(`.
+
+- `AUDIT_REPORT.md`: this section.
+
+**Verification**
+
+All three gates the user gated this commit on are green:
+
+| Command                | Result                              |
+| ---------------------- | ----------------------------------- |
+| `npx prisma generate`  | ✓ regenerated client v7.8.0         |
+| `npx tsc --noEmit`     | ✓ no output                         |
+| `npm test`             | ✓ 20/20 suites, 133/133 tests       |
+
+`npm run lint --fix` was also run locally and reformatted 21
+unrelated files across the codebase (pre-existing eslint debt the
+auto-fixer happened to clean up while it was scanning). Those changes
+were reverted with `git restore` to keep this commit narrowly scoped
+to P0.1; they can be re-applied any time by re-running `lint --fix`
+and committing as a separate `chore(style)`.
+
+### Follow-ups discovered during P0.1
+
+- [ ] **Pre-existing bug in `crm.service.ts:sendWelcomeKit`** —
+      the `addInteraction` call at the end of `sendWelcomeKit`
+      passes `tenantUserId` (a `User.id`) as the `prospectId`
+      argument. Pre-P0.1 the method threw `Error('Prospect not
+      found')` here because no Prospect with a User.id exists;
+      post-P0.1 it throws `NotFoundException` for the same reason
+      (no behavior change, no regression). The interaction was
+      probably meant to be logged against `request.prospectId`
+      from the calling `approveContract`. Fix is out of P0 scope —
+      requires threading `prospectId` through `sendWelcomeKit`'s
+      signature, which is a behavioral change that deserves its
+      own commit. Tracked here so it doesn't get lost.
+- [ ] **Re-apply `eslint --fix` over the codebase** — the
+      auto-fixer touched 21 files when run locally on top of P0.1.
+      None of those changes are scope, but they represent low-risk
+      pre-existing debt that should land as a focused
+      `chore(style): eslint --fix sweep` once P0 is done.
 
 ---
 
