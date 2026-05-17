@@ -11,6 +11,49 @@ Close items with a checkbox once resolved (commit hash next to it).
 
 ## Pending
 
+### [ ] 🟡 MEDIO: 3 backfill scripts broken on Prisma 7 — `new PrismaClient()` requires adapter
+
+- **Owner**: backend team
+- **Surfaced by**: deploy execution 2026-05-17 (intent to run pre-deploy backfills against prod Supabase)
+- **Files**:
+  - `backend/prisma/backfill-whatsapp-tokens.ts:24`
+  - `backend/prisma/backfill-user-phone-contacts.ts:23`
+  - `backend/prisma/backfill-journal-entry-audit.ts:26`
+- **What**: All three scripts construct `new PrismaClient()` with no
+  options. Prisma 7 enforces adapter/provider compatibility at construction
+  and throws `PrismaClientInitializationError` immediately. The scripts
+  have never executed successfully — they always failed at the constructor.
+  `backfill-file-assets-to-supabase.ts` sidesteps this by using raw `pg`
+  /`better-sqlite3` clients (see file's header comment) — the three newer
+  scripts (whatsapp Block C, whatsapp Block E, accounting Block C) were
+  written without the same workaround.
+- **Why it wasn't a deploy blocker**: prod source counts for all three
+  backfills are 0:
+  - `Tenant.whatsappAccessToken IS NOT NULL`: 0 rows (cluster on Baileys)
+  - `User.additionalContacts` non-empty: 0 rows
+  - `JournalEntry WHERE status = 'POSTED'`: 0 rows
+  The backfills are pure no-ops in current prod state. The live runtime
+  code paths (`encryptWhatsappSecret` on token save, `UserPhoneContact`
+  dual-write on user enrollment, `postedAt` on `postJournalEntry`) all
+  work — only the legacy-data migration helpers are broken.
+- **Why it matters**: Recovery scenario (restore from a pre-Block-C
+  backup), new-environment provisioning (staging clone, customer-specific
+  deployment with imported data), or any future legacy-data migration
+  would hit the same broken constructor.
+- **Suggested fix**: Mirror `PrismaService` adapter pattern in each script:
+  ```ts
+  import { Pool } from 'pg';
+  import { PrismaPg } from '@prisma/adapter-pg';
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
+  ```
+  (Optionally support sqlite dev path via `NODE_ENV === 'production'`
+  conditional, but for one-shot deploy scripts the pg path is the only
+  sensible default — they always target the URL in `DATABASE_URL`.)
+- **Verification after fix**: re-run each with `--dry-run` against prod;
+  all three should report `Found 0 ...` and exit clean.
+
 ### [ ] Cleanup cron for `RefreshToken` table — unbounded growth
 
 - **Owner**: backend team
