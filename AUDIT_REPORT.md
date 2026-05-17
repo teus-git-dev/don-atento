@@ -275,9 +275,112 @@ write per new index). Acceptable given the read profile dominates.
 Disk overhead: ~1-2% of table size per index → ~10-15% extra in
 aggregate for the 6 tables.
 
-### P0.2 commit 2 — pool tuning (status: pending)
+### P0.2 commit 2 — pool tuning (status: shipped locally)
 
-To be filled when commit 2 lands.
+The pre-P0.2 `prisma.service.ts` instantiated `new Pool({ connectionString })`
+with zero tuning. node-postgres defaults are `max=10` and no statement
+timeout — so a single slow tenant query could hold a pool slot
+indefinitely and any spike past 10 concurrent users queued up at the
+adapter. statement_timeout is the single biggest noisy-neighbour
+mitigation available; everything else here is sizing.
+
+**Changes**
+
+- `backend/src/prisma/prisma.service.ts`:
+  - Pool is now configured with `max`, `min`, `idleTimeoutMillis`,
+    `connectionTimeoutMillis`, `statement_timeout`, and a fixed
+    `application_name` (visible in `pg_stat_activity` for debugging
+    "which backend opened this connection?").
+  - Every value is env-overridable so the operator can re-tune on
+    paid plans without a code change.
+  - `pool.on('error', ...)` listener registered so an idle client
+    drop logs instead of killing the Node process.
+  - Boot-time `console.log` now prints the effective pool config —
+    quick sanity check from Render logs.
+
+- `backend/.env.example`:
+  - New `Postgres connection pool (pg.Pool)` section after the
+    Database section, with the per-tier recommendation table
+    inline.
+
+- `AUDIT_REPORT.md`: this section.
+
+**Per-tier env var reference**
+
+| Tier                     | `PG_POOL_MAX` | `PG_POOL_MIN` | `IDLE_TIMEOUT_MS` | `CONNECT_TIMEOUT_MS` | `STATEMENT_TIMEOUT_MS` |
+| ------------------------ | ------------- | ------------- | ----------------- | -------------------- | ---------------------- |
+| Render Free (512 MB)     | **10**        | **2**         | 30000             | 5000                 | 30000                  |
+| Render Starter (2 GB)    | **25**        | 2             | 30000             | 5000                 | 30000                  |
+| Render Standard (4 GB+)  | 30+           | 5             | 30000             | 5000                 | 30000                  |
+
+Free-tier defaults are baked into the code; everything else is set by
+the operator via Render dashboard env vars (no redeploy of code).
+
+**Why these specific values**
+
+- `PG_POOL_MAX=10` (Free) — at ~3-5 MB Node heap per pool conn, 10
+  conns ≈ 50 MB, ~10% of the 512 MB instance budget. Leaves room for
+  V8, Baileys adapters (~2 MB each persistent), and request buffers.
+- `PG_POOL_MIN=2` — keep two idle warm so the first request after a
+  quiet period doesn't pay the handshake. Two (not zero) was the
+  explicit operator preference: snappier cold path matters more than
+  the marginal RAM saving on this size of instance.
+- `IDLE_TIMEOUT_MS=30000` — moderate. The pool recycles slow tenants
+  but doesn't churn connections on every quiet 10s window.
+- `CONNECT_TIMEOUT_MS=5000` — fail-fast. If the pool can't lend a
+  conn in 5s under load, the request should 503 rather than queue
+  for tens of seconds (which then triggers Meta webhook retries and
+  doubles the work).
+- `STATEMENT_TIMEOUT_MS=30000` — generous enough for legitimate
+  batch flows (large `getFunnel` groupings, complex `include` reads
+  for ticket detail) but kills genuinely runaway queries before
+  they take down the pool. Imports and report jobs should bump
+  per-tx via `SET LOCAL statement_timeout` if they need it.
+
+**What this does NOT cover**
+
+- Supabase server-side connection limit. PgBouncer in transaction
+  mode (current URL config) multiplexes app conns to a small server-
+  side pool, so app `max=10` doesn't burn 10 Supabase slots. If the
+  team ever moves off PgBouncer to direct connections, `max` becomes
+  a real Supabase budget concern.
+- BullMQ workers (not implemented yet — P0 follow-up). When they
+  land, each worker process will need its own pool budget figured
+  in.
+
+**Verification gates (all green)**
+
+| Command                | Result                              |
+| ---------------------- | ----------------------------------- |
+| `npx tsc --noEmit`     | ✓ no output                         |
+| `npm test`             | ✓ 20/20 suites, 133/133 tests       |
+
+`prisma format` / `prisma generate` not re-run — no schema changes
+this commit.
+
+**Runbook (apply to prod)**
+
+```bash
+# 1. (Optional) Set non-default values on Render via dashboard.
+#    For Starter plan the only change vs defaults is:
+#      PG_POOL_MAX=25
+#    All other defaults from the code suit Starter fine.
+
+# 2. Redeploy from this commit.  On boot the [PrismaService] log line
+#    prints the effective pool config — sanity-check it in Render logs:
+#      [PrismaService] Connecting to Production Database (Supabase) ...
+#      [pool max=25 min=2 idle=30000ms connect=5000ms stmtTimeout=30000ms]
+
+# 3. Watch pg_stat_activity for a minute to confirm conns settle at min:
+#      SELECT count(*), state FROM pg_stat_activity
+#       WHERE application_name='don-atento-backend' GROUP BY state;
+#    Expected: ~2 idle when traffic is low, scaling up to PG_POOL_MAX
+#    under load.
+
+# 4. Rollback if needed: revert this commit and redeploy. The defaults
+#    are env-overridable so a bad value can also be patched live by
+#    setting the env var and rebooting (no code redeploy).
+```
 
 ---
 
