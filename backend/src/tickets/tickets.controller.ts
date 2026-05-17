@@ -11,6 +11,7 @@ import {
   UseGuards,
   Req,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -40,11 +41,29 @@ const TICKET_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 @UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
 @Controller('tickets')
 export class TicketsController {
+  private readonly logger = new Logger(TicketsController.name);
+
   constructor(
     private readonly ticketsService: TicketsService,
     private readonly fileUpload: FileUploadService,
     private readonly surveyToken: SurveyTokenService,
   ) {}
+
+  /**
+   * Parse `?page=` and `?limit=` into a sanitized pagination opts
+   * object. Page defaults to 1; limit defaults to 20 and is hard-capped
+   * at 100 (matches crm.controller.ts convention). Used by both `findAll`
+   * and `findByTechnician` during P0.3 Phase 1.
+   */
+  private parsePagination(
+    pageStr?: string,
+    limitStr?: string,
+  ): { page: number; limit: number } {
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const requestedLimit = parseInt(limitStr ?? '20', 10) || 20;
+    const limit = Math.min(Math.max(1, requestedLimit), 100);
+    return { page, limit };
+  }
 
   @Post()
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
@@ -57,20 +76,58 @@ export class TicketsController {
   @Get()
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({
-    summary: 'Listar todos los tickets por tenant o propietario',
+    summary: 'Listar todos los tickets por tenant o propietario (paginado)',
   })
-  async findAll(@Req() req: any, @Query('ownerId') ownerId?: string) {
-    if (ownerId) {
-      return this.ticketsService.findAllByOwner(ownerId, req['tenantId']);
+  async findAll(
+    @Req() req: any,
+    @Query('ownerId') ownerId?: string,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const tenantId = req['tenantId'];
+    const wantsPaginated = pageStr !== undefined || limitStr !== undefined;
+
+    if (!wantsPaginated) {
+      // P0.3 Phase 1 — preserve the legacy array shape so the current
+      // frontend keeps working unchanged. The deprecation warn surfaces
+      // remaining callers in Render logs (`tenant=X ownerId=Y`); when
+      // those drop to zero, Phase 2 removes this branch.
+      this.logger.warn(
+        `[deprecation] GET /tickets without pagination — tenant=${tenantId} ownerId=${ownerId ?? '-'}`,
+      );
+      return ownerId
+        ? this.ticketsService.findAllByOwner(ownerId, tenantId)
+        : this.ticketsService.findAllByTenant(tenantId);
     }
-    return this.ticketsService.findAllByTenant(req['tenantId']);
+
+    const opts = this.parsePagination(pageStr, limitStr);
+    return ownerId
+      ? this.ticketsService.findAllByOwner(ownerId, tenantId, opts)
+      : this.ticketsService.findAllByTenant(tenantId, opts);
   }
 
   @Get('technician/:id')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
-  @ApiOperation({ summary: 'Ver tickets asignados a un técnico' })
-  async findByTechnician(@Req() req: any, @Param('id') id: string) {
-    return this.ticketsService.findAllByTechnician(id, req['tenantId']);
+  @ApiOperation({ summary: 'Ver tickets asignados a un técnico (paginado)' })
+  async findByTechnician(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const tenantId = req['tenantId'];
+    const wantsPaginated = pageStr !== undefined || limitStr !== undefined;
+
+    if (!wantsPaginated) {
+      // P0.3 Phase 1 — see findAll for the rationale.
+      this.logger.warn(
+        `[deprecation] GET /tickets/technician/:id without pagination — tenant=${tenantId} technicianId=${id}`,
+      );
+      return this.ticketsService.findAllByTechnician(id, tenantId);
+    }
+
+    const opts = this.parsePagination(pageStr, limitStr);
+    return this.ticketsService.findAllByTechnician(id, tenantId, opts);
   }
 
   @Get(':id')

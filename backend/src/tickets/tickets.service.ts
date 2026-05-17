@@ -8,7 +8,7 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
-import { Ticket, TicketPriority, RelationType } from '@prisma/client';
+import { Ticket, TicketPriority, RelationType, Prisma } from '@prisma/client';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { EmailService } from '../cognitive/email.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
@@ -29,6 +29,49 @@ const USER_PUBLIC_SELECT = {
   role: true,
   whatsappId: true,
 } as const;
+
+/**
+ * Default include block for ticket list endpoints exposed to tenant
+ * admins and owners (findAllByTenant + findAllByOwner). Extracted
+ * during P0.3 from the duplicated inline includes — single source of
+ * truth, so a schema change updates both endpoints together.
+ *
+ * findAllByTechnician keeps its own (smaller) include below because a
+ * technician's view intentionally hides who reported the ticket and
+ * the full interaction trail.
+ */
+const TICKET_LIST_INCLUDE = {
+  property: {
+    include: {
+      relations: {
+        include: { user: { select: USER_PUBLIC_SELECT } },
+      },
+      assignments: {
+        include: { agent: { select: USER_PUBLIC_SELECT } },
+      },
+    },
+  },
+  reportedByUser: { select: USER_PUBLIC_SELECT },
+  assignedTechnician: { select: USER_PUBLIC_SELECT },
+  currentState: true,
+  interactions: {
+    orderBy: { sentAt: 'desc' },
+    take: 5,
+  },
+  stateLogs: {
+    include: {
+      state: {
+        include: { responsible: { select: USER_PUBLIC_SELECT } },
+      },
+      completedByUser: { select: USER_PUBLIC_SELECT },
+    },
+    orderBy: { startedAt: 'desc' },
+  },
+} satisfies Prisma.TicketInclude;
+
+/** Pagination opts accepted by the list endpoints' service methods. */
+type PageOpts = { page: number; limit: number };
+
 
 @Injectable()
 export class TicketsService {
@@ -744,39 +787,41 @@ export class TicketsService {
     }
   }
 
-  async findAllByTenant(tenantId: string) {
-    return this.prisma.ticket.findMany({
-      where: { tenantId },
-      include: {
-        property: {
-          include: {
-            relations: {
-              include: { user: { select: USER_PUBLIC_SELECT } },
-            },
-            assignments: {
-              include: { agent: { select: USER_PUBLIC_SELECT } },
-            },
-          },
-        },
-        reportedByUser: { select: USER_PUBLIC_SELECT },
-        assignedTechnician: { select: USER_PUBLIC_SELECT },
-        currentState: true,
-        interactions: {
-          orderBy: { sentAt: 'desc' },
-          take: 5,
-        },
-        stateLogs: {
-          include: {
-            state: {
-              include: { responsible: { select: USER_PUBLIC_SELECT } },
-            },
-            completedByUser: { select: USER_PUBLIC_SELECT },
-          },
-          orderBy: { startedAt: 'desc' },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  /**
+   * P0.3 — dual-shape during Phase 1: legacy array when `opts` is
+   * omitted (current frontend behavior), paginated `{ data, totalRecords,
+   * totalPages, currentPage }` when `opts` is provided. Controller
+   * decides which branch to invoke based on presence of `?page=`/`?limit=`.
+   * Phase 2 (next commit) removes the legacy branch.
+   */
+  async findAllByTenant(tenantId: string, opts?: PageOpts) {
+    const where = { tenantId };
+    if (!opts) {
+      return this.prisma.ticket.findMany({
+        where,
+        include: TICKET_LIST_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    const { page, limit } = opts;
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        include: TICKET_LIST_INCLUDE,
+        // id tiebreaker keeps pagination stable when two rows share the
+        // same createdAt (rare but possible under bulk imports).
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.ticket.count({ where }),
+    ]);
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page,
+    };
   }
 
   async findOne(id: string, tenantId: string) {
@@ -812,78 +857,109 @@ export class TicketsService {
     });
   }
 
-  async findAllByTechnician(technicianId: string, tenantId: string) {
-    return this.prisma.ticket.findMany({
-      where: { tenantId, assignedTechnicianId: technicianId },
-      include: {
-        property: {
-          include: {
-            relations: {
-              include: { user: { select: USER_PUBLIC_SELECT } },
-            },
-            assignments: {
-              include: { agent: { select: USER_PUBLIC_SELECT } },
-            },
+  /**
+   * P0.3 — dual-shape (see findAllByTenant). Keeps its own include
+   * inline instead of using TICKET_LIST_INCLUDE because a technician
+   * intentionally doesn't see who reported the ticket, the assigned
+   * technician field (it's themselves), or the full interaction trail.
+   */
+  async findAllByTechnician(
+    technicianId: string,
+    tenantId: string,
+    opts?: PageOpts,
+  ) {
+    const where = { tenantId, assignedTechnicianId: technicianId };
+    const technicianInclude = {
+      property: {
+        include: {
+          relations: {
+            include: { user: { select: USER_PUBLIC_SELECT } },
           },
-        },
-        currentState: true,
-        stateLogs: {
-          include: {
-            state: {
-              include: { responsible: { select: USER_PUBLIC_SELECT } },
-            },
-            completedByUser: { select: USER_PUBLIC_SELECT },
+          assignments: {
+            include: { agent: { select: USER_PUBLIC_SELECT } },
           },
-          orderBy: { startedAt: 'desc' },
         },
       },
-      orderBy: { createdAt: 'desc' },
-    });
+      currentState: true,
+      stateLogs: {
+        include: {
+          state: {
+            include: { responsible: { select: USER_PUBLIC_SELECT } },
+          },
+          completedByUser: { select: USER_PUBLIC_SELECT },
+        },
+        orderBy: { startedAt: 'desc' },
+      },
+    } satisfies Prisma.TicketInclude;
+
+    if (!opts) {
+      return this.prisma.ticket.findMany({
+        where,
+        include: technicianInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    const { page, limit } = opts;
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        include: technicianInclude,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.ticket.count({ where }),
+    ]);
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page,
+    };
   }
 
-  async findAllByOwner(ownerId: string, tenantId: string) {
-    return this.prisma.ticket.findMany({
-      where: {
-        tenantId,
-        property: {
-          relations: {
-            some: {
-              userId: ownerId,
-              relationType: RelationType.OWNER,
-              status: 'ACTIVE',
-            },
+  /**
+   * P0.3 — dual-shape (see findAllByTenant). Uses TICKET_LIST_INCLUDE
+   * because the owner view shows the same payload shape as the tenant-
+   * admin view (just filtered to properties they own).
+   */
+  async findAllByOwner(ownerId: string, tenantId: string, opts?: PageOpts) {
+    const where = {
+      tenantId,
+      property: {
+        relations: {
+          some: {
+            userId: ownerId,
+            relationType: RelationType.OWNER,
+            status: 'ACTIVE' as const,
           },
         },
       },
-      include: {
-        property: {
-          include: {
-            relations: {
-              include: { user: { select: USER_PUBLIC_SELECT } },
-            },
-            assignments: {
-              include: { agent: { select: USER_PUBLIC_SELECT } },
-            },
-          },
-        },
-        reportedByUser: { select: USER_PUBLIC_SELECT },
-        assignedTechnician: { select: USER_PUBLIC_SELECT },
-        currentState: true,
-        interactions: {
-          orderBy: { sentAt: 'desc' },
-          take: 5,
-        },
-        stateLogs: {
-          include: {
-            state: {
-              include: { responsible: { select: USER_PUBLIC_SELECT } },
-            },
-            completedByUser: { select: USER_PUBLIC_SELECT },
-          },
-          orderBy: { startedAt: 'desc' },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    } satisfies Prisma.TicketWhereInput;
+
+    if (!opts) {
+      return this.prisma.ticket.findMany({
+        where,
+        include: TICKET_LIST_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    const { page, limit } = opts;
+    const [data, totalRecords] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        include: TICKET_LIST_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.ticket.count({ where }),
+    ]);
+    return {
+      data,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: page,
+    };
   }
 }

@@ -36,9 +36,10 @@ five items are merged into it locally.
       `statement_timeout`). Document env vars in `.env.example` with
       free-tier vs paid-plan recommendations.
 - [ ] **P0.3 (was P0.5 in the original plan)** — Mandatory
-      pagination in `tickets.controller.ts:62-66`. Two-phase deploy
-      (optional `?page=&limit=`, deprecation warn, then enforce) to
-      avoid breaking the frontend in a single push.
+      pagination on the three `tickets` list endpoints. Two-phase
+      deploy (optional `?page=&limit=`, deprecation warn, then
+      enforce) to avoid breaking the frontend in a single push.
+      Phase 1 shipped locally; Phase 2 waits for frontend migration.
 
 ### P0.1 commit 1 — schema + backfill (status: shipped locally)
 
@@ -381,6 +382,108 @@ this commit.
 #    are env-overridable so a bad value can also be patched live by
 #    setting the env var and rebooting (no code redeploy).
 ```
+
+### P0.3 commit 1 — pagination phase 1, dual-shape (status: shipped locally)
+
+Pre-P0.3 the three `tickets` list endpoints (`GET /tickets`,
+`GET /tickets?ownerId=X`, `GET /tickets/technician/:id`) each ran an
+unbounded `findMany` with heavy includes (property + relations +
+assignments + reportedByUser + assignedTechnician + interactions
+[take:5] + stateLogs). A tenant-admin with 5k tickets would pull
+multi-MB JSON, serialise it in the request thread, and risk OOM on
+the 512MB Render instance. The audit flagged this as the top scale
+bug; this commit closes it without breaking the existing frontend.
+
+**Phase 1 contract (this commit)**
+
+- Presence of `?page=` OR `?limit=` switches the response shape:
+  - **Paginated:** `{ data, totalRecords, totalPages, currentPage }`
+    with `skip`, `take`, parallel `count`.
+  - **Legacy (omitted):** unchanged array shape; current frontend
+    keeps working.
+- Every legacy call logs a `Logger.warn` with `tenant=X` so Render
+  logs surface remaining callers as a migration metric.
+
+**Phase 2 (future commit, blocked on frontend migration)**
+
+- Remove the `if (!wantsPaginated)` branch in both `findAll` and
+  `findByTechnician`.
+- Remove the optional `opts?: PageOpts` and inline the paginated
+  body in each of the 3 service methods.
+- Default `limit=20` becomes implicit (no legacy fallback).
+- Delete the two `Logger.warn` deprecation lines.
+
+**Files**
+
+- `backend/src/tickets/tickets.controller.ts`:
+  - `findAll` and `findByTechnician` accept optional `?page=` and
+    `?limit=` and route accordingly.
+  - New private `parsePagination(pageStr?, limitStr?)` helper
+    sanitises inputs: page floors to 1, limit defaults to 20,
+    hard-capped at 100 (matches `crm.controller.ts` convention).
+  - `private readonly logger = new Logger(TicketsController.name)`
+    added (controller didn't have one previously).
+
+- `backend/src/tickets/tickets.service.ts`:
+  - New `TICKET_LIST_INCLUDE` constant extracted to the top of the
+    file. Single source of truth for the include block shared by
+    `findAllByTenant` and `findAllByOwner` — used to be duplicated
+    inline in both methods (~25 LOC each). `satisfies
+    Prisma.TicketInclude` validates the shape without losing literal
+    narrowing.
+  - `findAllByTechnician` keeps its own (smaller) inline include —
+    intentionally hides `reportedByUser`, `assignedTechnician`, and
+    `interactions` from the technician view.
+  - All 3 methods accept `opts?: PageOpts` and branch on its
+    presence. Paginated branch uses `orderBy: [{ createdAt: 'desc' },
+    { id: 'asc' }]` — the id tiebreaker keeps pagination stable when
+    two rows share the same createdAt (rare but possible under bulk
+    imports).
+
+- `backend/src/tickets/tickets.controller.spec.ts`:
+  - `mockTicketsService` now mocks the 3 list methods.
+  - 7 new tests under `findAll (P0.3 dual-shape)`: legacy no-params,
+    legacy with ownerId, `?page=1`, `?limit=50`, `?limit=200` (cap to
+    100), `?limit=0` (coerce to 20), `?ownerId + ?page + ?limit`.
+  - 2 new tests under `findByTechnician (P0.3 dual-shape)`: legacy +
+    paginated.
+
+- `backend/src/tickets/tickets.service.spec.ts`:
+  - `prismaMock.ticket.count` added.
+  - 4 tests under `findAllByTenant() — paginated shape (P0.3)`:
+    shape, skip/take/orderBy plumbing, count where parity, legacy
+    branch skips count.
+  - 2 tests under `findAllByOwner() — paginated shape (P0.3)`:
+    shape, count where matches the composite (tenantId + owner
+    relation).
+  - 2 tests under `findAllByTechnician() — paginated shape (P0.3)`:
+    shape, count where matches (tenantId + assignedTechnicianId).
+
+- `AUDIT_REPORT.md`: this section.
+
+**Verification (the two gates relevant for a controller+service commit)**
+
+| Command                | Result                                  |
+| ---------------------- | --------------------------------------- |
+| `npx tsc --noEmit`     | ✓ clean                                 |
+| `npm test`             | ✓ 20/20 suites, **150/150 tests** (+17) |
+
+`prisma format` / `prisma generate` not re-run — no schema changes.
+
+**Things NOT in this commit (intentional follow-ups)**
+
+- `?status=` filter on the list endpoints. Filtering is a separate
+  concern from pagination; would expand scope. Tracked as a future
+  `feat(tickets): status filter` commit.
+- Capping `stateLogs` in `TICKET_LIST_INCLUDE` to `take: N`. A ticket
+  with hundreds of transitions still brings the whole array. Real
+  only for very long-lived tickets and orthogonal to pagination.
+  Follow-up candidate.
+- Pagination on `findOne` (a single record doesn't need it; its
+  nested arrays are the same cap-stateLogs concern).
+- A `class-validator` DTO for the query params. Matches the project's
+  inline-`@Query` convention used by `crm.controller.ts`. A DTO
+  sweep can come as a separate `chore(api): typed query DTOs` pass.
 
 ---
 
