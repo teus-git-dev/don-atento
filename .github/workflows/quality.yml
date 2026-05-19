@@ -1,0 +1,335 @@
+name: Quality Gates
+
+# Branch Protection on `master` (and `main` if used in parallel) requires
+# every job below to pass before a PR can merge.  See README.md →
+# "Branch Protection" for the GitHub UI configuration.
+#
+# Coexists with `ci.yml` during the rollout — once Branch Protection is
+# configured to require these 10 jobs as the canonical gate set, ci.yml
+# can be retired in a follow-up commit.
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+
+# Cancel in-progress runs for the same ref when a new push lands —
+# saves runner minutes and keeps required-checks queue clean.
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ── TypeScript ──────────────────────────────────────────────────────────────
+
+  typescript-check-backend:
+    name: typescript-check-backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: tsc --noEmit
+        run: npx tsc --noEmit
+
+  typescript-check-frontend:
+    name: typescript-check-frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: tsc --noEmit
+        run: npx tsc --noEmit
+
+  # ── Lint (with delta-checks for `: any` and `console.log`) ──────────────────
+
+  lint-backend:
+    name: lint-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # delta-checks need full history vs PR base
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install deps
+        working-directory: backend
+        run: npm ci
+      - name: Block new `: any` (PR only)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- 'backend/**/*.ts' 'backend/**/*.tsx' \
+            | grep '^+' | grep -vE '^\+\+\+' \
+            | grep -E ':[[:space:]]*any\b' \
+            | grep -vE '// *safe:' || true)
+          if [ -n "$NEW" ]; then
+            echo "::error::New \`: any\` introduced (use a specific type, or annotate with \`// safe: <reason>\`):"
+            echo "$NEW"
+            exit 1
+          fi
+      - name: Block new `console.log` (PR only)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- 'backend/**/*.ts' 'backend/**/*.tsx' \
+            | grep '^+' | grep -vE '^\+\+\+' \
+            | grep -E 'console\.log\b' || true)
+          if [ -n "$NEW" ]; then
+            echo "::error::New \`console.log\` introduced — use NestJS Logger:"
+            echo "$NEW"
+            exit 1
+          fi
+      - name: ESLint
+        working-directory: backend
+        run: npm run lint
+
+  lint-frontend:
+    name: lint-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+      - name: Block new `: any` (PR only)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- 'frontend/**/*.ts' 'frontend/**/*.tsx' \
+            | grep '^+' | grep -vE '^\+\+\+' \
+            | grep -E ':[[:space:]]*any\b' \
+            | grep -vE '// *safe:' || true)
+          if [ -n "$NEW" ]; then
+            echo "::error::New \`: any\` introduced (use a specific type, or annotate with \`// safe: <reason>\`):"
+            echo "$NEW"
+            exit 1
+          fi
+      - name: Block new `console.log` (PR only)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- 'frontend/**/*.ts' 'frontend/**/*.tsx' \
+            | grep '^+' | grep -vE '^\+\+\+' \
+            | grep -E 'console\.log\b' || true)
+          if [ -n "$NEW" ]; then
+            echo "::error::New \`console.log\` introduced:"
+            echo "$NEW"
+            exit 1
+          fi
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+
+  # ── Tests ───────────────────────────────────────────────────────────────────
+
+  tests-backend:
+    name: tests-backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      NODE_ENV: test
+      JWT_SECRET: ci_test_secret_do_not_use_in_production
+      DATABASE_URL: file:./test.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Run Jest and enforce minimum test count
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test -- --passWithNoTests --forceExit 2>&1 | tee /tmp/jest.log
+          # Parse "Tests: 133 passed, 133 total" — pick the first match.
+          COUNT=$(grep -oE 'Tests:[[:space:]]+[0-9]+[[:space:]]+passed' /tmp/jest.log \
+            | grep -oE '[0-9]+' | head -1)
+          echo "Backend test count: ${COUNT:-0}"
+          if [ "${COUNT:-0}" -lt 133 ]; then
+            echo "::error::Backend test count ${COUNT:-0} is below floor of 133. Update the floor in quality.yml when adding tests."
+            exit 1
+          fi
+
+  tests-frontend:
+    name: tests-frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Run Jest
+        run: npm test -- --passWithNoTests --forceExit
+
+  # ── Security ────────────────────────────────────────────────────────────────
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Scan for hardcoded secrets
+        shell: bash
+        run: gitleaks detect --redact --verbose --no-banner
+      # `process.env` allowlist: paths where direct env access is expected
+      # (boot-time config, encryption keys, well-known integrations). Any
+      # NEW addition outside these paths must come via the Nest ConfigService
+      # or a tenant-scoped column.
+      - name: Block new `process.env` outside allowlist (PR only)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- \
+            '*.ts' '*.tsx' \
+            ':(exclude)backend/src/prisma/prisma.service.ts' \
+            ':(exclude)backend/src/main.ts' \
+            ':(exclude)backend/src/cognitive/**' \
+            ':(exclude)backend/src/whatsapp/whatsapp-encryption.util.ts' \
+            ':(exclude)backend/src/whatsapp/baileys.manager.ts' \
+            ':(exclude)backend/src/whatsapp/whatsapp.service.ts' \
+            ':(exclude)backend/src/auth/jwt.strategy.ts' \
+            ':(exclude)backend/src/invoicing/dian-crypto.service.ts' \
+            ':(exclude)backend/src/invoicing/dian-soap.service.ts' \
+            ':(exclude)backend/src/storage/**' \
+            ':(exclude)backend/prisma/**' \
+            ':(exclude)frontend/next.config.ts' \
+            | grep '^+' | grep -vE '^\+\+\+' \
+            | grep -E 'process\.env\.' || true)
+          if [ -n "$NEW" ]; then
+            echo "::error::New \`process.env.*\` usage outside the boot/config allowlist:"
+            echo "$NEW"
+            echo ""
+            echo "Move the read into ConfigService, a tenant column, or extend the allowlist in quality.yml with a justification."
+            exit 1
+          fi
+
+  # ── Prisma ──────────────────────────────────────────────────────────────────
+
+  prisma-check:
+    name: prisma-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: prisma validate
+        run: npx prisma validate
+      - name: prisma format --check (drift detector)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx prisma format
+          if ! git diff --quiet -- prisma/schema.prisma; then
+            echo "::error::schema.prisma is not formatted. Run \`npx prisma format\` locally and commit the result."
+            git --no-pager diff -- prisma/schema.prisma
+            exit 1
+          fi
+
+  # ── Builds ──────────────────────────────────────────────────────────────────
+
+  build-backend:
+    name: build-backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: nest build
+        run: npm run build
+
+  build-frontend:
+    name: build-frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: next build
+        run: npm run build
