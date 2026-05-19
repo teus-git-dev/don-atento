@@ -74,7 +74,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: backend/package-lock.json
+            cache-dependency-path: backend/package-lock.json
       - name: Install deps
         working-directory: backend
         run: npm ci
