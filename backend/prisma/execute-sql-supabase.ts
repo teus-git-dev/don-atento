@@ -109,8 +109,11 @@ async function run() {
       const sqlPath = path.join(__dirname, 'sql', 'p0.2-tenant-indexes.sql');
       const fileContent = fs.readFileSync(sqlPath, 'utf8');
 
+      // Strip comments first to avoid semicolons inside comments throwing off the split
+      const cleanContent = fileContent.replace(/--.*$/gm, '');
+      
       // Extract CREATE INDEX statements
-      const statements = fileContent
+      const statements = cleanContent
         .split(';')
         .map(s => s.trim())
         .filter(s => s.toLowerCase().startsWith('create index concurrently'));
