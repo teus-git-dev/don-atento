@@ -107,7 +107,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
     setLoading(true);
     try {
       // Validate phone prefix +57
-      let cleanPhone = formData.phone.trim().replace(/\s+/g, '');
+      const cleanPhone = formData.phone.trim().replace(/\s+/g, '');
       if (!cleanPhone.startsWith('+57')) {
         alert("El número de teléfono debe comenzar con +57");
         setLoading(false);

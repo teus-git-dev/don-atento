@@ -490,6 +490,7 @@ export class CrmService {
     // and not the cluster-wide env fallback (which would identify the
     // outbound as Don Atento global rather than the actual tenant).
     await this.sendWelcomeKit(
+      request.prospectId,
       result.id,
       request.propertyId,
       approvedByUserId,
@@ -500,6 +501,7 @@ export class CrmService {
   }
 
   private async sendWelcomeKit(
+    prospectId: string,
     tenantUserId: string,
     propertyId: string,
     agentUserId: string,
@@ -579,15 +581,8 @@ export class CrmService {
     }
 
     // Log the welcome interaction.
-    //
-    // Pre-existing landmine surfaced by P0.1: `tenantUserId` here is the
-    // newly-created User.id (passed as `result.id` from approveContract),
-    // NOT a Prospect.id — so addInteraction's findFirst returns null and
-    // the call has always thrown. Behavior preserved (still throws) to
-    // keep this commit narrowly scoped to tenantId plumbing. Tracked as a
-    // follow-up in AUDIT_REPORT.md → P0.1 commit 2 follow-ups.
     await this.addInteraction(
-      tenantUserId,
+      prospectId,
       tenantId,
       'ENVÍO KIT DE BIENVENIDA AUTOMÁTICO (EMAIL/WA)',
       InteractionChannel.SYSTEM_AI,

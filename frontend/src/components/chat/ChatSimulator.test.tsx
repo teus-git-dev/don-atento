@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import ChatSimulator from './ChatSimulator';
 import '@testing-library/jest-dom';
 
@@ -26,6 +26,15 @@ jest.mock('@/services/whatsappOrchestrator', () => ({
 }));
 
 describe('ChatSimulator', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
   test('renders initial system message', () => {
     render(<ChatSimulator />);
     expect(screen.getByText(/Atento-Sim: Simulación de Negociación Cognitiva activa/i)).toBeInTheDocument();
@@ -35,17 +44,23 @@ describe('ChatSimulator', () => {
     render(<ChatSimulator />);
     
     const input = screen.getByPlaceholderText(/Escribe un mensaje aquí/i);
-    const sendButton = screen.getByTitle(/Enviar/i) || screen.getAllByRole('button')[3]; // Select last button
+    const sendButton = screen.queryByTitle(/Enviar/i) || screen.getAllByRole('button')[3]; // Select last button
 
     fireEvent.change(input, { target: { value: 'Hola' } });
     fireEvent.click(sendButton);
 
-    // Initial user message should be in the document
     expect(screen.getByText('Hola')).toBeInTheDocument();
     
+    // Advance timers by the maximum possible timeout (1500 + 1000)
+    await act(async () => {
+        jest.advanceTimersByTime(3000);
+        // Let promises resolve
+        await Promise.resolve();
+    });
+
     await waitFor(() => {
         expect(screen.getByText('Mocked AI Response')).toBeInTheDocument();
-    }, { timeout: 4000 });
+    });
   });
 
   test('updates metrics when messages are sent', async () => {
@@ -56,6 +71,11 @@ describe('ChatSimulator', () => {
 
     fireEvent.change(input, { target: { value: 'Tengo un problema' } });
     fireEvent.click(sendButton);
+    // Advance timers by the maximum possible timeout
+    await act(async () => {
+        jest.advanceTimersByTime(3000);
+        await Promise.resolve();
+    });
 
     await waitFor(() => {
         // Look for the user input in the orchestration log (partial match because of substring in UI)
