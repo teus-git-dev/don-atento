@@ -55,7 +55,7 @@ export interface Provider {
   legalSst?: boolean;
   legalPolicyNumber?: string;
   
-  technicians?: any[];
+  technicians?: { id: string; name: string }[];
   additionalContacts?: ProviderAdditionalContact[];
 }
 
@@ -88,6 +88,6 @@ export const providersService = {
   },
 
   async assignTechnician(providerId: string, userId: string) {
-    return apiClient.post<any>(`/providers/${providerId}/assign-technician/${userId}`, {});
+    return apiClient.post<{ providerId: string; userId: string }>(`/providers/${providerId}/assign-technician/${userId}`, {});
   }
 };

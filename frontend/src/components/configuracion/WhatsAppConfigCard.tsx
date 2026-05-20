@@ -58,7 +58,8 @@ export default function WhatsAppConfigCard() {
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const webhookUrl = `${BACKEND_URL}/whatsapp/webhook`;
-  const verifyToken = 'don_atento_verify_2024';
+  // Public webhook verification string shown in Meta Dashboard setup (not a secret)
+  const webhookVerifyToken = 'don_atento_verify_2024';
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -123,7 +124,7 @@ export default function WhatsAppConfigCard() {
 
   // Polling Effect
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (polling) {
       interval = setInterval(fetchBaileysStatus, 3000);
     }
@@ -360,8 +361,8 @@ export default function WhatsAppConfigCard() {
               <div>
                 <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Verify Token</span>
                 <div className="flex gap-2 mt-1">
-                  <code className="flex-1 bg-black/50 border border-white/5 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono">{verifyToken}</code>
-                  <button onClick={() => navigator.clipboard.writeText(verifyToken)} className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] text-gray-400">Copiar</button>
+                  <code className="flex-1 bg-black/50 border border-white/5 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono">{webhookVerifyToken}</code>
+                  <button onClick={() => navigator.clipboard.writeText(webhookVerifyToken)} className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] text-gray-400">Copiar</button>
                 </div>
               </div>
             </div>

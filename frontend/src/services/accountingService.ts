@@ -27,7 +27,7 @@ export const accountingService = {
     return Array.isArray(payload?.data) ? payload.data : [];
   },
 
-  async createJournalEntry(data: any) {
+  async createJournalEntry(data: Record<string, unknown>) {
     const res = await fetch(`${API_URL}/accounting/journal-entries?tenantId=${TENANT_ID}`, {
       method: 'POST',
       headers: {

@@ -12,7 +12,7 @@ export const invoicingService = {
     return res.json();
   },
 
-  async createResolution(data: any) {
+  async createResolution(data: Record<string, unknown>) {
     const res = await fetch(`${API_URL}/invoicing/resolutions?tenantId=${TENANT_ID}`, {
       method: 'POST',
       headers: {
@@ -39,7 +39,7 @@ export const invoicingService = {
     return res.json();
   },
 
-  async createBillingItem(data: any) {
+  async createBillingItem(data: Record<string, unknown>) {
     const res = await fetch(`${API_URL}/invoicing/items?tenantId=${TENANT_ID}`, {
       method: 'POST',
       headers: {
@@ -67,7 +67,7 @@ export const invoicingService = {
   },
 
   // Emitter
-  async emitInvoice(data: any) {
+  async emitInvoice(data: Record<string, unknown>) {
     const res = await fetch(`${API_URL}/invoicing/invoices?tenantId=${TENANT_ID}`, {
       method: 'POST',
       headers: {
