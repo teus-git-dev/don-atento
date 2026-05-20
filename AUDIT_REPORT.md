@@ -56,41 +56,53 @@ five items are merged into it locally.
   `backfill-file-assets-to-supabase.ts` (the one Prisma-7 backfill
   script that's not broken — see the Pending item below).
 - `backend/prisma/sql/p0-tenant-id-children.sql`: hand-written DDL in
-  three sections — A (ADD COLUMN nullable), B (SET NOT NULL + FK),
-  C (`CREATE INDEX CONCURRENTLY`). Section C is the only one that
-  must not run inside a transaction; the file is idempotent
-  end-to-end.
+  **two sections** — A (ADD COLUMN nullable) and BC (SET NOT NULL +
+  FK + `CREATE INDEX CONCURRENTLY`). The file is human-readable
+  reference; the canonical runner is
+  `backend/prisma/execute-sql-supabase.ts` which has the same statements
+  hardcoded as modes `A` and `BC`. CONCURRENTLY indexes must not run
+  inside an explicit transaction — the runner satisfies this by issuing
+  each statement as its own top-level query.
+- `backend/prisma/execute-sql-supabase.ts`: the runner. Wraps a
+  `pg.Client` against `DIRECT_URL || DATABASE_URL` and exposes three
+  modes: `A`, `BC`, `INDEXES` (the last reads P0.2's SQL file). Use
+  this instead of `psql` — works on Windows, no external CLI dep, and
+  the phase ordering is enforced by the operator command rather than
+  by SQL file structure.
 
 **Runbook (apply to prod Supabase)**
 
+> ⚠️ Run every step from `backend/` with `NODE_ENV=production` exported
+> AND `DIRECT_URL` (or `DATABASE_URL`) pointing to prod Supabase. The
+> backfill script refuses to run otherwise.
+
 ```bash
-# 0. Pre-flight — verify all 3 child tables have rows with a resolvable
-#    parent.tenantId (no orphans).  If this count is non-zero, fix
-#    orphans first (delete or reassign) — Section B will refuse to run.
-psql "$DIRECT_URL" -At -c "
-  SELECT
-    (SELECT COUNT(*) FROM \"ProspectInteraction\" pi LEFT JOIN \"Prospect\" p ON pi.\"prospectId\"=p.id WHERE p.\"tenantId\" IS NULL) +
-    (SELECT COUNT(*) FROM \"ProspectTask\"        pt LEFT JOIN \"Prospect\" p ON pt.\"prospectId\"=p.id WHERE p.\"tenantId\" IS NULL) +
-    (SELECT COUNT(*) FROM \"TicketInteraction\"   ti LEFT JOIN \"Ticket\"   t ON ti.\"ticketId\"  =t.id WHERE t.\"tenantId\" IS NULL)
-  AS orphans;"
-
-# 1. Section A — add nullable columns (metadata-only, instant)
-psql "$DIRECT_URL" -v ON_ERROR_STOP=1 < backend/prisma/sql/p0-tenant-id-children.sql
-# (or paste just Section A if you prefer manual control)
-
-# 2. Backfill — preview, then apply
 cd backend
+# PowerShell:  $env:NODE_ENV = "production"
+# bash:        export NODE_ENV=production
+
+# 1. Section A — add nullable tenantId columns (metadata-only, instant).
+npx ts-node prisma/execute-sql-supabase.ts A
+
+# 2. Backfill — preview first, then apply. The script's fail-fast NULL
+#    count surfaces orphans (rows whose Prospect/Ticket parent itself
+#    has no tenantId); fix or delete those before Section BC.
 npx ts-node prisma/backfill-tenant-id-children.ts --dry-run
 npx ts-node prisma/backfill-tenant-id-children.ts             # idempotent
 
-# 3. Section B + C — NOT NULL + FK + indexes CONCURRENTLY
-#    (Section C cannot be in a transaction — psql autocommits per
-#    statement so this is fine as-is; do NOT wrap in BEGIN/COMMIT.)
-psql "$DIRECT_URL" -v ON_ERROR_STOP=1 < backend/prisma/sql/p0-tenant-id-children.sql
+# 3. Section BC — NOT NULL + FK + 5 CONCURRENTLY indexes, in order.
+#    The runner issues CONCURRENTLY statements one at a time so each
+#    gets its own implicit transaction (Postgres requires that).
+npx ts-node prisma/execute-sql-supabase.ts BC
 
 # 4. Sync the local schema state — should be a no-op now.
-cd backend && npx prisma db push --skip-generate
+npx prisma db push --skip-generate
 ```
+
+If step 2 reports residual NULLs, the script exits 2 and prints which
+row ids lack a resolvable `parent.tenantId`. Investigate (deleted parent?
+schema drift?) before re-running step 2 — it's idempotent and safe to
+re-run after a fix. Section BC must not run while NULLs remain.
 
 **Known follow-ups after this commit lands**
 
@@ -235,31 +247,45 @@ production application path because Prisma can't emit
 
 **Runbook (apply to prod Supabase)**
 
+> Same `NODE_ENV=production` + `DIRECT_URL` shell prerequisites as P0.1.
+> Canonical runner is `execute-sql-supabase.ts` mode `INDEXES`, which
+> reads the SQL file and executes each `CREATE INDEX CONCURRENTLY`
+> as a separate top-level statement.
+
 ```bash
-# 1. Pre-flight — look for any INVALID indexes from prior interrupted
-#    CONCURRENTLY attempts.  Drop them first if present.
-psql "$DIRECT_URL" -At -c "
-  SELECT c.relname FROM pg_index i
-   JOIN pg_class c ON c.oid = i.indexrelid
-   WHERE NOT i.indisvalid
-     AND c.relname LIKE ANY (ARRAY['Ticket_tenantId%','Property_tenantId%',
-         'Prospect_tenantId%','User_tenantId%','Workflow_tenantId%',
-         'TokenUsageLog_tenantId%']);"
-# Expected output: empty.  Any name returned needs:
-#   DROP INDEX CONCURRENTLY \"<name>\";
+cd backend
+# PowerShell:  $env:NODE_ENV = "production"
+# bash:        export NODE_ENV=production
 
-# 2. Apply the SQL.  Each CONCURRENTLY scans the table without blocking
-#    writes; total wall time depends on table sizes.  Idempotent.
-psql "$DIRECT_URL" -v ON_ERROR_STOP=1 \
-  -f backend/prisma/sql/p0.2-tenant-indexes.sql
+# 1. (Optional pre-flight, run in Supabase SQL Editor)
+#    Look for INVALID indexes left over from a prior interrupted
+#    CONCURRENTLY attempt.  Expected: empty result set.  Any name
+#    returned must be dropped manually before step 2 (the runner's
+#    IF NOT EXISTS would otherwise skip it silently):
+#
+#      SELECT c.relname FROM pg_index i
+#       JOIN pg_class c ON c.oid = i.indexrelid
+#       WHERE NOT i.indisvalid
+#         AND c.relname LIKE ANY (ARRAY[
+#           'Ticket_tenantId%','Property_tenantId%','Prospect_tenantId%',
+#           'User_tenantId%','Workflow_tenantId%','TokenUsageLog_tenantId%'
+#         ]);
+#
+#    To drop:  DROP INDEX CONCURRENTLY "<name>";
 
-# 3. Verify — all 13 must show indisvalid = true.
-#    SELECT block at the bottom of the SQL file does this.
+# 2. Apply the 13 CREATE INDEX CONCURRENTLY statements. Each scans the
+#    table without blocking writes; wall time depends on row counts.
+#    Idempotent (IF NOT EXISTS).
+npx ts-node prisma/execute-sql-supabase.ts INDEXES
 
-# 4. Merge the PR.  Post-merge `prisma db push --skip-generate`
-#    (if anyone runs it) sees the indexes match the schema and is a
-#    true no-op.  Sqlite dev DBs will recreate them locally without
-#    CONCURRENTLY semantics — fine in that environment.
+# 3. Verify in Supabase SQL Editor — all 13 should show indisvalid=true.
+#    The full SELECT block is at the bottom of
+#    backend/prisma/sql/p0.2-tenant-indexes.sql.
+
+# 4. Merge the PR. Post-merge `prisma db push --skip-generate` (if
+#    anyone runs it) sees the indexes match the schema and is a true
+#    no-op. Sqlite dev DBs recreate them locally without CONCURRENTLY
+#    semantics — fine in that environment.
 ```
 
 **Performance expectation** (rough, depends on row counts and Postgres

@@ -2,29 +2,41 @@
 -- P0.1 — Denormalize tenantId on ProspectInteraction / ProspectTask /
 -- TicketInteraction.  Companion to backfill-tenant-id-children.ts.
 --
--- Apply in 3 phases, in order, against DIRECT_URL (NOT pgbouncer):
+-- ⚠️  PREFERRED RUNNER: backend/prisma/execute-sql-supabase.ts
+-- ⚠️  This .sql file is the human-readable reference for what the runner
+-- ⚠️  actually applies. The runner has hardcoded queries that match the
+-- ⚠️  statements below 1:1; keep them in sync if you edit either side.
 --
---   1. Section A         (adds nullable columns)         psql $DIRECT_URL -v ON_ERROR_STOP=1 -f p0-tenant-id-children.sql --set=APPLY=A
---   2. backfill script   (data move + fail-fast verify)  npx ts-node prisma/backfill-tenant-id-children.ts
---   3. Section B         (NOT NULL + FK)                 psql $DIRECT_URL -v ON_ERROR_STOP=1 -f p0-tenant-id-children.sql --set=APPLY=B
---   4. Section C         (indexes, CONCURRENTLY)         psql $DIRECT_URL -v ON_ERROR_STOP=1 -f p0-tenant-id-children.sql --set=APPLY=C
+-- Apply in TWO phases, in order, with the backfill in between:
 --
--- psql lacks a clean cross-section selector, so the simplest operation
--- is to copy/paste the relevant section, or split into 3 files when
--- automating.  Each section is self-contained and idempotent (uses
--- IF NOT EXISTS / IF EXISTS guards) so re-running is safe.
+--   1. Section A           (adds nullable columns)
+--      → npx ts-node prisma/execute-sql-supabase.ts A
 --
--- Section C MUST NOT run in a transaction (CONCURRENTLY).  Do NOT wrap
--- this file in BEGIN/COMMIT.  psql autocommits per statement by default,
--- which is what we want.
--- =====================================================================
+--   2. backfill            (data move + fail-fast verify)
+--      → npx ts-node prisma/backfill-tenant-id-children.ts
+--
+--   3. Section BC          (NOT NULL + FK + indexes CONCURRENTLY)
+--      → npx ts-node prisma/execute-sql-supabase.ts BC
+--
+-- Both sections are idempotent (IF NOT EXISTS guards + DO blocks that
+-- check pg_constraint). Section BC's CONCURRENTLY indexes cannot run
+-- inside an explicit transaction — the runner issues them as separate
+-- top-level statements so this constraint is satisfied automatically.
 
 
--- =====================================================================
--- SECTION A — pre-backfill: add nullable columns
--- Safe to run on a live DB.  ADD COLUMN with no default is metadata-only
--- in Postgres ≥ 11; no full-table rewrite.
--- =====================================================================
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║                                                                   ║
+-- ║   SECTION A — pre-backfill: add nullable tenantId columns         ║
+-- ║                                                                   ║
+-- ║   Run via:                                                        ║
+-- ║     npx ts-node prisma/execute-sql-supabase.ts A                  ║
+-- ║                                                                   ║
+-- ║   Safe on a live DB. ADD COLUMN with no default is metadata-only  ║
+-- ║   in Postgres ≥ 11 — no full-table rewrite.                       ║
+-- ║                                                                   ║
+-- ║   STOP HERE and run the backfill before continuing to Section BC. ║
+-- ║                                                                   ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
 
 ALTER TABLE "ProspectInteraction"
   ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
@@ -35,27 +47,48 @@ ALTER TABLE "ProspectTask"
 ALTER TABLE "TicketInteraction"
   ADD COLUMN IF NOT EXISTS "tenantId" TEXT;
 
--- STOP HERE — run backfill-tenant-id-children.ts before continuing.
 
-
--- =====================================================================
--- SECTION B — post-backfill: enforce NOT NULL + FK to Tenant
--- The backfill script's fail-fast guarantees no NULLs remain.  If this
--- block errors on NULL, re-run the backfill (it's idempotent) and
--- investigate the orphan count it surfaced.
+-- ═══════════════════════════════════════════════════════════════════════
 --
--- The FK uses ON DELETE CASCADE to mirror the parent (Prospect/Ticket)
--- → Tenant relation: deleting a tenant already cascade-deletes prospects
--- and tickets, and now it also cleans up the child interactions/tasks
--- directly instead of relying on the parent cascade.
--- =====================================================================
+--   ⏸  PAUSE HERE — run the backfill before continuing.
+--
+--      npx ts-node prisma/backfill-tenant-id-children.ts --dry-run
+--      npx ts-node prisma/backfill-tenant-id-children.ts
+--
+--   The backfill exits 2 if any orphan row remains (Prospect/Ticket
+--   without a tenantId), so Section BC won't run on dirty data —
+--   the SET NOT NULL would fail at the DB level anyway.
+--
+-- ═══════════════════════════════════════════════════════════════════════
 
+
+-- ╔═══════════════════════════════════════════════════════════════════╗
+-- ║                                                                   ║
+-- ║   SECTION BC — post-backfill: NOT NULL + FK + indexes             ║
+-- ║                                                                   ║
+-- ║   Run via:                                                        ║
+-- ║     npx ts-node prisma/execute-sql-supabase.ts BC                 ║
+-- ║                                                                   ║
+-- ║   Combines what was previously Section B (NOT NULL + FK) and      ║
+-- ║   Section C (CONCURRENTLY indexes) because they share the same    ║
+-- ║   "post-backfill" precondition and the runner handles the         ║
+-- ║   no-transaction requirement for CONCURRENTLY automatically.      ║
+-- ║                                                                   ║
+-- ║   The FKs use ON DELETE CASCADE to mirror the parent (Prospect /  ║
+-- ║   Ticket) → Tenant relation: deleting a tenant already cascade-   ║
+-- ║   deletes prospects and tickets, and now it also cleans up the    ║
+-- ║   child interactions/tasks directly instead of relying on the     ║
+-- ║   parent cascade.                                                 ║
+-- ║                                                                   ║
+-- ╚═══════════════════════════════════════════════════════════════════╝
+
+-- (BC.1) Enforce NOT NULL — the backfill's fail-fast guarantees no NULLs.
 ALTER TABLE "ProspectInteraction" ALTER COLUMN "tenantId" SET NOT NULL;
 ALTER TABLE "ProspectTask"        ALTER COLUMN "tenantId" SET NOT NULL;
 ALTER TABLE "TicketInteraction"   ALTER COLUMN "tenantId" SET NOT NULL;
 
--- FKs.  Use DO blocks for idempotency — ALTER TABLE ADD CONSTRAINT lacks
--- IF NOT EXISTS, but pg_constraint lookup is fast.
+-- (BC.2) Foreign keys (idempotent via pg_constraint lookup — ALTER TABLE
+-- ADD CONSTRAINT lacks IF NOT EXISTS).
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -83,20 +116,20 @@ BEGIN
   END IF;
 END$$;
 
-
--- =====================================================================
--- SECTION C — indexes, CONCURRENTLY
--- CONCURRENTLY avoids the AccessExclusiveLock that a plain CREATE INDEX
--- would take.  Each statement runs in its own implicit transaction
--- (psql autocommit); CONCURRENTLY refuses to run inside an explicit
--- BEGIN/COMMIT, so DO NOT wrap this file.
+-- (BC.3) Indexes — CONCURRENTLY. Issued one statement at a time by the
+-- runner so each gets its own implicit transaction (Postgres requires
+-- this for CREATE INDEX CONCURRENTLY). DO NOT wrap this block in
+-- BEGIN/COMMIT if running by hand.
 --
--- The `IF NOT EXISTS` guard makes re-runs safe and skips already-built
--- indexes if a prior CONCURRENTLY attempt was interrupted (leaving an
--- INVALID index).  If you see `INVALID` in \d output, DROP it first:
---   DROP INDEX CONCURRENTLY "ProspectInteraction_tenantId_idx";
--- and re-run this section.
--- =====================================================================
+-- IF NOT EXISTS skips already-built indexes if a prior CONCURRENTLY
+-- attempt was interrupted, leaving an INVALID index. Check for INVALID
+-- in Supabase SQL Editor before re-running:
+--   SELECT relname, indisvalid FROM pg_index i
+--    JOIN pg_class c ON c.oid = i.indexrelid
+--    WHERE relname LIKE ANY (ARRAY['ProspectInteraction_%_idx',
+--          'ProspectTask_%_idx', 'TicketInteraction_%_idx']);
+-- Drop any indisvalid=false index manually:
+--   DROP INDEX CONCURRENTLY "<name>";
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "ProspectInteraction_tenantId_idx"
   ON "ProspectInteraction"("tenantId");
@@ -115,7 +148,8 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "TicketInteraction_ticketId_idx"
 
 
 -- =====================================================================
--- Verification (run after Section C completes)
+-- Verification (run in Supabase SQL Editor after Section BC completes)
+-- All five rows should show indisvalid = true.
 -- =====================================================================
 --
 --   SELECT relname, indisvalid
@@ -128,6 +162,4 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "TicketInteraction_ticketId_idx"
 --      'TicketInteraction_tenantId_idx',
 --      'TicketInteraction_ticketId_idx'
 --    );
---
--- All five rows should show indisvalid = true.
 -- =====================================================================

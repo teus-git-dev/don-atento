@@ -164,10 +164,10 @@ async function verifySchema(db: DbClient, table: string): Promise<void> {
     console.error(`\n❌ Schema verification failed for ${table}.`);
     console.error(`   The \`tenantId\` column is missing.`);
     console.error(
-      `   Apply Section A of prisma/sql/p0-tenant-id-children.sql first:`,
+      `   Apply Section A via the runner before re-running this script:`,
     );
-    console.error(`     psql "$DIRECT_URL" -f prisma/sql/p0-tenant-id-children.sql`);
-    console.error(`   (only Section A — STOP before Section B)\n`);
+    console.error(`     npx ts-node prisma/execute-sql-supabase.ts A`);
+    console.error(`   (only Section A — Section BC runs AFTER this backfill)\n`);
     console.error(`   Underlying error: ${msg}\n`);
     process.exit(1);
   }
@@ -214,8 +214,44 @@ async function backfillTable(
   return { before, updated, after };
 }
 
+// ── SQLite/NODE_ENV guard ─────────────────────────────────────────────────────
+//
+// Pre-P0.1-validation the script was dual-mode (NODE_ENV=production → pg,
+// else → sqlite) so it could be exercised locally. That's a footgun in
+// practice: an operator who forgets to set NODE_ENV=production runs the
+// backfill against ./dev.db, sees green output, and thinks prod is done.
+// Refuse to run unless DATABASE_URL is a real Postgres URL AND NODE_ENV
+// is explicitly 'production'.
+function assertProdEnv(): void {
+  const dbUrl = process.env.DATABASE_URL ?? '';
+  const nodeEnv = process.env.NODE_ENV ?? '(unset)';
+  const looksSqlite =
+    dbUrl === '' || dbUrl.startsWith('file:') || dbUrl.endsWith('.db');
+  const isProd = nodeEnv === 'production';
+
+  if (looksSqlite || !isProd) {
+    console.error('');
+    console.error('❌  Refusing to run — environment is not production.');
+    console.error('');
+    console.error('   Set NODE_ENV=production para conectar a Postgres.');
+    console.error('');
+    console.error('   Current values:');
+    console.error(`     NODE_ENV      = ${nodeEnv}`);
+    console.error(`     DATABASE_URL  = ${dbUrl || '(unset)'}`);
+    console.error('');
+    console.error('   Example (PowerShell):');
+    console.error('     $env:NODE_ENV = "production"');
+    console.error('     $env:DATABASE_URL = "postgresql://..."');
+    console.error('     npx ts-node prisma/backfill-tenant-id-children.ts');
+    console.error('');
+    process.exit(1);
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
+  assertProdEnv();
+
   console.log(`Mode:        ${dryRun ? 'DRY RUN (no writes)' : 'APPLY'}`);
   console.log(`Batch size:  ${BATCH_SIZE}`);
   console.log(`Tables:      ${SELECTED_TABLE ?? 'all (' + TARGETS.map((t) => t.table).join(', ') + ')'}`);
