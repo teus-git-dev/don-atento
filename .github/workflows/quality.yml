@@ -114,7 +114,7 @@ jobs:
       - name: Install deps
         working-directory: frontend
         run: npm ci
-      - name: Block new `: any` (PR only)
+      - name: 'Block new `: any` (PR only)'
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
