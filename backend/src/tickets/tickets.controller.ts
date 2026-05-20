@@ -68,7 +68,8 @@ export class TicketsController {
   @Post()
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
-  async create(@Req() req: Request, @Body() createTicketDto: CreateTicketDto) {
+  async create(@Req() // safe: req contains user and tenantId
+    req: any, @Body() createTicketDto: CreateTicketDto) {
     createTicketDto.tenantId = req['tenantId'];
     return this.ticketsService.createTicket(createTicketDto);
   }
@@ -79,7 +80,8 @@ export class TicketsController {
     summary: 'Listar todos los tickets por tenant o propietario (paginado)',
   })
   async findAll(
-    @Req() req: Request,
+    @Req() // safe: req contains user and tenantId
+    req: any,
     @Query('ownerId') ownerId?: string,
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
@@ -110,7 +112,8 @@ export class TicketsController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver tickets asignados a un técnico (paginado)' })
   async findByTechnician(
-    @Req() req: Request,
+    @Req() // safe: req contains user and tenantId
+    req: any,
     @Param('id') id: string,
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
@@ -133,7 +136,8 @@ export class TicketsController {
   @Get(':id')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver detalle de un ticket' })
-  async findOne(@Req() req: Request, @Param('id') id: string) {
+  async findOne(@Req() // safe: req contains user and tenantId
+    req: any, @Param('id') id: string) {
     return this.ticketsService.findOne(id, req['tenantId']);
   }
 
@@ -141,7 +145,8 @@ export class TicketsController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Transición de estado y cálculo automático de ANS' })
   async transition(
-    @Req() req: Request,
+    @Req() // safe: req contains user and tenantId
+    req: any,
     @Param('id') id: string,
     @Body() data: TransitionStateDto,
   ) {
@@ -157,7 +162,8 @@ export class TicketsController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Cerrar ticket con motivo de resolución y firma' })
   async resolve(
-    @Req() req: Request,
+    @Req() // safe: req contains user and tenantId
+    req: any,
     @Param('id') id: string,
     @Body() data: ResolveTicketDto,
   ) {
@@ -173,7 +179,8 @@ export class TicketsController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Completar tarea de estado actual y avanzar' })
   async completeTask(
-    @Req() req: Request,
+    @Req() // safe: req contains user and tenantId
+    req: any,
     @Param('id') id: string,
     @Body() data: CompleteTaskDto,
   ) {
@@ -209,7 +216,8 @@ export class TicketsController {
   )
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
-    @Req() req: Request,
+    @Req() // safe: req contains user and tenantId
+    req: any,
   ) {
     if (!file) return { error: 'No se subió ningún archivo' };
 
