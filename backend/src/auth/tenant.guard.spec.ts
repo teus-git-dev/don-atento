@@ -9,23 +9,29 @@ describe('TenantGuard', () => {
   beforeEach(() => {
     reflectorMock = {
       getAllAndOverride: jest.fn().mockReturnValue(false),
-    } as any;
+    } as unknown as jest.Mocked<Reflector>;
     guard = new TenantGuard(reflectorMock);
   });
 
   const makeContext = (
-    user: any,
-    query: any = {},
-    body: any = {},
-    params: any = {},
+    user: unknown,
+    query: Record<string, unknown> = {},
+    body: Record<string, unknown> = {},
+    params: Record<string, unknown> = {},
   ): ExecutionContext => {
     return {
       getHandler: jest.fn(),
       getClass: jest.fn(),
       switchToHttp: () => ({
-        getRequest: () => ({ user, query, body, params }),
+        getRequest: () => ({
+          user,
+          query,
+          body,
+          params,
+          tenantId: undefined as string | undefined,
+        }),
       }),
-    } as any;
+    } as unknown as ExecutionContext;
   };
 
   it('allows access if public decorator bypasses it', () => {
@@ -42,17 +48,19 @@ describe('TenantGuard', () => {
   describe('ADMIN_TENANT role', () => {
     it('passes if user has a tenantId and assigns it to req.tenantId', () => {
       const user = { role: 'ADMIN_TENANT', tenantId: 'tenant-1' };
-      const req = makeContext(user).switchToHttp().getRequest();
+      const req: Record<string, unknown> = makeContext(user)
+        .switchToHttp()
+        .getRequest();
 
       const context = {
         switchToHttp: () => ({ getRequest: () => req }),
         getHandler: jest.fn(),
         getClass: jest.fn(),
-      } as any;
+      } as unknown as ExecutionContext;
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('tenant-1');
-      expect(req.query.tenantId).toBe('tenant-1');
+      expect((req.query as Record<string, unknown>).tenantId).toBe('tenant-1');
     });
 
     it('throws Forbidden if user has no tenantId', () => {
@@ -66,14 +74,16 @@ describe('TenantGuard', () => {
   describe('SUPERADMIN role', () => {
     it('passes if ?tenantId query param is provided, overriding user tenantId', () => {
       const user = { role: 'SUPERADMIN', tenantId: 'super-tenant' };
-      const req = makeContext(user, { tenantId: 'target-tenant' })
+      const req: Record<string, unknown> = makeContext(user, {
+        tenantId: 'target-tenant',
+      })
         .switchToHttp()
         .getRequest();
       const context = {
         switchToHttp: () => ({ getRequest: () => req }),
         getHandler: jest.fn(),
         getClass: jest.fn(),
-      } as any;
+      } as unknown as ExecutionContext;
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('target-tenant');
@@ -81,12 +91,14 @@ describe('TenantGuard', () => {
 
     it('uses user.tenantId if no query/param tenantId is provided', () => {
       const user = { role: 'SUPERADMIN', tenantId: 'super-tenant' };
-      const req = makeContext(user).switchToHttp().getRequest();
+      const req: Record<string, unknown> = makeContext(user)
+        .switchToHttp()
+        .getRequest();
       const context = {
         switchToHttp: () => ({ getRequest: () => req }),
         getHandler: jest.fn(),
         getClass: jest.fn(),
-      } as any;
+      } as unknown as ExecutionContext;
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('super-tenant');

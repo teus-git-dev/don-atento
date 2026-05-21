@@ -21,9 +21,9 @@ jest.mock('ioredis', () => {
 
 describe('WhatsappService', () => {
   let service: WhatsappService;
-  let redisMock: any;
-  let ticketsServiceMock: any;
-  let cognitiveServiceMock: any;
+  let redisMock: Record<string, jest.Mock>;
+  let ticketsServiceMock: Record<string, jest.Mock>;
+  let cognitiveServiceMock: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     ticketsServiceMock = {
@@ -90,7 +90,8 @@ describe('WhatsappService', () => {
 
     service = module.get<WhatsappService>(WhatsappService);
     // Grab the redis instance from the service to spy on it
-    redisMock = (service as any).redis;
+    redisMock = (service as unknown as { redis: Record<string, jest.Mock> })
+      .redis;
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -115,7 +116,9 @@ describe('WhatsappService', () => {
   describe('getState / setState fallback', () => {
     it('getState returns null if Redis throws error (graceful fallback)', async () => {
       redisMock.get.mockRejectedValueOnce(new Error('Redis is down'));
-      const state = await (service as any).getState('phone');
+      const state = await (
+        service as unknown as { getState: (phone: string) => Promise<unknown> }
+      ).getState('phone');
       expect(state).toBeNull();
     });
   });

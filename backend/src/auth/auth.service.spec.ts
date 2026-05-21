@@ -7,7 +7,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
 /** Minimal PrismaService mock — returns controlled data per test */
-const makePrismaMock = (overrides: Partial<any> = {}) => ({
+const makePrismaMock = (overrides: Record<string, unknown> = {}) => ({
   user: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
@@ -20,7 +20,7 @@ const makePrismaMock = (overrides: Partial<any> = {}) => ({
     update: jest.fn().mockResolvedValue({}),
     updateMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
-  $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
+  $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   ...overrides,
 });
 
@@ -30,7 +30,7 @@ const makeJwtMock = () => ({
 });
 
 /** Build a minimal active user object for tests */
-const makeUser = (overrides: Partial<any> = {}) => ({
+const makeUser = (overrides: Record<string, unknown> = {}) => ({
   id: 'user-1',
   email: 'test@example.com',
   passwordHash: bcrypt.hashSync('correctPassword', 10),
@@ -83,8 +83,12 @@ describe('AuthService', () => {
       prismaMock.user.findUnique.mockResolvedValue(user);
 
       const result = await service.login('test@example.com', 'correctPassword');
-      const storedToken =
-        prismaMock.refreshToken.create.mock.calls[0][0].data.token;
+      const createCall = (
+        prismaMock.refreshToken.create.mock.calls as unknown[][]
+      )[0][0] as {
+        data: { token: string };
+      };
+      const storedToken = createCall.data.token;
 
       // The stored token must be a 64-char SHA-256 hex hash
       expect(storedToken).toHaveLength(64);
@@ -237,7 +241,7 @@ describe('AuthService', () => {
 
       expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-1', usedAt: null },
-        data: { usedAt: expect.any(Date) },
+        data: { usedAt: expect.any(Date) as unknown as Date },
       });
     });
 
@@ -264,7 +268,9 @@ describe('AuthService', () => {
 
       await service.login('test@example.com', 'correctPassword');
 
-      const jwtPayload = jwtMock.sign.mock.calls[0][0];
+      const jwtPayload = (jwtMock.sign.mock.calls as unknown[][])[0][0] as {
+        tenantId: string;
+      };
       expect(jwtPayload.tenantId).toBe('tenant-abc');
     });
   });

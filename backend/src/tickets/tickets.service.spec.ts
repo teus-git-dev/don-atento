@@ -10,7 +10,7 @@ import { TicketPriority } from '@prisma/client';
 
 // ─── Minimal mock factory ────────────────────────────────────────────────────
 
-const makeTicket = (overrides: any = {}) => ({
+const makeTicket = (overrides: Record<string, unknown> = {}) => ({
   id: 'ticket-1',
   shortId: 'INC-11111',
   tenantId: 'tenant-1',
@@ -123,7 +123,7 @@ describe('TicketsService', () => {
   let service: TicketsService;
   let prismaMock: ReturnType<typeof makePrismaMock>;
   let cognitiveMock: ReturnType<typeof makeCognitiveMock>;
-  let whatsappMock: any;
+  let whatsappMock: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     prismaMock = makePrismaMock();
@@ -160,7 +160,9 @@ describe('TicketsService', () => {
         workflowId: 'wf-1',
       };
 
-      const result = await service.createTicket(dto as any);
+      const result = await service.createTicket(
+        dto as unknown as import('./dto/create-ticket.dto').CreateTicketDto,
+      );
 
       expect(prismaMock.ticket.create).toHaveBeenCalledTimes(1);
       expect(prismaMock.ticketStateLog.create).toHaveBeenCalledTimes(1);
@@ -178,7 +180,9 @@ describe('TicketsService', () => {
         workflowId: undefined,
       };
 
-      await service.createTicket(dto as any);
+      await service.createTicket(
+        dto as unknown as import('./dto/create-ticket.dto').CreateTicketDto,
+      );
 
       // No workflow fetched → ticketStateLog.create NOT called
       expect(prismaMock.ticketStateLog.create).not.toHaveBeenCalled();
@@ -199,7 +203,9 @@ describe('TicketsService', () => {
         workflowId: 'wf-1',
       };
 
-      await service.createTicket(dto as any);
+      await service.createTicket(
+        dto as unknown as import('./dto/create-ticket.dto').CreateTicketDto,
+      );
 
       // The AI classification should have been called
       expect(cognitiveMock.classifyPriority).toHaveBeenCalledWith(
@@ -208,7 +214,9 @@ describe('TicketsService', () => {
       );
 
       // The created ticket should have URGENT priority in the data
-      const createCall = prismaMock.ticket.create.mock.calls[0][0];
+      const createCall = (
+        prismaMock.ticket.create.mock.calls as unknown[][]
+      )[0][0] as { data: { priority: string } };
       expect(createCall.data.priority).toBe(TicketPriority.URGENT);
     });
 
@@ -225,9 +233,11 @@ describe('TicketsService', () => {
         description: 'Test',
         priority: TicketPriority.MEDIUM,
         workflowId: 'wf-1',
-      } as any);
+      } as unknown as import('./dto/create-ticket.dto').CreateTicketDto);
 
-      const createCall = prismaMock.ticket.create.mock.calls[0][0];
+      const createCall = (
+        prismaMock.ticket.create.mock.calls as unknown[][]
+      )[0][0] as { data: { shortId: string } };
       // 5 bytes of crypto.randomBytes → 10 uppercase hex chars (Block E
       // replaced the old Math.random 5-digit numeric space).
       expect(createCall.data.shortId).toMatch(/^INC-[0-9A-F]{10}$/);
@@ -256,7 +266,7 @@ describe('TicketsService', () => {
         description: 'Test description',
         priority: TicketPriority.MEDIUM,
         assignedTechnicianId: 'tech-1',
-      } as any);
+      } as unknown as import('./dto/create-ticket.dto').CreateTicketDto);
 
       // Allow async sendTicketNotifications call to execute
       await new Promise((resolve) => setImmediate(resolve));
@@ -335,7 +345,9 @@ describe('TicketsService', () => {
         'state-3',
       );
 
-      const updateCall = prismaMock.ticket.update.mock.calls[0][0];
+      const updateCall = (
+        prismaMock.ticket.update.mock.calls as unknown[][]
+      )[0][0] as { data: { resolvedAt: Date } };
       expect(updateCall.data.resolvedAt).toBeDefined();
     });
 
@@ -366,7 +378,9 @@ describe('TicketsService', () => {
         'state-2',
       );
 
-      const updateCall = prismaMock.ticket.update.mock.calls[0][0];
+      const updateCall = (
+        prismaMock.ticket.update.mock.calls as unknown[][]
+      )[0][0] as { data: { resolvedAt?: Date } };
       expect(updateCall.data.resolvedAt).toBeUndefined();
     });
   });
@@ -528,7 +542,9 @@ describe('TicketsService', () => {
       prismaMock.ticket.findMany.mockResolvedValue([]);
       await service.findAllByTenant('tenant-2');
 
-      const call = prismaMock.ticket.findMany.mock.calls[0][0];
+      const call = (
+        prismaMock.ticket.findMany.mock.calls as unknown[][]
+      )[0][0] as { where: { tenantId: string } };
       expect(call.where.tenantId).toBe('tenant-2');
       // Confirm it does NOT query tenant-1 data
       expect(call.where.tenantId).not.toBe('tenant-1');
@@ -563,7 +579,9 @@ describe('TicketsService', () => {
           currentPage: 2,
         }),
       );
-      expect(Array.isArray((result as any).data)).toBe(true);
+      expect(Array.isArray((result as Record<string, unknown>).data)).toBe(
+        true,
+      );
     });
 
     it('passes skip/take/orderBy correctly to findMany', async () => {
@@ -572,7 +590,9 @@ describe('TicketsService', () => {
 
       await service.findAllByTenant('tenant-1', { page: 3, limit: 25 });
 
-      const call = prismaMock.ticket.findMany.mock.calls[0][0];
+      const call = (
+        prismaMock.ticket.findMany.mock.calls as unknown[][]
+      )[0][0] as { skip: number; take: number; orderBy: unknown };
       expect(call.skip).toBe(50); // (3 - 1) * 25
       expect(call.take).toBe(25);
       // id tiebreaker for stable pagination across rows sharing createdAt
@@ -625,7 +645,14 @@ describe('TicketsService', () => {
         limit: 20,
       });
 
-      const countCall = prismaMock.ticket.count.mock.calls[0][0];
+      const countCall = (
+        prismaMock.ticket.count.mock.calls as unknown[][]
+      )[0][0] as {
+        where: {
+          tenantId: string;
+          property: { relations: { some: { userId: string } } };
+        };
+      };
       expect(countCall.where.tenantId).toBe('tenant-1');
       expect(countCall.where.property.relations.some.userId).toBe('owner-1');
     });

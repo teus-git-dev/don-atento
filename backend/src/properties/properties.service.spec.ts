@@ -14,10 +14,16 @@ const makeProperty = (overrides = {}) => ({
   ...overrides,
 });
 
-// `any` return type is required because $transaction's callback receives a
-// reference to the mock itself — TS can't easily infer the recursive shape.
-const makePrismaMock = (): any => {
-  const mock: any = {
+type PrismaMockType = {
+  property: Record<string, jest.Mock>;
+  user: Record<string, jest.Mock>;
+  propertyRelation: Record<string, jest.Mock>;
+  inventoryTemplate: Record<string, jest.Mock>;
+  $transaction: jest.Mock;
+};
+
+const makePrismaMock = (): PrismaMockType => {
+  const mock: Record<string, unknown> = {
     property: {
       create: jest.fn().mockResolvedValue(makeProperty()),
       findMany: jest.fn().mockResolvedValue([makeProperty()]),
@@ -43,15 +49,16 @@ const makePrismaMock = (): any => {
   };
   // Pass the SAME mock instance into the callback so assertions on
   // mock.X.method capture both direct and transactional calls.
-  mock.$transaction = jest.fn(async (cb: (tx: any) => Promise<any>) =>
-    cb(mock),
+  mock.$transaction = jest.fn(
+    async (cb: (tx: PrismaMockType) => Promise<unknown>) =>
+      cb(mock as unknown as PrismaMockType),
   );
-  return mock;
+  return mock as unknown as PrismaMockType;
 };
 
 describe('PropertiesService', () => {
   let service: PropertiesService;
-  let prismaMock: any;
+  let prismaMock: PrismaMockType;
 
   beforeEach(async () => {
     prismaMock = makePrismaMock();
@@ -87,7 +94,8 @@ describe('PropertiesService', () => {
       };
 
       prismaMock.$transaction.mockImplementation(
-        async (cb: (tx: any) => Promise<any>) => cb(txMock),
+        async (cb: (tx: PrismaMockType) => Promise<unknown>) =>
+          cb(txMock as unknown as PrismaMockType),
       );
 
       const result = await service.create(data);
@@ -103,7 +111,9 @@ describe('PropertiesService', () => {
       prismaMock.$transaction.mockRejectedValue(new Error('DB Error'));
 
       await expect(
-        service.create({ tenantId: 't1' } as any),
+        service.create({
+          tenantId: 't1',
+        } as unknown as import('./properties.service').CreatePropertyData),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });
@@ -134,7 +144,10 @@ describe('PropertiesService', () => {
 
       expect(prismaMock.property.updateMany).toHaveBeenCalledWith({
         where: { id: 'prop-1', tenantId: 'tenant-1' },
-        data: expect.objectContaining({ title: 'New Title', bathrooms: 2 }),
+        data: expect.objectContaining({
+          title: 'New Title',
+          bathrooms: 2,
+        }) as unknown as Record<string, unknown>,
       });
     });
 
@@ -154,7 +167,8 @@ describe('PropertiesService', () => {
       };
 
       prismaMock.$transaction.mockImplementation(
-        async (cb: (tx: any) => Promise<any>) => cb(txMock),
+        async (cb: (tx: PrismaMockType) => Promise<unknown>) =>
+          cb(txMock as unknown as PrismaMockType),
       );
 
       await service.update('prop-1', 'tenant-1', {
