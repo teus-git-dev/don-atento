@@ -47,6 +47,11 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'warn',
       '@typescript-eslint/no-unsafe-return': 'warn',
       '@typescript-eslint/no-unsafe-enum-comparison': 'warn',
+      // Several service methods are async for signature compatibility
+      // (future real-async impl) but currently synchronous. Tracked in
+      // AUDIT_REPORT.md. eslint-disable-next-line comments were added
+      // inline in 4b474bd; this rule-level override removes the need.
+      '@typescript-eslint/require-await': 'off',
       // Allow `_`-prefixed unused vars and args (codebase convention).
       '@typescript-eslint/no-unused-vars': [
         'error',
