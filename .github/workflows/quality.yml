@@ -88,6 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- 'backend/**/*.ts' 'backend/**/*.tsx' \
+            ':(exclude)backend/prisma/**' \
             | grep '^+' | grep -vE '^\+\+\+' \
             | grep -E 'console\.log\b' || true)
           if [ -n "$NEW" ]; then
