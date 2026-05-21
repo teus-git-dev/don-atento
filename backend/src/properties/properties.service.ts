@@ -9,41 +9,22 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { TransferPropertyDto } from './dto/transfer-property.dto';
-import { CreatePropertyDto } from './dto/create-property.dto';
-import { PropertyType, PropertyStatus, InventoryCategory, InventoryCondition, Prisma } from '@prisma/client';
+import {
+  CreatePropertyDto,
+  OwnerInfo,
+  TenantInfo,
+} from './dto/create-property.dto';
+import {
+  PropertyType,
+  PropertyStatus,
+  InventoryCategory,
+  InventoryCondition,
+  Prisma,
+} from '@prisma/client';
 
-// ─── Domain interfaces ────────────────────────────────────────────────────────
 // These mirror the shapes sent from the frontend form / CSV import. They are
 // intentionally looser than strict Prisma inputs (all fields optional) because
 // callers provide partial objects — the service fills in defaults where needed.
-
-export interface OwnerInfo {
-  name?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  /** Government-issued ID (cédula / NIT) */
-  id?: string;
-  personType?: string;
-  isTaxDeclarant?: boolean;
-  regimeType?: string;
-  applyReteIva?: boolean;
-  applyReteFuente?: boolean;
-  applyReteIca?: boolean;
-  additionalContacts?: string[];
-}
-
-export interface TenantInfo {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  governmentId?: string;
-  personType?: string;
-  contractStart?: string | Date | null;
-  contractEnd?: string | Date | null;
-  contractType?: string;
-}
 
 interface InventoryTemplateItem {
   name: string;
@@ -214,9 +195,13 @@ export class PropertiesService {
             managementEmail: propertyFields.managementEmail || null,
             managementPhone: propertyFields.managementPhone || null,
             splatUrl: propertyFields.splatUrl || null,
-            visionVideoUrl: propertyFields.visionVideoUrl ?? null,
+            visionVideoUrl:
+              (propertyFields.visionVideoUrl as Prisma.InputJsonValue) ??
+              Prisma.JsonNull,
             attachments: (attachments as Prisma.InputJsonValue[]) || [],
-            visionAnalysis: (propertyFields.visionAnalysis as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+            visionAnalysis:
+              (propertyFields.visionAnalysis as Prisma.InputJsonValue) ??
+              Prisma.JsonNull,
             latitude: data.latitude || 4.6097,
             longitude: data.longitude || -74.0817,
           },
@@ -224,7 +209,11 @@ export class PropertiesService {
 
         // 2. Handle Owner Persistence
         if (ownerInfo && ownerInfo.name) {
-          const ownerLookupConditions: { email?: string; phone?: string; governmentId?: string }[] = [];
+          const ownerLookupConditions: {
+            email?: string;
+            phone?: string;
+            governmentId?: string;
+          }[] = [];
           if (ownerInfo.email)
             ownerLookupConditions.push({ email: ownerInfo.email });
           if (ownerInfo.phone)
@@ -292,7 +281,10 @@ export class PropertiesService {
 
         // 3. Handle Tenant/Arrendatario Persistence (if RENTED)
         if (tenantInfo && (tenantInfo.firstName || tenantInfo.lastName)) {
-          const tenantLookupConditions: { email?: string; governmentId?: string }[] = [];
+          const tenantLookupConditions: {
+            email?: string;
+            governmentId?: string;
+          }[] = [];
           if (tenantInfo.email)
             tenantLookupConditions.push({ email: tenantInfo.email });
           if (tenantInfo.governmentId)
@@ -374,14 +366,16 @@ export class PropertiesService {
               });
               createdZones.push({ id: propZone.id, originalName: zone.name });
 
-              const zoneItems = (zone as InventoryTemplateZone).items.map((item: InventoryTemplateItem) => ({
-                propertyId: createdProperty.id,
-                zoneId: propZone.id,
-                name: item.name,
-                category: item.category,
-                condition: 'GOOD' as InventoryCondition,
-                description: `Desde zona ${zone.name}: ${item.material ?? ''} ${item.description ?? ''}`,
-              }));
+              const zoneItems = (zone as InventoryTemplateZone).items.map(
+                (item: InventoryTemplateItem) => ({
+                  propertyId: createdProperty.id,
+                  zoneId: propZone.id,
+                  name: item.name,
+                  category: item.category,
+                  condition: 'GOOD' as InventoryCondition,
+                  description: `Desde zona ${zone.name}: ${item.material ?? ''} ${item.description ?? ''}`,
+                }),
+              );
 
               if (zoneItems.length > 0) {
                 await tx.inventoryItem.createMany({ data: zoneItems });
@@ -389,13 +383,15 @@ export class PropertiesService {
             }
 
             // Legacy top-level template items (not zone-scoped)
-            const legacyItems = template.items.map((item: InventoryTemplateItem) => ({
-              propertyId: createdProperty.id,
-              name: item.name,
-              category: item.category,
-              condition: 'GOOD' as InventoryCondition,
-              description: `Desde plantilla: ${item.material ?? ''} ${item.description ?? ''}`,
-            }));
+            const legacyItems = template.items.map(
+              (item: InventoryTemplateItem) => ({
+                propertyId: createdProperty.id,
+                name: item.name,
+                category: item.category,
+                condition: 'GOOD' as InventoryCondition,
+                description: `Desde plantilla: ${item.material ?? ''} ${item.description ?? ''}`,
+              }),
+            );
 
             if (legacyItems.length > 0) {
               await tx.inventoryItem.createMany({ data: legacyItems });
@@ -409,10 +405,7 @@ export class PropertiesService {
       return property;
     } catch (error) {
       const err = error as Error;
-      this.logger.error(
-        '[PropertiesService] CRITICAL ERROR in create():',
-        err,
-      );
+      this.logger.error('[PropertiesService] CRITICAL ERROR in create():', err);
       throw new InternalServerErrorException(
         `Error en creación de propiedad: ${err.message}`,
       );
@@ -529,9 +522,10 @@ export class PropertiesService {
           splatUrl: propertyFields.splatUrl,
           visionVideoUrl: propertyFields.visionVideoUrl ?? undefined,
           attachments: (attachments as Prisma.InputJsonValue[]) || undefined,
-          visionAnalysis: propertyFields.visionAnalysis !== undefined
-            ? (propertyFields.visionAnalysis as Prisma.InputJsonValue ?? Prisma.JsonNull)
-            : undefined,
+          visionAnalysis:
+            propertyFields.visionAnalysis !== undefined
+              ? (propertyFields.visionAnalysis ?? Prisma.JsonNull)
+              : undefined,
           latitude: propertyFields.latitude,
           longitude: propertyFields.longitude,
         },
@@ -615,7 +609,11 @@ export class PropertiesService {
           tenantInfo.governmentId ||
           tenantInfo.phone)
       ) {
-        const tenantLookupConditions: { email?: string; governmentId?: string; phone?: string }[] = [];
+        const tenantLookupConditions: {
+          email?: string;
+          governmentId?: string;
+          phone?: string;
+        }[] = [];
         if (tenantInfo.email)
           tenantLookupConditions.push({ email: tenantInfo.email });
         if (tenantInfo.governmentId)

@@ -75,7 +75,11 @@ export class BulkImportService {
   }
 
   private smartMap(externalItem: ExternalRow): MappedProperty {
-    const str = (v: unknown): string => (v != null ? String(v) : '');
+    const str = (v: unknown): string => {
+      if (v == null) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v as string | number | boolean);
+    };
 
     // Basic heuristics for mapping (Plug & Play vision)
     return {
@@ -92,7 +96,9 @@ export class BulkImportService {
           'Inmueble Importado',
       ),
       address: str(
-        externalItem['Direccion'] ?? externalItem['address'] ?? 'Calle Falsa 123',
+        externalItem['Direccion'] ??
+          externalItem['address'] ??
+          'Calle Falsa 123',
       ),
       city: str(externalItem['Ciudad'] ?? externalItem['city'] ?? 'Bogotá'),
       department: str(
@@ -116,8 +122,7 @@ export class BulkImportService {
       bathrooms:
         parseInt(str(externalItem['Baños'] ?? externalItem['bathrooms']), 10) ||
         0,
-      isVip:
-        externalItem['VIP'] === 'SI' || externalItem['isVip'] === true,
+      isVip: externalItem['VIP'] === 'SI' || externalItem['isVip'] === true,
       ownerInfo: {
         name: str(externalItem['Propietario'] ?? externalItem['ownerName']),
         email: str(

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PropertyStatus, PropertyType } from '@prisma/client';
+import { PropertyStatus, PropertyType, Prisma } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
@@ -13,6 +13,33 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+
+export interface OwnerInfo {
+  name?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  id?: string;
+  personType?: string;
+  isTaxDeclarant?: boolean;
+  regimeType?: string;
+  applyReteIva?: boolean;
+  applyReteFuente?: boolean;
+  applyReteIca?: boolean;
+  additionalContacts?: string[];
+}
+
+export interface TenantInfo {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  governmentId?: string;
+  personType?: string;
+  contractStart?: string | Date | null;
+  contractEnd?: string | Date | null;
+  contractType?: string;
+}
 
 export class CreatePropertyDto {
   @ApiPropertyOptional({
@@ -188,24 +215,24 @@ export class CreatePropertyDto {
   // them as opaque blobs with shape constraints at the service layer.
   @ApiPropertyOptional({ description: 'Vision Video URL or metadata blob' })
   @IsOptional()
-  visionVideoUrl?: any;
+  visionVideoUrl?: string;
 
   @ApiPropertyOptional({ description: 'Vision AI Analysis Data' })
   @IsOptional()
-  visionAnalysis?: any;
+  visionAnalysis?: Prisma.InputJsonValue;
 
   @ApiPropertyOptional({ description: 'Uploaded files' })
   @IsArray()
   @IsOptional()
-  attachments?: any[];
+  attachments?: Prisma.InputJsonValue[];
 
   @ApiPropertyOptional({ description: 'Owner Information Object' })
   @IsOptional()
-  ownerInfo?: any;
+  ownerInfo?: OwnerInfo;
 
   @ApiPropertyOptional({ description: 'Tenant Information Object (if rented)' })
   @IsOptional()
-  tenantInfo?: any;
+  tenantInfo?: TenantInfo;
 
   @ApiPropertyOptional({ description: 'Latitude (decimal degrees)' })
   @IsNumber()
