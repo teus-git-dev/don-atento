@@ -1,10 +1,22 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole, PropertyType, PropertyStatus } from '@prisma/client';
+import { UserRole, PropertyType, PropertyStatus, Prisma } from '@prisma/client';
 import { parse as parseXlsx } from 'node-xlsx';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { OnboardingService } from '../tenants/onboarding.service';
+
+/**
+ * Shape of a single import error entry stored in DataImportLog.errors
+ * and returned in the API response. Both `record` and `error` are required
+ * to ensure the log is actionable (the operator can see which row failed
+ * and why).
+ */
+export interface ImportError {
+  record?: Record<string, unknown>;
+  recordSummary?: string;
+  error: string;
+}
 
 /** Cap on the persisted `DataImportLog.errors` Json. A run with 10k
  *  errors otherwise produces multi-MB Json rows. */
@@ -57,7 +69,7 @@ export class DataImportService {
       );
 
       const previewData = dataRows.map((row) => {
-        const obj: any = {};
+        const obj: Record<string, unknown> = {};
         headers.forEach((h: string, idx: number) => {
           if (h) {
             obj[h] = row[idx] ?? null;
@@ -82,7 +94,7 @@ export class DataImportService {
     tenantId: string,
     name: string,
     categoryId: string,
-    mapping: any,
+    mapping: Prisma.InputJsonValue,
   ) {
     return this.prisma.dataImportTemplate.create({
       data: {
@@ -144,7 +156,7 @@ export class DataImportService {
     if (!rawArray || rawArray.length === 0) return null;
 
     const headerRowIndex = 0;
-    const headers: (string | null)[] = rawArray[headerRowIndex] || [];
+    const headers: (string | null)[] = (rawArray[headerRowIndex] as (string | null)[]) || [];
     let dataRows = rawArray.slice(headerRowIndex + 1);
 
     // Block C: keep the `row[0] === '-'` separator filter (universal
@@ -171,12 +183,12 @@ export class DataImportService {
 
     const recordsToImport = dataRows
       .map((row) => {
-        const obj: any = {};
+        const obj: Record<string, unknown> = {};
         headers.forEach((h, idx) => {
           if (!h) return;
           const targetField = normalizedMapping[normalize(h)] || mapping[h];
           if (targetField) {
-            let val = row[idx];
+            let val: unknown = row[idx];
             if (
               (val === null || val === undefined || val === '') &&
               !headers[idx + 1]
@@ -187,8 +199,7 @@ export class DataImportService {
 
             // Only assign if the new value is valid, or if the field is currently empty
             if (val !== null && val !== undefined && val !== '') {
-              // If we already have a value, we can optionally concatenate it, but prioritizing the first non-empty is safer for IDs
-              // For phones/emails, maybe concatenate? Let's just keep the first non-empty one, or concatenate if it's a string.
+              // For phones/emails concatenate unique values; for other fields keep first.
               if (obj[targetField]) {
                 if (targetField === 'phones' || targetField === 'emails') {
                   if (!String(obj[targetField]).includes(String(val))) {
@@ -209,7 +220,7 @@ export class DataImportService {
 
     this.logger.log(`Records parsed from file: ${recordsToImport.length}`);
     let savedRecords = 0;
-    const errors: any[] = [];
+    const errors: ImportError[] = [];
     // Block C: sourceTag now has CSPRNG suffix so two imports at the
     // same ms don't collide (pre-Block-C `XLS_IMPORT_${Date.now()}`
     // collided when two ADMIN_TENANTs clicked simultaneously).
@@ -397,10 +408,10 @@ export class DataImportService {
               : process.env.DEFAULT_COUNTRY || 'Colombia',
             propertyCode,
             rentAmount: record['financials.canon']
-              ? parseFloat(record['financials.canon'])
+              ? parseFloat(String(record['financials.canon']))
               : 0,
             adminAmount: record['financials.admin']
-              ? parseFloat(record['financials.admin'])
+              ? parseFloat(String(record['financials.admin']))
               : 0,
             insuranceCompany: record.insurance_company
               ? String(record.insurance_company).substring(0, 255)
@@ -454,7 +465,9 @@ export class DataImportService {
               : 'FAILED',
         recordsRead: recordsToImport.length,
         recordsSaved: savedRecords,
-        errors: persistedErrors.length ? persistedErrors : undefined,
+        errors: persistedErrors.length
+          ? (persistedErrors as unknown as Prisma.InputJsonValue)
+          : undefined,
       },
     });
 
