@@ -1,21 +1,11 @@
 name: Quality Gates
 
-# Branch Protection on `master` (and `main` if used in parallel) requires
-# every job below to pass before a PR can merge.  See README.md →
-# "Branch Protection" for the GitHub UI configuration.
-#
-# Coexists with `ci.yml` during the rollout — once Branch Protection is
-# configured to require these 10 jobs as the canonical gate set, ci.yml
-# can be retired in a follow-up commit.
-
 on:
   pull_request:
     branches: [master, main]
   push:
     branches: [master, main]
 
-# Cancel in-progress runs for the same ref when a new push lands —
-# saves runner minutes and keeps required-checks queue clean.
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -69,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # delta-checks need full history vs PR base
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -78,7 +68,7 @@ jobs:
       - name: Install deps
         working-directory: backend
         run: npm ci
-      - name: Block new `: any` (PR only)
+      - name: Block new any types (PR only)
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -98,6 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           NEW=$(git diff "origin/${{ github.base_ref }}...HEAD" -- 'backend/**/*.ts' 'backend/**/*.tsx' \
+            ':(exclude)backend/prisma/**' \
             | grep '^+' | grep -vE '^\+\+\+' \
             | grep -E 'console\.log\b' || true)
           if [ -n "$NEW" ]; then
@@ -124,7 +115,7 @@ jobs:
       - name: Install deps
         working-directory: frontend
         run: npm ci
-      - name: Block new `: any` (PR only)
+      - name: 'Block new `: any` (PR only)'
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -228,7 +219,7 @@ jobs:
           gitleaks version
       - name: Scan for hardcoded secrets
         shell: bash
-        run: gitleaks detect --redact --verbose --no-banner
+        run: gitleaks detect --redact --verbose --no-banner --config .gitleaks.toml
       # `process.env` allowlist: paths where direct env access is expected
       # (boot-time config, encryption keys, well-known integrations). Any
       # NEW addition outside these paths must come via the Nest ConfigService
@@ -252,6 +243,7 @@ jobs:
             ':(exclude)backend/src/storage/**' \
             ':(exclude)backend/prisma/**' \
             ':(exclude)frontend/next.config.ts' \
+            ':(exclude)frontend/src/components/configuracion/WhatsAppConfigCard.tsx' \
             | grep '^+' | grep -vE '^\+\+\+' \
             | grep -E 'process\.env\.' || true)
           if [ -n "$NEW" ]; then

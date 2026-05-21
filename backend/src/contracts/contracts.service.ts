@@ -93,6 +93,7 @@ export class ContractsService {
    * raw fileUrl + status. Block C will tighten the fileUrl handling
    * via FileUploadService.
    */
+  // eslint-disable-next-line @typescript-eslint/require-await -- async signature preserved for future LegalAI processing (post-v1)
   private async processContractAsync(documentId: string): Promise<void> {
     this.logger.log(
       `[ContractProcessor] Doc ${documentId} created in PENDING_AI; real AI processing is post-v1 carryover.`,

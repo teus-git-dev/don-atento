@@ -3,12 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { TicketsService } from '../tickets/tickets.service';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  TicketPriority,
-  InteractionChannel,
-  SentimentAnalysis,
-  ProspectSource,
-} from '@prisma/client';
+import { InteractionChannel, SentimentAnalysis } from '@prisma/client';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { CrmService } from '../crm/crm.service';
 import { BaileysManager } from './baileys.manager';
@@ -348,9 +343,13 @@ export class WhatsappService {
         activeTickets,
         originalText,
         finalCleanResponse,
-        propertyName,
         propertyId,
         dbSentiment,
+        // propertyName is intentionally NOT destructured — the cached
+        // state.data had it from the disambiguation menu, but we don't
+        // need it to create the ticket (only propertyId). The fresh
+        // `propertyName` defined later in this function is the
+        // authoritative one for echoing back to the user.
         // resolvedTenantId is intentionally NOT destructured from
         // state.data — the outer-scope `resolvedTenantId` was validated
         // non-null at the top of processIncomingMessage and is the
@@ -415,6 +414,7 @@ export class WhatsappService {
         const selectedTicket = activeTickets[choice - 1];
         await this.cognitiveService.logInteraction(
           selectedTicket.id,
+          resolvedTenantId,
           user.id,
           `[Client WA] ${originalText}`,
           InteractionChannel.WHATSAPP,
@@ -438,11 +438,7 @@ export class WhatsappService {
 
     if (!relation || !relation.property) {
       const noPropertyMsg = `Hola ${user.firstName}. Soy Daniel. Reconozco tu número, pero actualmente no veo ningún contrato o inmueble activo vinculado a ti. Para poder registrar cualquier ticket de mantenimiento, necesito primero confirmar tu inmueble. Por favor comunícate con nuestras oficinas para revisar tu estado.`;
-      return this.sendMessage(
-        from,
-        noPropertyMsg,
-        resolvedTenantId,
-      );
+      return this.sendMessage(from, noPropertyMsg, resolvedTenantId);
     }
 
     const propertyName = relation.property.title || relation.property.address;
@@ -689,6 +685,7 @@ export class WhatsappService {
       if (latestTicket) {
         await this.cognitiveService.logInteraction(
           latestTicket.id,
+          resolvedTenantId,
           user.id,
           `[Client WA] ${text}`,
           InteractionChannel.WHATSAPP,
@@ -696,6 +693,7 @@ export class WhatsappService {
         );
         await this.cognitiveService.logInteraction(
           latestTicket.id,
+          resolvedTenantId,
           null,
           `[Daniel AI] ${finalResponse} (Intensity: ${parsedMetadata.intensity || 0})`,
           InteractionChannel.WHATSAPP,

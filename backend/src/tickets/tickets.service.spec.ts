@@ -46,6 +46,7 @@ const makePrismaMock = () => ({
     findUnique: jest.fn().mockResolvedValue(makeTicket()),
     findFirst: jest.fn().mockResolvedValue(makeTicket()),
     findMany: jest.fn().mockResolvedValue([makeTicket()]),
+    count: jest.fn().mockResolvedValue(0),
   },
   tenant: {
     findUnique: jest
@@ -428,7 +429,7 @@ describe('TicketsService', () => {
         satisfactionComment: 'Excelente servicio',
       });
 
-      const result = await service.updateSatisfaction(
+      await service.updateSatisfaction(
         'ticket-1',
         'tenant-1',
         5,
@@ -494,6 +495,140 @@ describe('TicketsService', () => {
       expect(call.where.tenantId).toBe('tenant-2');
       // Confirm it does NOT query tenant-1 data
       expect(call.where.tenantId).not.toBe('tenant-1');
+    });
+  });
+
+  // ── P0.3 dual-shape pagination ───────────────────────────────────────────
+  //
+  // Phase 1 contract: when `opts` is omitted, the service returns the
+  // legacy array (current frontend keeps working). When `opts` is given,
+  // it returns `{ data, totalRecords, totalPages, currentPage }` and
+  // issues a parallel count query. Tests verify both branches across the
+  // three list methods. Phase 2 (next commit) removes the legacy branch.
+
+  describe('findAllByTenant() — paginated shape (P0.3)', () => {
+    it('returns paginated shape when opts is provided', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([
+        makeTicket(),
+        makeTicket(),
+      ]);
+      prismaMock.ticket.count.mockResolvedValue(42);
+
+      const result = await service.findAllByTenant('tenant-1', {
+        page: 2,
+        limit: 10,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          totalRecords: 42,
+          totalPages: 5, // ceil(42 / 10)
+          currentPage: 2,
+        }),
+      );
+      expect(Array.isArray((result as any).data)).toBe(true);
+    });
+
+    it('passes skip/take/orderBy correctly to findMany', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([]);
+      prismaMock.ticket.count.mockResolvedValue(0);
+
+      await service.findAllByTenant('tenant-1', { page: 3, limit: 25 });
+
+      const call = prismaMock.ticket.findMany.mock.calls[0][0];
+      expect(call.skip).toBe(50); // (3 - 1) * 25
+      expect(call.take).toBe(25);
+      // id tiebreaker for stable pagination across rows sharing createdAt
+      expect(call.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'asc' }]);
+    });
+
+    it('issues count with the same where clause as findMany', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([]);
+      prismaMock.ticket.count.mockResolvedValue(0);
+
+      await service.findAllByTenant('tenant-1', { page: 1, limit: 20 });
+
+      expect(prismaMock.ticket.count).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1' },
+      });
+    });
+
+    it('legacy branch (no opts) does NOT call count', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([makeTicket()]);
+      await service.findAllByTenant('tenant-1');
+      expect(prismaMock.ticket.count).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAllByOwner() — paginated shape (P0.3)', () => {
+    it('returns paginated shape when opts is provided', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([makeTicket()]);
+      prismaMock.ticket.count.mockResolvedValue(7);
+
+      const result = await service.findAllByOwner('owner-1', 'tenant-1', {
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          totalRecords: 7,
+          totalPages: 1,
+          currentPage: 1,
+        }),
+      );
+    });
+
+    it('count uses the same composite where (tenantId + owner relation)', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([]);
+      prismaMock.ticket.count.mockResolvedValue(0);
+
+      await service.findAllByOwner('owner-1', 'tenant-1', {
+        page: 1,
+        limit: 20,
+      });
+
+      const countCall = prismaMock.ticket.count.mock.calls[0][0];
+      expect(countCall.where.tenantId).toBe('tenant-1');
+      expect(countCall.where.property.relations.some.userId).toBe('owner-1');
+    });
+  });
+
+  describe('findAllByTechnician() — paginated shape (P0.3)', () => {
+    it('returns paginated shape when opts is provided', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([
+        makeTicket(),
+        makeTicket(),
+        makeTicket(),
+      ]);
+      prismaMock.ticket.count.mockResolvedValue(15);
+
+      const result = await service.findAllByTechnician('tech-1', 'tenant-1', {
+        page: 1,
+        limit: 5,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          totalRecords: 15,
+          totalPages: 3, // ceil(15 / 5)
+          currentPage: 1,
+        }),
+      );
+    });
+
+    it('count uses tenantId + assignedTechnicianId composite where', async () => {
+      prismaMock.ticket.findMany.mockResolvedValue([]);
+      prismaMock.ticket.count.mockResolvedValue(0);
+
+      await service.findAllByTechnician('tech-1', 'tenant-1', {
+        page: 1,
+        limit: 20,
+      });
+
+      expect(prismaMock.ticket.count).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', assignedTechnicianId: 'tech-1' },
+      });
     });
   });
 });

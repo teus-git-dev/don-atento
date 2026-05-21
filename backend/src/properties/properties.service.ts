@@ -220,8 +220,7 @@ export class PropertiesService {
               data: {
                 tenantId: propertyFields.tenantId,
                 email:
-                  tenantInfo.email ||
-                  `tenant_${randomEmailSuffix()}@teus.com`,
+                  tenantInfo.email || `tenant_${randomEmailSuffix()}@teus.com`,
                 passwordHash,
                 mustChangePassword: true,
                 firstName: tenantInfo.firstName || 'Arrendatario',
@@ -399,6 +398,7 @@ export class PropertiesService {
   }
 
   async update(id: string, tenantId: string, data: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- BUG tracked in AUDIT_REPORT.md: tenantInfo destructured but update() never persists it. Frontend edits to arrendatario data are silently dropped.
     const { ownerInfo, tenantInfo, attachments, ...propertyFields } = data;
 
     // All writes wrapped in a single $transaction: property update + (if
@@ -454,8 +454,7 @@ export class PropertiesService {
           ownerUser = await tx.user.create({
             data: {
               tenantId: tenantId,
-              email:
-                ownerInfo.email || `owner_${randomEmailSuffix()}@teus.com`,
+              email: ownerInfo.email || `owner_${randomEmailSuffix()}@teus.com`,
               passwordHash,
               mustChangePassword: true,
               firstName: ownerInfo.name,

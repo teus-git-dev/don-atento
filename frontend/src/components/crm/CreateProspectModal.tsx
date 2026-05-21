@@ -6,6 +6,19 @@ import { API_URL, TENANT_ID } from "@/lib/config";
 import { authService } from "@/services/authService";
 import { useEffect } from "react";
 
+interface Property {
+  id: string;
+  title: string;
+  propertyCode?: string;
+}
+
+interface Agent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
+
 interface CreateProspectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -23,12 +36,12 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
     interestedIn: "",
     assignedAgentId: "",
   });
-  const [selectedProperties, setSelectedProperties] = useState<any[]>([]);
+  const [selectedProperties, setSelectedProperties] = useState<Property[]>([]);
   const [propertySearch, setPropertySearch] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Property[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const searchTimeout = useRef<any>(null);
-  const [agents, setAgents] = useState<any[]>([]);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const user = authService.getUser();
   const isAdmin = user ? (user.role === 'ADMIN_TENANT' || user.role === 'SUPERADMIN') : false;
 
@@ -44,7 +57,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
       if (res.ok) {
         const allUsers = await res.json();
         // Filter those who can be agents (AGENT role)
-        setAgents(allUsers.filter((u: any) => u.role === 'AGENT' || u.role === 'ADMIN_TENANT'));
+        setAgents(allUsers.filter((u: Agent) => u.role === 'AGENT' || u.role === 'ADMIN_TENANT'));
       }
     } catch (err) {
       console.error("Error fetching agents:", err);
@@ -74,7 +87,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
         const res = await fetch(`${API_URL}/properties?tenantId=${TENANT_ID}`);
         if (res.ok) {
           const all = await res.json();
-          const filtered = all.filter((p: any) => 
+          const filtered = (all as Property[]).filter((p: Property) => 
             p.title.toLowerCase().includes(val.toLowerCase()) || 
             (p.propertyCode && p.propertyCode.toLowerCase().includes(val.toLowerCase()))
           );
@@ -88,7 +101,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
     }, 300);
   };
 
-  const addProperty = (prop: any) => {
+  const addProperty = (prop: Property) => {
     if (!selectedProperties.find(p => p.id === prop.id)) {
       setSelectedProperties([...selectedProperties, prop]);
     }
@@ -107,7 +120,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
     setLoading(true);
     try {
       // Validate phone prefix +57
-      let cleanPhone = formData.phone.trim().replace(/\s+/g, '');
+      const cleanPhone = formData.phone.trim().replace(/\s+/g, '');
       if (!cleanPhone.startsWith('+57')) {
         alert("El número de teléfono debe comenzar con +57");
         setLoading(false);
@@ -143,10 +156,10 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
       
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error creating prospect:", err);
-      alert(`Error al crear el prospecto:\n${err.message ?? err}`);
-    } finally {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Error al crear el prospecto:\n${msg}`);    } finally {
       setLoading(false);
     }
   };

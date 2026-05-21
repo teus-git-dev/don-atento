@@ -21,9 +21,7 @@ import {
  * `debit=0 && credit=0` is also rejected (an empty line is noise).
  */
 @ValidatorConstraint({ name: 'IsValidDoubleEntryLine', async: false })
-class IsValidDoubleEntryLineConstraint
-  implements ValidatorConstraintInterface
-{
+class IsValidDoubleEntryLineConstraint implements ValidatorConstraintInterface {
   validate(_value: unknown, args: ValidationArguments): boolean {
     const obj = args.object as { debit?: number; credit?: number };
     const d = obj.debit ?? 0;

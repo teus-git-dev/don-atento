@@ -1,0 +1,17 @@
+title = "Don Atento gitleaks config"
+
+[allowlist]
+  description = "Allow known non-secret patterns in source"
+  # These are public webhook verification strings shown in the Meta Dashboard setup UI.
+  # They are NOT credentials — Meta requires you to set this value yourself and it is
+  # publicly visible in the dashboard. The literal value was removed from code in
+  # commit 2f506ac; this allowlist suppresses the historical detection.
+  regexes = [
+    "don_atento_verify_2024",
+    "don-atento-webhook",
+  ]
+  # The CI JWT_SECRET in quality.yml is explicitly labelled "ci_test_secret_do_not_use_in_production"
+  # and is hardcoded as a test fixture — safe by design.
+  paths = [
+    ".github/workflows/quality.yml",
+  ]

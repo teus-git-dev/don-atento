@@ -73,7 +73,8 @@ export class CreateInventoryItemDto {
   isFunctional?: boolean;
 
   @ApiPropertyOptional({
-    description: 'JSON con detalles técnicos heterogéneos (max 16KB serializado)',
+    description:
+      'JSON con detalles técnicos heterogéneos (max 16KB serializado)',
   })
   @IsOptional()
   @IsObject()

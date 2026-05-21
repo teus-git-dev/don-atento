@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Delete,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Get, Delete, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BaileysManager } from './baileys.manager';
 import { AntiBanService } from './anti-ban.service';

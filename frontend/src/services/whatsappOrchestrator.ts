@@ -86,7 +86,7 @@ export async function processMessage(input: string, history: ChatMessage[]): Pro
   try {
     if (currentTenant) {
       const data = await brainService.getBrain(currentTenant.id);
-      if (data) brain = data as any;
+      if (data) brain = data as typeof brain;
     }
   } catch (e) {
     console.warn("Using default brain for simulation");

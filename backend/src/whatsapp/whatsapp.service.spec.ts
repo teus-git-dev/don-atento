@@ -26,8 +26,6 @@ describe('WhatsappService', () => {
   let cognitiveServiceMock: any;
 
   beforeEach(async () => {
-    const IORedis = require('ioredis');
-
     ticketsServiceMock = {
       findLatestByPhone: jest
         .fn()
@@ -128,8 +126,12 @@ describe('WhatsappService', () => {
         'Tranquilo [METADATA]Action: DE_ESCALATE[/METADATA]',
       );
 
-      // Stub sendMessage to prevent actual HTTP calls
-      jest.spyOn(service, 'sendMessage').mockResolvedValue(undefined);
+      // Stub sendMessage to prevent actual HTTP calls. Store the spy so
+      // `expect(spy)` instead of `expect(service.sendMessage)` — avoids
+      // the unbound-method lint warning.
+      const sendMessageSpy = jest
+        .spyOn(service, 'sendMessage')
+        .mockResolvedValue(undefined);
 
       // Block A: phoneNumberId is required so the service can resolve
       // tenant via prisma.tenant.findFirst (mocked to return t1). Without
@@ -142,7 +144,7 @@ describe('WhatsappService', () => {
       );
 
       expect(ticketsServiceMock.createTicket).not.toHaveBeenCalled();
-      expect(service.sendMessage).toHaveBeenCalledWith(
+      expect(sendMessageSpy).toHaveBeenCalledWith(
         '3000000000',
         'Tranquilo',
         expect.anything(),
@@ -154,7 +156,9 @@ describe('WhatsappService', () => {
         'Creando ticket [METADATA]Action: CREATE_TICKET[/METADATA]',
       );
 
-      jest.spyOn(service, 'sendMessage').mockResolvedValue(undefined);
+      const sendMessageSpy = jest
+        .spyOn(service, 'sendMessage')
+        .mockResolvedValue(undefined);
 
       await service.processIncomingMessage(
         '3000000000',
@@ -164,7 +168,7 @@ describe('WhatsappService', () => {
       );
 
       expect(ticketsServiceMock.createTicket).toHaveBeenCalled();
-      expect(service.sendMessage).toHaveBeenCalledWith(
+      expect(sendMessageSpy).toHaveBeenCalledWith(
         '3000000000',
         expect.stringContaining('TKT-2'),
         expect.anything(),

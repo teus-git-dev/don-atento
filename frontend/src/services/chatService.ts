@@ -9,14 +9,14 @@ export interface ChatMessage {
 }
 
 export const chatService = {
-  sendMessage: async (message: string, history: ChatMessage[]): Promise<{ reply: string, contextUsed: any }> => {
+  sendMessage: async (message: string, history: ChatMessage[]): Promise<{ reply: string, contextUsed: unknown }> => {
     // Convert local history to format that backend expects
     const simplifiedHistory = history.map(h => ({
       role: h.role,
       content: h.content
     }));
 
-    const data = await apiClient.post<{ reply: string, contextUsed: any }>('/ai-chat', {
+    const data = await apiClient.post<{ reply: string, contextUsed: unknown }>('/ai-chat', {
       tenantId: TENANT_ID,
       userId: 'user-001', // Ideally would be dynamic
       message,

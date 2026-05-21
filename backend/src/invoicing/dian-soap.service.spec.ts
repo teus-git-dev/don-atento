@@ -33,9 +33,7 @@ describe('DianSoapService', () => {
       expect(envelope).toContain('SendTestSetAsync');
       expect(envelope).toContain('FAC-001.zip');
       expect(envelope).toContain('test-set-123');
-      expect(envelope).toContain(
-        Buffer.from('<Invoice/>').toString('base64'),
-      );
+      expect(envelope).toContain(Buffer.from('<Invoice/>').toString('base64'));
     });
 
     it('escapes XML special chars in fileName (no envelope injection)', () => {

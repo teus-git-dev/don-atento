@@ -1,9 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import {
-  Prisma,
-  ProviderSpecialty,
-  ProviderStatus,
-} from '@prisma/client';
+import { Prisma, ProviderSpecialty, ProviderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
@@ -52,7 +48,10 @@ export class ProvidersService {
     const skip = (safePage - 1) * safeLimit;
 
     const where: Prisma.ProviderWhereInput = { tenantId };
-    if (opts.status && ['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(opts.status)) {
+    if (
+      opts.status &&
+      ['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(opts.status)
+    ) {
       where.status = opts.status as ProviderStatus;
     }
     if (opts.specialty) {

@@ -25,11 +25,11 @@ export class DataImportService {
     private onboardingService: OnboardingService,
   ) {}
 
-  async parseFileAndPreview(
+  parseFileAndPreview(
     fileBuffer: Buffer,
-    fileName: string,
-    tenantId: string,
-    categoryId: string,
+    _fileName: string,
+    _tenantId: string,
+    _categoryId: string,
   ) {
     try {
       const workSheets = parseXlsx(fileBuffer);
@@ -207,9 +207,7 @@ export class DataImportService {
       })
       .filter((obj) => Object.keys(obj).length > 0);
 
-    this.logger.log(
-      `Records parsed from file: ${recordsToImport.length}`,
-    );
+    this.logger.log(`Records parsed from file: ${recordsToImport.length}`);
     let savedRecords = 0;
     const errors: any[] = [];
     // Block C: sourceTag now has CSPRNG suffix so two imports at the

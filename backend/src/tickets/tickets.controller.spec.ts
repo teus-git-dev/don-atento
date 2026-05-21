@@ -8,7 +8,11 @@ import type { Request } from 'express';
 describe('TicketsController', () => {
   let controller: TicketsController;
 
-  const mockTicketsService = {};
+  const mockTicketsService = {
+    findAllByTenant: jest.fn(),
+    findAllByOwner: jest.fn(),
+    findAllByTechnician: jest.fn(),
+  };
   const mockFileUpload = { upload: jest.fn() };
   const mockSurveyToken = {
     generate: jest.fn().mockReturnValue('deadbeefdeadbeef'),
@@ -117,6 +121,139 @@ describe('TicketsController', () => {
       await expect(
         controller.uploadFile(fakeFile(), fakeReq()),
       ).rejects.toThrow('storage down');
+    });
+  });
+
+  // ── P0.3 dual-shape pagination ───────────────────────────────────────────
+  //
+  // Phase 1 contract: presence of `?page=` OR `?limit=` switches the
+  // controller from legacy array shape (passing no opts to the service)
+  // to paginated shape (passing { page, limit }). Tests verify the
+  // routing + the page/limit parsing — the actual shape comes back from
+  // the service which is mocked here. Phase 2 will remove the legacy
+  // branch and these tests update accordingly.
+
+  describe('findAll (P0.3 dual-shape)', () => {
+    const fakeReq = (tenantId = 't1') =>
+      ({ tenantId }) as unknown as Parameters<typeof controller.findAll>[0];
+
+    it('legacy: no params → calls findAllByTenant(tenantId) without opts', async () => {
+      mockTicketsService.findAllByTenant.mockResolvedValue([]);
+      await controller.findAll(fakeReq('t1'));
+      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1');
+      expect(mockTicketsService.findAllByOwner).not.toHaveBeenCalled();
+    });
+
+    it('legacy: with ownerId → calls findAllByOwner without opts', async () => {
+      mockTicketsService.findAllByOwner.mockResolvedValue([]);
+      await controller.findAll(fakeReq('t1'), 'owner-7');
+      expect(mockTicketsService.findAllByOwner).toHaveBeenCalledWith(
+        'owner-7',
+        't1',
+      );
+      expect(mockTicketsService.findAllByTenant).not.toHaveBeenCalled();
+    });
+
+    it('paginated: ?page=1 → calls findAllByTenant with { page: 1, limit: 20 }', async () => {
+      mockTicketsService.findAllByTenant.mockResolvedValue({
+        data: [],
+        totalRecords: 0,
+        totalPages: 0,
+        currentPage: 1,
+      });
+      await controller.findAll(fakeReq('t1'), undefined, '1');
+      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
+        page: 1,
+        limit: 20,
+      });
+    });
+
+    it('paginated: ?limit=50 → calls findAllByTenant with { page: 1, limit: 50 }', async () => {
+      mockTicketsService.findAllByTenant.mockResolvedValue({
+        data: [],
+        totalRecords: 0,
+        totalPages: 0,
+        currentPage: 1,
+      });
+      await controller.findAll(fakeReq('t1'), undefined, undefined, '50');
+      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
+        page: 1,
+        limit: 50,
+      });
+    });
+
+    it('paginated: ?limit=200 → caps limit at 100', async () => {
+      mockTicketsService.findAllByTenant.mockResolvedValue({
+        data: [],
+        totalRecords: 0,
+        totalPages: 0,
+        currentPage: 1,
+      });
+      await controller.findAll(fakeReq('t1'), undefined, '1', '200');
+      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
+        page: 1,
+        limit: 100,
+      });
+    });
+
+    it('paginated: ?limit=0 → coerces to default 20', async () => {
+      mockTicketsService.findAllByTenant.mockResolvedValue({
+        data: [],
+        totalRecords: 0,
+        totalPages: 0,
+        currentPage: 1,
+      });
+      await controller.findAll(fakeReq('t1'), undefined, '1', '0');
+      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
+        page: 1,
+        limit: 20,
+      });
+    });
+
+    it('paginated: ?ownerId + ?page + ?limit → calls findAllByOwner with opts', async () => {
+      mockTicketsService.findAllByOwner.mockResolvedValue({
+        data: [],
+        totalRecords: 0,
+        totalPages: 0,
+        currentPage: 2,
+      });
+      await controller.findAll(fakeReq('t1'), 'owner-7', '2', '10');
+      expect(mockTicketsService.findAllByOwner).toHaveBeenCalledWith(
+        'owner-7',
+        't1',
+        { page: 2, limit: 10 },
+      );
+    });
+  });
+
+  describe('findByTechnician (P0.3 dual-shape)', () => {
+    const fakeReq = (tenantId = 't1') =>
+      ({
+        tenantId,
+      }) as unknown as Parameters<typeof controller.findByTechnician>[0];
+
+    it('legacy: no params → calls findAllByTechnician without opts', async () => {
+      mockTicketsService.findAllByTechnician.mockResolvedValue([]);
+      await controller.findByTechnician(fakeReq('t1'), 'tech-1');
+      expect(mockTicketsService.findAllByTechnician).toHaveBeenCalledWith(
+        'tech-1',
+        't1',
+      );
+    });
+
+    it('paginated: ?page=3&limit=5 → calls findAllByTechnician with opts', async () => {
+      mockTicketsService.findAllByTechnician.mockResolvedValue({
+        data: [],
+        totalRecords: 0,
+        totalPages: 0,
+        currentPage: 3,
+      });
+      await controller.findByTechnician(fakeReq('t1'), 'tech-1', '3', '5');
+      expect(mockTicketsService.findAllByTechnician).toHaveBeenCalledWith(
+        'tech-1',
+        't1',
+        { page: 3, limit: 5 },
+      );
     });
   });
 });

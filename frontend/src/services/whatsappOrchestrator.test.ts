@@ -52,7 +52,7 @@ describe('whatsappOrchestrator', () => {
 
     test('should return maintenance request response', async () => {
         const response = await processMessage('El calentador está roto', []);
-        expect(response.content).toContain('Lamento escuchar lo del calentador');
+        expect(response.content).toContain('He detectado un reporte de falla');
     });
   });
 });

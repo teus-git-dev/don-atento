@@ -20,7 +20,9 @@ describe('InventoryTemplatesController', () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [InventoryTemplatesController],
-      providers: [{ provide: InventoryTemplatesService, useValue: mockService }],
+      providers: [
+        { provide: InventoryTemplatesService, useValue: mockService },
+      ],
     }).compile();
     controller = module.get<InventoryTemplatesController>(
       InventoryTemplatesController,

@@ -12,8 +12,18 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+interface FinOpsEntry {
+  tenantId: string;
+  name: string;
+  planType: string;
+  revenue: number;
+  totalCostUsd: number;
+  totalUsed: number;
+  tokenQuota: number;
+}
+
 export default function FinOpsDashboard() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<FinOpsEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

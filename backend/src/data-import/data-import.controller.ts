@@ -63,7 +63,7 @@ export class DataImportController {
       },
     }),
   )
-  async uploadFile(
+  uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Req() req: Request,
     @Body('categoryId') categoryId: string,
