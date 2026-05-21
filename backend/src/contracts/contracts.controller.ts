@@ -12,6 +12,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -92,11 +93,11 @@ export class ContractsController {
     }),
   )
   async uploadContract(
-    @Req() req: any,
+    @Req() req: Request,
     @UploadedFile() file: Express.Multer.File,
     @Body('propertyId') propertyId: string,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
     if (!file) {
       throw new BadRequestException('No se subió ningún archivo');
     }
@@ -136,12 +137,12 @@ export class ContractsController {
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'limit', required: false, example: '20' })
   async getDocuments(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('propertyId') propertyId: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
     const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
     const requestedLimit = limit ? parseInt(limit, 10) : 20;
     const limitNum = Math.max(1, isNaN(requestedLimit) ? 20 : requestedLimit);
@@ -158,8 +159,8 @@ export class ContractsController {
   @ApiOperation({
     summary: 'Eliminar registro de documento contractual (no borra el archivo)',
   })
-  async deleteDocument(@Req() req: any, @Param('id') id: string) {
-    const tenantId = req['tenantId'];
+  async deleteDocument(@Req() req: Request, @Param('id') id: string) {
+    const tenantId = req.tenantId!;
     return this.contractsService.deleteDocument(id, tenantId);
   }
 }

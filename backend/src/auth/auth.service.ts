@@ -110,7 +110,7 @@ export class AuthService {
     try {
       const payload = this.jwtService.verify(rawAccessToken, {
         ignoreExpiration: true,
-      });
+      }) as JwtPayload | null;
       userId = payload?.sub;
     } catch {
       return;

@@ -15,7 +15,9 @@ async function bootstrap() {
   });
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- cookie-parser is CJS-only; require() is the documented Nest pattern
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const cookieParser = require('cookie-parser');
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   app.use(cookieParser());
 
   app.use(

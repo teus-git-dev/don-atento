@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
+import axios, { type AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import { AiChatService } from '../cognitive/ai-chat.service';
 
@@ -52,9 +52,9 @@ export class RadarService {
       return [];
     }
 
-    let response;
+    let response: AxiosResponse<string>;
     try {
-      response = await axios.get(url, {
+      response = await axios.get<string>(url, {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

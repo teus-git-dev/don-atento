@@ -84,7 +84,6 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refrescar JWT usando Refresh Token' })
   async refresh(
-    @Body() body: any, // or @Req() to get cookies
     @Res({ passthrough: true }) res: Response,
     @Req() req: Request,
   ) {

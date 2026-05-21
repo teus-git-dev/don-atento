@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Request } from 'express';
 
 export interface JwtPayload {
   sub: string; // userId
@@ -20,10 +21,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
-        (request: any) => {
-          let token = null;
-          if (request && request.cookies) {
-            token = request.cookies['don_atento_token_v1'];
+        (request: Request) => {
+          let token: string | null = null;
+          if (request?.cookies) {
+            token =
+              (request.cookies as Record<string, string>)[
+                'don_atento_token_v1'
+              ] ?? null;
           }
           return token;
         },

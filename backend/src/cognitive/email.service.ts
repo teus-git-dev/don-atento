@@ -6,7 +6,7 @@ export class EmailService {
     to: string,
     subject: string,
     body: string,
-    attachments?: any[],
+    attachments?: { filename: string; [key: string]: unknown }[],
   ) {
     // In a real scenario, this would use nodemailer or a service like SendGrid/SES
     console.log(`[Email Service] Sending to ${to}...`);

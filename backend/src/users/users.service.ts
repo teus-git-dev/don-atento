@@ -225,7 +225,8 @@ export class UsersService {
     const propertyIds = user.relations.map((r) => r.propertyId);
 
     let associatedTickets =
-      (user as any).Ticket_Ticket_reportedByUserIdToUser || [];
+      (user as unknown as { Ticket_Ticket_reportedByUserIdToUser?: unknown[] })
+        .Ticket_Ticket_reportedByUserIdToUser ?? [];
 
     if (propertyIds.length > 0) {
       const propertyTickets = await this.prisma.ticket.findMany({

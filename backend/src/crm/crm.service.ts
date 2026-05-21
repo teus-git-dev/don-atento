@@ -17,9 +17,11 @@ import {
   RelationType,
   InteractionChannel,
 } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { BrandBrainService } from '../cognitive/brand-brain.service';
 import { EmailService } from '../cognitive/email.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { UpdateProspectDto } from './dto/update-prospect.dto';
 
 /**
  * Whitelist of User fields safe to expose in CRM responses. Mirrors
@@ -240,7 +242,7 @@ export class CrmService {
     });
   }
 
-  async updateProspect(id: string, tenantId: string, data: any) {
+  async updateProspect(id: string, tenantId: string, data: UpdateProspectDto) {
     // updateMany with composite where prevents cross-tenant tampering.
     // Block B will further constrain `data` via a DTO whitelist so
     // tenantId itself can't be set from the body.
@@ -379,7 +381,7 @@ export class CrmService {
     prospectId: string,
     propertyId: string,
     tenantId: string,
-    formData: any,
+    formData: Prisma.InputJsonValue,
   ) {
     // Cross-tenant write guards: both the prospect and the property
     // must belong to the caller's tenant. Without these the endpoint

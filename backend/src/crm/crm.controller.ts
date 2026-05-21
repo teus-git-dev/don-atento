@@ -153,11 +153,15 @@ export class CrmController {
     @Req() req: Request,
     @Body() body: StartContractDto,
   ) {
+    // formData is a JSON blob forwarded as-is to Prisma.
+    // Prisma.InputJsonValue is the exact type for JSON columns;
+    // the DTO validates structure upstream, so this cast is safe.
     return this.crmService.startContractProcess(
       prospectId,
       propertyId,
       req.tenantId!,
-      body.formData ?? {},
+      (body.formData ??
+        {}) as unknown as import('@prisma/client').Prisma.InputJsonValue,
     );
   }
 

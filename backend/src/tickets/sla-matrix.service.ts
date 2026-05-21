@@ -38,7 +38,8 @@ export class SlaMatrixService {
 
     const baseDate =
       ticket.stateLogs?.find(
-        (l: any) => l.stateId === ticket.currentStateId && !l.completedAt,
+        (l: { stateId: string | null; completedAt: Date | null }) =>
+          l.stateId === ticket.currentStateId && !l.completedAt,
       )?.startedAt || ticket.createdAt;
     const dueDate = new Date(baseDate);
     dueDate.setHours(dueDate.getHours() + slaHours);

@@ -8,7 +8,13 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
-import { Ticket, TicketPriority, RelationType, UserRole, Prisma } from '@prisma/client';
+import {
+  Ticket,
+  TicketPriority,
+  RelationType,
+  UserRole,
+  Prisma,
+} from '@prisma/client';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { EmailService } from '../cognitive/email.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
@@ -222,6 +228,7 @@ export class TicketsService {
           priority: (finalPriority as TicketPriority) || TicketPriority.MEDIUM,
           title: data.title,
           description: data.description,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- attachments is a JSON blob field from body
           attachments: data.attachments,
           aiDiagnosisSummary: aiReason
             ? `Clasificación Automática: ${aiReason}`
@@ -433,7 +440,10 @@ export class TicketsService {
     return ticket;
   }
 
-  private async notifyRoleAssignment(ticket: TicketForNotification & { property?: TicketProperty | null }, state: WorkflowStateShape) {
+  private async notifyRoleAssignment(
+    ticket: TicketForNotification & { property?: TicketProperty | null },
+    state: WorkflowStateShape,
+  ) {
     if (!state.assignedRole) return;
 
     // Find users with this role in the tenant
@@ -465,13 +475,15 @@ export class TicketsService {
     closureReason: string,
     signature?: string,
   ): Promise<Ticket> {
-    type TicketWithWorkflow = NonNullable<Awaited<ReturnType<typeof this.prisma.ticket.findUnique>>> & {
+    type TicketWithWorkflow = NonNullable<
+      Awaited<ReturnType<typeof this.prisma.ticket.findUnique>>
+    > & {
       workflow?: { states: WorkflowStateShape[]; id: string } | null;
     };
-    let ticket: TicketWithWorkflow = await this.prisma.ticket.findUnique({
+    let ticket: TicketWithWorkflow = (await this.prisma.ticket.findUnique({
       where: { id, tenantId },
       include: { workflow: { include: { states: true } } },
-    }) as TicketWithWorkflow;
+    })) as TicketWithWorkflow;
 
     if (!ticket) throw new Error('Ticket not found');
 
@@ -539,19 +551,22 @@ export class TicketsService {
     let finalComment = comment;
 
     // 0. Fetch Ticket to check state
-    type TicketWithStateAndWorkflow = NonNullable<Awaited<ReturnType<typeof this.prisma.ticket.findUnique>>> & {
+    type TicketWithStateAndWorkflow = NonNullable<
+      Awaited<ReturnType<typeof this.prisma.ticket.findUnique>>
+    > & {
       currentState?: { name?: string | null; order?: number | null } | null;
       workflow?: { states: WorkflowStateShape[]; id: string } | null;
       reportedByUser?: PublicUser | null;
     };
-    let ticket: TicketWithStateAndWorkflow = await this.prisma.ticket.findUnique({
-      where: { id: ticketId, tenantId },
-      include: {
-        currentState: true,
-        reportedByUser: { select: USER_PUBLIC_SELECT },
-        workflow: { include: { states: { orderBy: { order: 'asc' } } } },
-      },
-    }) as TicketWithStateAndWorkflow;
+    let ticket: TicketWithStateAndWorkflow =
+      (await this.prisma.ticket.findUnique({
+        where: { id: ticketId, tenantId },
+        include: {
+          currentState: true,
+          reportedByUser: { select: USER_PUBLIC_SELECT },
+          workflow: { include: { states: { orderBy: { order: 'asc' } } } },
+        },
+      })) as TicketWithStateAndWorkflow;
     if (!ticket) throw new Error('Ticket not found');
 
     if (!ticket.workflow) {
@@ -588,15 +603,19 @@ export class TicketsService {
         let quoteItems: QuoteItem[] = [];
         if (comment.startsWith('[{')) {
           try {
-            quoteItems = JSON.parse(comment);
+            quoteItems = JSON.parse(comment) as QuoteItem[];
           } catch {
             throw new BadRequestException(
               'Comentario marcado como JSON de cotización pero no es JSON válido.',
             );
           }
           finalComment = await this.cognitiveService.generateExecutiveQuotation(
-            ticket.tenantId!,
-            quoteItems as { description: string; price: number; quantity: number }[],
+            ticket.tenantId,
+            quoteItems as {
+              description: string;
+              price: number;
+              quantity: number;
+            }[],
           );
         }
         // Note: previous code path detected an image/PDF attachment and
@@ -612,14 +631,36 @@ export class TicketsService {
         if (quoteItems.length > 0) {
           this.logger.log('Smart Quotation: generating official documents');
           const docxUrl = await this.cognitiveService.generateQuotationDocx(
-            ticket.tenantId!,
-            ticket.id!,
-            quoteItems as { description: string; price: number; quantity: number }[],
+            ticket.tenantId,
+            ticket.id,
+            quoteItems.filter(
+              (
+                qi,
+              ): qi is {
+                description: string;
+                price: number;
+                quantity: number;
+              } =>
+                typeof qi.description === 'string' &&
+                typeof qi.price === 'number' &&
+                typeof qi.quantity === 'number',
+            ),
           );
           const pdfUrl = await this.cognitiveService.generateQuotationPdf(
-            ticket.tenantId!,
-            ticket.id!,
-            quoteItems as { description: string; price: number; quantity: number }[],
+            ticket.tenantId,
+            ticket.id,
+            quoteItems.filter(
+              (
+                qi,
+              ): qi is {
+                description: string;
+                price: number;
+                quantity: number;
+              } =>
+                typeof qi.description === 'string' &&
+                typeof qi.price === 'number' &&
+                typeof qi.quantity === 'number',
+            ),
           );
 
           // Add to process attachments
@@ -637,11 +678,11 @@ export class TicketsService {
           };
 
           attachments = attachments ?? [];
-          (attachments as AttachmentRecord[]).push(newDocx, newPdf);
+          attachments.push(newDocx, newPdf);
 
           // Update Ticket historical attachments
           const currentTicketAttachments =
-            ((ticket.attachments as unknown) as AttachmentRecord[]) || [];
+            (ticket.attachments as unknown as AttachmentRecord[]) || [];
           await this.prisma.ticket.update({
             where: { id: ticketId },
             data: {
@@ -696,11 +737,12 @@ export class TicketsService {
           // safe: sendRawMessage is not in the WhatsappService public interface
           // because it bypasses the tenant-scoped channel lookup (for internal
           // scheduling proposals only). Cast is narrowly scoped here.
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          await (this.whatsappService as unknown as Record<string, (phone: string, msg: string) => Promise<void>>).sendRawMessage(
-            ticket.reportedByUser?.phone ?? '',
-            message,
-          );
+          await (
+            this.whatsappService as unknown as Record<
+              string,
+              (phone: string, msg: string) => Promise<void>
+            >
+          ).sendRawMessage(ticket.reportedByUser?.phone ?? '', message);
         }
 
         // Trigger Email
