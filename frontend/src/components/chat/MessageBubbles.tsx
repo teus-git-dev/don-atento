@@ -23,15 +23,18 @@ export const UserBubble = ({ message }: { message: ChatMessage }) => (
   </div>
 );
 
-export const AssistantBubble = ({ message }: { message: ChatMessage }) => {
-  const SentimentIcon = () => {
-    switch (message.sentiment) {
-      case Sentiment.ANGRY: return <Frown size={14} className="text-red-400" />;
-      case Sentiment.HAPPY: return <Smile size={14} className="text-green-400" />;
-      default: return <HelpCircle size={14} className="text-gray-400" />;
-    }
-  };
+// Top-level static component — defining inside AssistantBubble (the
+// pre-fix shape) made React treat it as a new component every render
+// and reset its internal state. Lifted out + sentiment passed as prop.
+const SentimentIcon = ({ sentiment }: { sentiment?: Sentiment }) => {
+  switch (sentiment) {
+    case Sentiment.ANGRY: return <Frown size={14} className="text-red-400" />;
+    case Sentiment.HAPPY: return <Smile size={14} className="text-green-400" />;
+    default: return <HelpCircle size={14} className="text-gray-400" />;
+  }
+};
 
+export const AssistantBubble = ({ message }: { message: ChatMessage }) => {
   return (
     <div className="flex justify-start animate-in fade-in slide-in-from-left-4 duration-300">
       <div className="bg-[#202C33] text-[#E9EDEF] p-2.5 rounded-2xl rounded-tl-none max-w-[80%] shadow-md border border-[var(--color-neon-cyan)]/20 relative group">
@@ -39,7 +42,7 @@ export const AssistantBubble = ({ message }: { message: ChatMessage }) => {
         <div className="flex items-center justify-end gap-1 mt-1 opacity-60 group-hover:opacity-100 transition-opacity">
           <div className="p-1 bg-black/20 rounded-md mr-1 flex items-center gap-1">
             <span className="text-[8px] font-mono text-gray-500 uppercase">Sentiment:</span>
-            <SentimentIcon />
+            <SentimentIcon sentiment={message.sentiment} />
           </div>
           <span className="text-[10px]">{message.timestamp}</span>
         </div>
