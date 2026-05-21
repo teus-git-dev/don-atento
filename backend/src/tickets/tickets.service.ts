@@ -205,15 +205,14 @@ export class TicketsService {
 
   private async sendTicketNotifications(ticket: any) {
     const property = ticket.property;
-    const tenantRel = property.relations.find(
+    const tenantRel = property?.relations?.find(
       (r: any) => r.relationType === RelationType.TENANT,
     );
-    const ownerRel = property.relations.find(
+    const ownerRel = property?.relations?.find(
       (r: any) => r.relationType === RelationType.OWNER,
     );
 
     const reporter = ticket.reportedByUser;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- gap tracked in AUDIT_REPORT.md: sendTicketNotifications does not notify the assigned technician. Investigate if missing feature.
     const technician = ticket.assignedTechnician;
 
     // Omnichannel logic for WhatsApp (Short Response)
@@ -229,7 +228,11 @@ export class TicketsService {
 
     // Notify Reporter (if WhatsApp available)
     if (reporter.phone)
-      await this.whatsappService.sendMessage(reporter.phone, messageToReporter);
+      await this.whatsappService.sendMessage(
+        reporter.phone,
+        messageToReporter,
+        ticket.tenantId,
+      );
 
     // Notify Tenant (if different from reporter)
     if (tenantRel?.user?.phone && tenantRel.user.id !== reporter.id) {
@@ -237,24 +240,36 @@ export class TicketsService {
       await this.whatsappService.sendMessage(
         tenantRel.user.phone,
         messageToTenant,
+        ticket.tenantId,
       );
     }
 
     // Notify Owner (Omnichannel: WhatsApp + Formal Email)
     if (ownerRel?.user?.phone) {
-      const messageToOwner = `Don Atento Informa: Se ha generado un requerimiento de mantenimiento ("${ticket.title}") para su propiedad "${property.title}".`;
+      const messageToOwner = `Don Atento Informa: Se ha generado un requerimiento de mantenimiento ("${ticket.title}") para su propiedad "${property?.title || 'sin asignar'}".`;
       await this.whatsappService.sendMessage(
         ownerRel.user.phone,
         messageToOwner,
+        ticket.tenantId,
       );
     }
 
-    if (ownerRel?.user?.email) {
+    if (ownerRel?.user?.email && property?.title) {
       await this.emailService.sendFormalReport(
         ownerRel.user.email,
         property.title,
         longEmail,
       );
+    }
+
+    // Notify Assigned Technician (WhatsApp)
+    if (technician?.phone) {
+      const messageToTech = `Don Atento Tareas: Se te ha asignado un nuevo ticket "${ticket.title}" para la propiedad "${property?.title || 'sin asignar'}".`;
+      await this.whatsappService
+        .sendMessage(technician.phone, messageToTech, ticket.tenantId)
+        .catch((e) =>
+          this.logger.error('WhatsApp dispatch to technician failed', e),
+        );
     }
   }
 

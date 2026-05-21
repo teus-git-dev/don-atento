@@ -123,6 +123,7 @@ describe('TicketsService', () => {
   let service: TicketsService;
   let prismaMock: ReturnType<typeof makePrismaMock>;
   let cognitiveMock: ReturnType<typeof makeCognitiveMock>;
+  let whatsappMock: any;
 
   beforeEach(async () => {
     prismaMock = makePrismaMock();
@@ -141,6 +142,7 @@ describe('TicketsService', () => {
     }).compile();
 
     service = module.get<TicketsService>(TicketsService);
+    whatsappMock = module.get<WhatsappService>(WhatsappService);
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -229,6 +231,41 @@ describe('TicketsService', () => {
       // 5 bytes of crypto.randomBytes → 10 uppercase hex chars (Block E
       // replaced the old Math.random 5-digit numeric space).
       expect(createCall.data.shortId).toMatch(/^INC-[0-9A-F]{10}$/);
+    });
+
+    it('notifies the assigned technician via WhatsApp if technician.phone is present', async () => {
+      const techUser = {
+        id: 'tech-1',
+        firstName: 'Jose',
+        email: 'jose@test.com',
+        phone: '3009876543',
+        whatsappId: null,
+      };
+
+      prismaMock.ticket.create.mockResolvedValue(
+        makeTicket({
+          assignedTechnicianId: 'tech-1',
+          assignedTechnician: techUser,
+        }),
+      );
+
+      await service.createTicket({
+        tenantId: 'tenant-1',
+        propertyId: 'prop-1',
+        title: 'Fuga de agua',
+        description: 'Test description',
+        priority: TicketPriority.MEDIUM,
+        assignedTechnicianId: 'tech-1',
+      } as any);
+
+      // Allow async sendTicketNotifications call to execute
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(whatsappMock.sendMessage).toHaveBeenCalledWith(
+        '3009876543',
+        expect.stringContaining('Se te ha asignado un nuevo ticket'),
+        'tenant-1',
+      );
     });
   });
 
