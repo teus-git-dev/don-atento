@@ -17,10 +17,10 @@
  * Usage:
  *   npx ts-node prisma/backfill-user-phone-contacts.ts [--dry-run]
  */
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from './prisma-client-factory';
 
 const DRY_RUN = process.argv.includes('--dry-run');
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 function parseContacts(raw: string): string[] {
   const seen = new Set<string>();

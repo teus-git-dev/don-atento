@@ -20,10 +20,11 @@
  * Block-C-aware service code, so older POSTED rows don't render
  * with an empty audit trail in the dashboard.
  */
-import { PrismaClient, EntryStatus } from '@prisma/client';
+import { EntryStatus } from '@prisma/client';
+import { createPrismaClient } from './prisma-client-factory';
 
 const DRY_RUN = process.argv.includes('--dry-run');
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   const rows = await prisma.journalEntry.findMany({

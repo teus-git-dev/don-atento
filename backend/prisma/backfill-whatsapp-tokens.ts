@@ -14,14 +14,14 @@
  * by design and should run as part of the deploy pipeline regardless,
  * so future Meta tenants are protected.
  */
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from './prisma-client-factory';
 import {
   encryptWhatsappSecret,
   isEncrypted,
 } from '../src/whatsapp/whatsapp-encryption.util';
 
 const DRY_RUN = process.argv.includes('--dry-run');
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   if (!process.env.WHATSAPP_ENCRYPTION_KEY) {
