@@ -72,7 +72,7 @@ describe('PropertiesService', () => {
       const data = {
         tenantId: 'tenant-1',
         title: 'Apto 101',
-        propertyType: 'APARTMENT',
+        propertyType: 'APARTMENT' as const,
         ownerInfo: { name: 'Owner Test', email: 'owner@test.com' },
       };
 
@@ -102,9 +102,9 @@ describe('PropertiesService', () => {
     it('rolls back (throws error) if transaction fails', async () => {
       prismaMock.$transaction.mockRejectedValue(new Error('DB Error'));
 
-      await expect(service.create({ tenantId: 't1' })).rejects.toThrow(
-        InternalServerErrorException,
-      );
+      await expect(
+        service.create({ tenantId: 't1' } as any),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 

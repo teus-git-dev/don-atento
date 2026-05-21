@@ -42,7 +42,7 @@ export class IntegrationsService {
       propertyCode: propertyData.externalId || `FR-${Date.now()}`,
       rentAmount: propertyData.price,
       // Integration specific metadata
-      visionAnalysis: `Imported via Finca Raiz Webhook on ${new Date().toISOString()}`,
+      visionAnalysis: `Imported via Finca Raiz Webhook on ${new Date().toISOString()}` as string,
     });
 
     this.logger.log(`Property auto-created from Finca Raiz: ${newProperty.id}`);
@@ -81,14 +81,14 @@ export class IntegrationsService {
     return { status: 'SUCCESS', type: 'PROSPECT', id: prospect.id };
   }
 
-  private mapPropertyType(frType: string): string {
-    const mapping: Record<string, string> = {
+  private mapPropertyType(frType: string): import('@prisma/client').PropertyType {
+    const mapping: Record<string, import('@prisma/client').PropertyType> = {
       Apartamento: 'APARTMENT',
       Casa: 'HOUSE',
       Oficina: 'OFFICE',
       Bodega: 'WAREHOUSE',
       Local: 'OFFICE',
     };
-    return mapping[frType] || 'APARTMENT';
+    return mapping[frType] ?? 'APARTMENT';
   }
 }
