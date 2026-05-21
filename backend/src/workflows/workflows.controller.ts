@@ -16,6 +16,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { WorkflowsService } from './workflows.service';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { CreateWorkflowStateDto } from './dto/create-workflow-state.dto';
@@ -44,7 +45,7 @@ export class WorkflowsController {
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'limit', required: false, example: '20' })
   async findAll(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -55,7 +56,7 @@ export class WorkflowsController {
       MAX_PAGE_LIMIT,
     );
     return this.workflowsService.findAllByTenant(
-      req['tenantId'],
+      req.tenantId!,
       pageNum,
       limitNum,
     );
@@ -64,8 +65,8 @@ export class WorkflowsController {
   @Post()
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear nuevo workflow (con estados opcionales)' })
-  async create(@Req() req: any, @Body() data: CreateWorkflowDto) {
-    return this.workflowsService.create({ ...data, tenantId: req['tenantId'] });
+  async create(@Req() req: Request, @Body() data: CreateWorkflowDto) {
+    return this.workflowsService.create({ ...data, tenantId: req.tenantId! });
   }
 
   @Post('states')
@@ -73,19 +74,20 @@ export class WorkflowsController {
   @ApiOperation({
     summary: 'Agregar un estado a un workflow existente del tenant',
   })
-  async createState(@Req() req: any, @Body() data: CreateWorkflowStateDto) {
-    return this.workflowsService.createState(req['tenantId'], data);
+  // Fail-fast: any leftover NULL tenantId means we'd break Section B
+  async createState(@Req() req: Request, @Body() data: CreateWorkflowStateDto) {
+    return this.workflowsService.createState(req.tenantId!, data);
   }
 
   @Patch(':id')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Actualizar nombre / descripción de un workflow' })
   async update(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() data: UpdateWorkflowDto,
   ) {
-    return this.workflowsService.update(id, req['tenantId'], data);
+    return this.workflowsService.update(id, req.tenantId!, data);
   }
 
   @Delete(':id/states')
@@ -93,8 +95,8 @@ export class WorkflowsController {
   @ApiOperation({
     summary: 'Eliminar todos los estados de un workflow (mantiene el workflow)',
   })
-  async deleteStates(@Req() req: any, @Param('id') id: string) {
-    return this.workflowsService.deleteStatesByWorkflow(id, req['tenantId']);
+  async deleteStates(@Req() req: Request, @Param('id') id: string) {
+    return this.workflowsService.deleteStatesByWorkflow(id, req.tenantId!);
   }
 
   @Delete(':id')
@@ -102,7 +104,7 @@ export class WorkflowsController {
   @ApiOperation({
     summary: 'Eliminar un workflow y sus estados (operación atómica)',
   })
-  async delete(@Req() req: any, @Param('id') id: string) {
-    return this.workflowsService.delete(id, req['tenantId']);
+  async delete(@Req() req: Request, @Param('id') id: string) {
+    return this.workflowsService.delete(id, req.tenantId!);
   }
 }

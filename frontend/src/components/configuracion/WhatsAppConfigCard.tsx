@@ -58,8 +58,9 @@ export default function WhatsAppConfigCard() {
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const webhookUrl = `${BACKEND_URL}/whatsapp/webhook`;
-  // Public webhook verification string shown in Meta Dashboard setup (not a secret)
-  const webhookVerifyToken = 'don_atento_verify_2024';
+  // Webhook verification token — configured in Meta Dashboard (not a secret).
+  // Set NEXT_PUBLIC_WHATSAPP_VERIFY_TOKEN in your .env.local to override.
+  const webhookVerifyToken = process.env.NEXT_PUBLIC_WHATSAPP_VERIFY_TOKEN ?? 'don-atento-webhook';
 
   const fetchStatus = useCallback(async () => {
     try {
