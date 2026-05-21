@@ -284,7 +284,7 @@ async function main(): Promise<void> {
     );
   }
 
-  // Fail-fast: any leftover NULL tenantId means we'd break Section B
+  // Guard: leftover NULL tenantId rows would break Section B
   // (SET NOT NULL would fail). Surface the count so the operator can
   // find orphans (e.g. ProspectInteraction.prospectId pointing to a
   // deleted Prospect, or Ticket rows that somehow had no tenantId).
