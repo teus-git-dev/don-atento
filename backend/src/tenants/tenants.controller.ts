@@ -9,6 +9,7 @@ import {
   UseGuards,
   ForbiddenException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -62,7 +63,7 @@ export class TenantsController {
   // ─── Auth: Forced Password Change on First Login ──────────────────────────
   @Patch('change-password')
   @ApiOperation({ summary: 'Complete mandatory first-login password reset' })
-  async changePassword(@Req() req: any, @Body() body: ChangePasswordDto) {
+  async changePassword(@Req() req: Request, @Body() body: ChangePasswordDto) {
     const userId = req.user?.id;
     if (!userId) throw new ForbiddenException('No autenticado.');
 
@@ -125,8 +126,8 @@ export class TenantsController {
 
   @Get('me')
   @ApiOperation({ summary: 'Get current tenant WhatsApp config (masked)' })
-  async getMyTenant(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  async getMyTenant(@Req() req: Request) {
+    const tenantId = req.tenantId!;
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
       select: {
@@ -165,10 +166,10 @@ export class TenantsController {
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Save WhatsApp credentials for the current tenant' })
   async saveWhatsappConfig(
-    @Req() req: any,
+    @Req() req: Request,
     @Body() body: SaveWhatsappConfigDto,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
 
     // Encrypt the Meta access token before persisting. The token is a
     // long-lived bearer credential — anyone with read access to the row
@@ -192,8 +193,8 @@ export class TenantsController {
   @Patch('whatsapp-disconnect')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Disconnect WhatsApp from the current tenant' })
-  async disconnectWhatsapp(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  async disconnectWhatsapp(@Req() req: Request) {
+    const tenantId = req.tenantId!;
 
     await this.prisma.tenant.update({
       where: { id: tenantId },

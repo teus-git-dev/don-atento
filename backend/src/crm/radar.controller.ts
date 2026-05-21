@@ -1,4 +1,5 @@
 import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { RadarService } from './radar.service';
@@ -26,9 +27,9 @@ export class RadarController {
   @ApiOperation({
     summary: 'Escanear portales externos por leads (rate-limited)',
   })
-  async scan(@Req() req: any) {
-    const tenantId = req['tenantId'];
-    const userId = req.user.id;
+  async scan(@Req() req: Request) {
+    const tenantId = req.tenantId!;
+    const userId = req.user!.id;
     const leads = await this.radarService.scanPortals(tenantId, userId);
     return {
       success: true,

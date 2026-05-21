@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserRole } from '@prisma/client';
@@ -27,13 +28,13 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('technicians')
-  async findTechnicians(@Req() req: any) {
-    return this.usersService.findByRole(UserRole.TECHNICIAN, req['tenantId']);
+  async findTechnicians(@Req() req: Request) {
+    return this.usersService.findByRole(UserRole.TECHNICIAN, req.tenantId!);
   }
 
   @Get('tenants')
   async findTenants(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -41,7 +42,7 @@ export class UsersController {
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.usersService.findByRole(
       UserRole.TENANT_USER,
-      req['tenantId'],
+      req.tenantId!,
       pageNum,
       limitNum,
     );
@@ -49,7 +50,7 @@ export class UsersController {
 
   @Get('owners')
   async findOwners(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -57,48 +58,44 @@ export class UsersController {
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.usersService.findByRole(
       UserRole.OWNER,
-      req['tenantId'],
+      req.tenantId!,
       pageNum,
       limitNum,
     );
   }
 
   @Get('admin')
-  async findAdmin(@Req() req: any) {
-    return this.usersService.findAdmin(req['tenantId']);
+  async findAdmin(@Req() req: Request) {
+    return this.usersService.findAdmin(req.tenantId!);
   }
 
   @Get()
   async findAll(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
     const requestedLimit = limit ? parseInt(limit, 10) : 20;
     const limitNum = Math.max(1, isNaN(requestedLimit) ? 20 : requestedLimit);
-    return this.usersService.findAllByTenant(
-      req['tenantId'],
-      pageNum,
-      limitNum,
-    );
+    return this.usersService.findAllByTenant(req.tenantId!, pageNum, limitNum);
   }
 
   @Post()
-  async create(@Req() req: any, @Body() data: CreateUserDto) {
+  async create(@Req() req: Request, @Body() data: CreateUserDto) {
     return this.usersService.create({
       ...data,
-      tenantId: req['tenantId'],
+      tenantId: req.tenantId!,
     });
   }
 
   @Delete(':id')
-  async delete(@Req() req: any, @Param('id') id: string) {
-    return this.usersService.delete(id, req['tenantId']);
+  async delete(@Req() req: Request, @Param('id') id: string) {
+    return this.usersService.delete(id, req.tenantId!);
   }
 
   @Get(':id/details')
-  async getUserDetails(@Req() req: any, @Param('id') id: string) {
-    return this.usersService.getUserDetails(id, req['tenantId']);
+  async getUserDetails(@Req() req: Request, @Param('id') id: string) {
+    return this.usersService.getUserDetails(id, req.tenantId!);
   }
 }

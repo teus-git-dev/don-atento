@@ -10,6 +10,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -55,7 +56,7 @@ export class PropertiesController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Obtener todos los inmuebles de un tenant' })
   async findAll(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -66,7 +67,7 @@ export class PropertiesController {
       MAX_PAGE_LIMIT,
     );
     return this.propertiesService.findAllByTenant(
-      req['tenantId'],
+      req.tenantId!,
       pageNum,
       limitNum,
     );
@@ -75,8 +76,8 @@ export class PropertiesController {
   @Get(':id')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Obtener detalle de un inmueble por UUID' })
-  async findOne(@Req() req: any, @Param('id') id: string) {
-    return this.propertiesService.findOne(id, req['tenantId']);
+  async findOne(@Req() req: Request, @Param('id') id: string) {
+    return this.propertiesService.findOne(id, req.tenantId!);
   }
 
   @Get('search/:code')
@@ -87,15 +88,15 @@ export class PropertiesController {
     name: 'code',
     description: 'Código externo del inmueble (ej: INC-99)',
   })
-  async findByCode(@Req() req: any, @Param('code') code: string) {
-    return this.propertiesService.findByPropertyCode(req['tenantId'], code);
+  async findByCode(@Req() req: Request, @Param('code') code: string) {
+    return this.propertiesService.findByPropertyCode(req.tenantId!, code);
   }
 
   @Post()
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear nuevo inmueble' })
-  async create(@Req() req: any, @Body() data: CreatePropertyDto) {
-    data.tenantId = req['tenantId'];
+  async create(@Req() req: Request, @Body() data: CreatePropertyDto) {
+    data.tenantId = req.tenantId!;
     return this.propertiesService.create(data);
   }
 
@@ -106,7 +107,10 @@ export class PropertiesController {
     type: [CreatePropertyDto],
     description: 'Array de objetos de propiedad extraídos de CSV/Excel',
   })
-  async bulkImport(@Req() req: any, @Body() data: any[]) {
+  async bulkImport(
+    @Req() req: Request,
+    @Body() data: Record<string, unknown>[],
+  ) {
     if (!Array.isArray(data)) {
       throw new BadRequestException(
         'El body debe ser un array de propiedades.',
@@ -117,29 +121,29 @@ export class PropertiesController {
         `Importación masiva limitada a ${MAX_BULK_IMPORT_ITEMS} items por request. Use un job en background para volúmenes mayores.`,
       );
     }
-    return this.bulkImportService.processImport(req['tenantId'], data);
+    return this.bulkImportService.processImport(req.tenantId!, data);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Activar/Desactivar inmueble' })
   async patchStatus(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Body('isActive') isActive: boolean,
   ) {
-    return this.propertiesService.updateStatus(id, req['tenantId'], isActive);
+    return this.propertiesService.updateStatus(id, req.tenantId!, isActive);
   }
 
   @Patch(':id')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Actualizar datos de un inmueble' })
   async update(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() data: UpdatePropertyDto,
   ) {
-    return this.propertiesService.update(id, req['tenantId'], data);
+    return this.propertiesService.update(id, req.tenantId!, data);
   }
 
   @Post(':id/transfer')
@@ -148,10 +152,10 @@ export class PropertiesController {
     summary: 'Realizar cesión (transferencia) de titularidad o arrendatario',
   })
   async transfer(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() data: TransferPropertyDto,
   ) {
-    return this.propertiesService.transferProperty(id, req['tenantId'], data);
+    return this.propertiesService.transferProperty(id, req.tenantId!, data);
   }
 }

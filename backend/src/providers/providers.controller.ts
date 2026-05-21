@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ProvidersService } from './providers.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
@@ -43,7 +44,7 @@ export class ProvidersController {
   })
   @ApiQuery({ name: 'specialty', required: false })
   findAll(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('status') status?: string,
@@ -52,7 +53,7 @@ export class ProvidersController {
     const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
     const requestedLimit = limit ? parseInt(limit, 10) : 20;
     const limitNum = Math.max(1, isNaN(requestedLimit) ? 20 : requestedLimit);
-    return this.providersService.findAll(req['tenantId'], {
+    return this.providersService.findAll(req.tenantId!, {
       page: pageNum,
       limit: limitNum,
       status,
@@ -63,15 +64,15 @@ export class ProvidersController {
   @Get(':id')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Detalle de un provider' })
-  findOne(@Req() req: any, @Param('id') id: string) {
-    return this.providersService.findOne(id, req['tenantId']);
+  findOne(@Req() req: Request, @Param('id') id: string) {
+    return this.providersService.findOne(id, req.tenantId!);
   }
 
   @Post()
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear provider con contactos opcionales' })
-  create(@Req() req: any, @Body() data: CreateProviderDto) {
-    return this.providersService.create(req['tenantId'], data);
+  create(@Req() req: Request, @Body() data: CreateProviderDto) {
+    return this.providersService.create(req.tenantId!, data);
   }
 
   @Patch(':id')
@@ -80,18 +81,18 @@ export class ProvidersController {
     summary: 'Actualizar provider (whitelist DTO — tenantId no mutable)',
   })
   update(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() data: UpdateProviderDto,
   ) {
-    return this.providersService.update(id, req['tenantId'], data);
+    return this.providersService.update(id, req.tenantId!, data);
   }
 
   @Delete(':id')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Eliminar provider' })
-  remove(@Req() req: any, @Param('id') id: string) {
-    return this.providersService.remove(id, req['tenantId']);
+  remove(@Req() req: Request, @Param('id') id: string) {
+    return this.providersService.remove(id, req.tenantId!);
   }
 
   @Post(':id/assign-technician/:userId')
@@ -100,10 +101,10 @@ export class ProvidersController {
     summary: 'Asignar técnico (User) a un provider — ambos del tenant',
   })
   assignTechnician(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Param('userId') userId: string,
   ) {
-    return this.providersService.assignTechnician(id, userId, req['tenantId']);
+    return this.providersService.assignTechnician(id, userId, req.tenantId!);
   }
 }

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
 import { BYPASS_TENANT_GUARD_KEY } from './tenant-bypass.decorator';
 
 /**
@@ -30,7 +31,7 @@ export class TenantGuard implements CanActivate {
     );
     if (isBypassed) return true;
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
     const user = request.user;
 
     // Public routes (no user) — skip tenant enforcement
@@ -42,7 +43,9 @@ export class TenantGuard implements CanActivate {
       // NOTE: request.params.id is intentionally excluded — it is the resource ID (e.g. property UUID),
       // NOT a tenantId, and confusing the two causes silent data isolation failures.
       const resolvedTenant =
-        request.query?.tenantId || request.params?.tenantId || user.tenantId;
+        (request.query['tenantId'] as string | undefined) ||
+        (request.params['tenantId'] as string | undefined) ||
+        user.tenantId;
 
       if (!resolvedTenant) {
         throw new ForbiddenException(
@@ -50,10 +53,10 @@ export class TenantGuard implements CanActivate {
         );
       }
 
-      request['tenantId'] = resolvedTenant;
-      if (request.query) request.query.tenantId = resolvedTenant;
+      request.tenantId = resolvedTenant;
+      if (request.query) request.query['tenantId'] = resolvedTenant;
       if (request.body && typeof request.body === 'object')
-        request.body.tenantId = resolvedTenant;
+        (request.body as Record<string, unknown>)['tenantId'] = resolvedTenant;
       return true;
     }
 
@@ -65,10 +68,10 @@ export class TenantGuard implements CanActivate {
     }
 
     // Override any client-supplied tenantId with the JWT's tenantId
-    request['tenantId'] = user.tenantId;
-    if (request.query) request.query.tenantId = user.tenantId;
+    request.tenantId = user.tenantId;
+    if (request.query) request.query['tenantId'] = user.tenantId;
     if (request.body && typeof request.body === 'object')
-      request.body.tenantId = user.tenantId;
+      (request.body as Record<string, unknown>)['tenantId'] = user.tenantId;
 
     return true;
   }
