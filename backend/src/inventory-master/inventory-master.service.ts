@@ -1,6 +1,13 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { EvidenceType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryReportService } from './inventory-report.service';
+import { CreatePropertyInventoryDto } from './dto/create-property-inventory.dto';
+import { CreateZoneDto } from './dto/create-zone.dto';
+import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
+import { CreateEvidenceDto } from './dto/create-evidence.dto';
+import { CreateMeterReadingDto } from './dto/create-meter-reading.dto';
+import { CreatePropertyAccessItemDto } from './dto/create-property-access-item.dto';
 
 @Injectable()
 export class InventoryMasterService {
@@ -21,7 +28,7 @@ export class InventoryMasterService {
   async createPropertyInventory(
     propertyId: string,
     tenantId: string,
-    data: any,
+    data: CreatePropertyInventoryDto,
   ) {
     // Block A: cross-tenant write guard before any DB mutation.
     await this.assertPropertyBelongsToTenant(propertyId, tenantId);
@@ -34,33 +41,38 @@ export class InventoryMasterService {
     // data.zones) is preserved inside the tx.
     const result = await this.prisma.$transaction(async (tx) => {
       const zones = await Promise.all(
-        data.zones.map((zoneData: any) =>
+        data.zones.map((zoneData: CreateZoneDto) =>
           tx.zone.create({
             data: {
               propertyId,
               name: zoneData.name,
               type: zoneData.type,
               items: {
-                create: zoneData.items.map((item: any) => ({
-                  propertyId,
-                  category: item.category || 'GENERAL',
-                  name: item.name,
-                  condition: item.condition || 'GOOD',
-                  description: item.description,
-                  brand: item.brand,
-                  model: item.model,
-                  serialNumber: item.serialNumber,
-                  material: item.material,
-                  isFunctional: item.isFunctional ?? true,
-                  technicalDetails: item.technicalDetails,
-                  expectedLifespanMonths: item.expectedLifespanMonths,
-                  evidences: {
-                    create: (item.evidences || []).map((ev: any) => ({
-                      evidenceType: ev.type,
-                      url: ev.url,
-                    })),
-                  },
-                })),
+                create: zoneData.items.map(
+                  (item: CreateInventoryItemDto) =>
+                    ({
+                      propertyId,
+                      category: item.category,
+                      name: item.name,
+                      condition: item.condition ?? 'GOOD',
+                      description: item.description,
+                      brand: item.brand,
+                      model: item.model,
+                      serialNumber: item.serialNumber,
+                      material: item.material,
+                      isFunctional: item.isFunctional ?? true,
+                      technicalDetails: item.technicalDetails,
+                      expectedLifespanMonths: item.expectedLifespanMonths,
+                      evidences: {
+                        create: (item.evidences ?? []).map(
+                          (ev: CreateEvidenceDto) => ({
+                            evidenceType: ev.type,
+                            url: ev.url,
+                          }),
+                        ),
+                      },
+                    }) as Prisma.InventoryItemUncheckedCreateWithoutZoneInput,
+                ) as Prisma.InventoryItemUncheckedCreateWithoutZoneInput[],
               },
             },
             include: { items: true },
@@ -70,7 +82,7 @@ export class InventoryMasterService {
 
       if (data.meterReadings) {
         await tx.meterReading.createMany({
-          data: data.meterReadings.map((reading: any) => ({
+          data: data.meterReadings.map((reading: CreateMeterReadingDto) => ({
             propertyId,
             type: reading.type,
             value: reading.value,
@@ -81,13 +93,15 @@ export class InventoryMasterService {
 
       if (data.accessItems) {
         await tx.propertyAccessItem.createMany({
-          data: data.accessItems.map((access: any) => ({
-            propertyId,
-            type: access.type,
-            description: access.description,
-            quantity: access.quantity || 1,
-            photoUrl: access.photoUrl,
-          })),
+          data: data.accessItems.map(
+            (access: CreatePropertyAccessItemDto) => ({
+              propertyId,
+              type: access.type,
+              description: access.description,
+              quantity: access.quantity ?? 1,
+              photoUrl: access.photoUrl,
+            }),
+          ),
         });
       }
 
@@ -151,7 +165,7 @@ export class InventoryMasterService {
     return this.prisma.inventoryEvidence.create({
       data: {
         inventoryItemId: itemId,
-        evidenceType: evidenceType as any,
+        evidenceType: evidenceType as EvidenceType,
         url,
       },
     });
