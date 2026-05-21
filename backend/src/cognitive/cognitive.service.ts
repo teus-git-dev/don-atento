@@ -248,7 +248,6 @@ export class CognitiveService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- async signature preserved for future Gemini-backed implementation
   async validateEvidence(
     fileName: string,
     fileType: string,
@@ -337,7 +336,6 @@ export class CognitiveService {
     return { verdict, confidence, isCoherent };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- async signature preserved for future Gemini-backed implementation
   async classifyPriority(
     title: string,
     description: string,
