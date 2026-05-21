@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Delete, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BaileysManager } from './baileys.manager';
 import { AntiBanService } from './anti-ban.service';
@@ -36,8 +37,8 @@ export class BaileysController {
   @Post('connect')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Iniciar conexión Baileys para el tenant actual' })
-  async connect(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  async connect(@Req() req: Request) {
+    const tenantId = req.tenantId!;
     const result = await this.baileysManager.connectTenant(tenantId);
     return {
       success: true,
@@ -55,8 +56,8 @@ export class BaileysController {
   @Get('status')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Estado de conexión Baileys del tenant' })
-  getStatus(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  getStatus(@Req() req: Request) {
+    const tenantId = req.tenantId!;
     const info = this.baileysManager.getConnectionStatus(tenantId);
     // Strip QR from the AGENT-facing status response — possession of
     // the QR grants WhatsApp control. Only the dedicated GET /qr
@@ -71,8 +72,8 @@ export class BaileysController {
   @Get('qr')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Obtener QR code actual para vincular' })
-  getQr(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  getQr(@Req() req: Request) {
+    const tenantId = req.tenantId!;
     const info = this.baileysManager.getConnectionStatus(tenantId);
     return {
       success: true,
@@ -84,8 +85,8 @@ export class BaileysController {
   @Delete('disconnect')
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Desconectar Baileys del tenant' })
-  async disconnect(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  async disconnect(@Req() req: Request) {
+    const tenantId = req.tenantId!;
     await this.baileysManager.disconnectTenant(tenantId);
     return {
       success: true,
@@ -96,8 +97,8 @@ export class BaileysController {
   @Get('health')
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Métricas de salud anti-ban del número' })
-  async getHealth(@Req() req: any) {
-    const tenantId = req['tenantId'];
+  async getHealth(@Req() req: Request) {
+    const tenantId = req.tenantId!;
     const health = await this.antiBan.getHealthMetrics(tenantId);
     return {
       success: true,

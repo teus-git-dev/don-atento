@@ -4,6 +4,32 @@ import { BrandBrainService } from './brand-brain.service';
 import { ChatHistoryItemDto } from './dto/ai-chat.dto';
 import axios from 'axios';
 
+/** Shape returned by BrandBrainService.getBrandTone() */
+export interface BrandBrain {
+  tone: string;
+  description: string;
+  policies?: string;
+  faq?: { question: string; answer: string }[];
+}
+
+/** Operational metrics surfaced in chat context */
+export interface AiMetrics {
+  openTickets: number;
+  totalProperties: number;
+  providers: number;
+}
+
+/** Minimal shape of the OpenAI chat completion response we consume */
+export interface OpenAiChatResponse {
+  data: {
+    choices: { message: { content: string } }[];
+    usage?: {
+      prompt_tokens: number;
+      completion_tokens: number;
+    };
+  };
+}
+
 /**
  * Map the DTO-validated role (`'user' | 'assistant' | 'usuario' | 'ia'`) to
  * the canonical LLM pair. Anything outside the four-value allowlist is
@@ -27,13 +53,13 @@ export class AiChatService {
     history: ChatHistoryItemDto[] = [],
   ) {
     // 1. Gather Context
-    let brain: any;
+    let brain: BrandBrain;
     let openTickets = 0,
       totalProperties = 0,
       providers = 0;
 
     try {
-      brain = await this.brandBrain.getBrandTone(tenantId);
+      brain = (await this.brandBrain.getBrandTone(tenantId)) as BrandBrain;
       openTickets = await this.prisma.ticket.count({
         where: { tenantId, resolvedAt: null },
       });
@@ -44,7 +70,7 @@ export class AiChatService {
     } catch (dbError) {
       console.warn(
         '[AiChatService] Database offline. Using mock RAG context.',
-        dbError.message,
+        (dbError as Error).message,
       );
       brain = {
         tone: 'PROFESSIONAL',
@@ -65,8 +91,8 @@ Tu rol es ayudar a los empleados y administradores de la agencia respondiendo pr
 
 Contexto del Cerebro de Marca:
 - Tono o Personalidad: ${brain.tone} - ${brain.description}
-- Políticas y Reglas establecidas por la Inmobiliaria: ${brain.policies || 'Ninguna restricción específica registrada.'}
-- Base de Conocimientos (FAQ): ${JSON.stringify(brain.faq || [])}
+- Políticas y Reglas establecidas por la Inmobiliaria: ${brain.policies ?? 'Ninguna restricción específica registrada.'}
+- Base de Conocimientos (FAQ): ${JSON.stringify(brain.faq ?? [])}
 
 Contexto Operativo (Datos en tiempo real extráidos de Prisma):
 - Cantidad de inmuebles gestionados: ${totalProperties}
@@ -126,7 +152,7 @@ Instrucciones Críticas:
       if (!apiKey || apiKey === 'FILL_ME')
         throw new Error('OpenAI API key missing or invalid');
 
-      const response = await axios.post(
+      const response = (await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
           model: 'gpt-4o-mini', // or gpt-3.5-turbo fallback
@@ -141,7 +167,7 @@ Instrucciones Críticas:
           },
           timeout: 10000,
         },
-      );
+      )) as OpenAiChatResponse;
 
       return {
         reply: response.data.choices[0].message.content,
@@ -155,7 +181,7 @@ Instrucciones Críticas:
     } catch (error) {
       console.warn(
         '[AiChatService] Fallback invoked. Cannot reach external LLM.',
-        error.message,
+        (error as Error).message,
       );
       return this.fallbackSimulation(message, brain, {
         openTickets,
@@ -165,7 +191,11 @@ Instrucciones Críticas:
     }
   }
 
-  private fallbackSimulation(message: string, brain: any, metrics: any) {
+  private fallbackSimulation(
+    message: string,
+    brain: BrandBrain,
+    metrics: AiMetrics,
+  ) {
     const msg = message.toLowerCase();
     let reply = `MODO OFFLINE (Sugerencia IA): Hola, soy la inteligencia de Don Atento. `;
 
@@ -184,7 +214,7 @@ Instrucciones Críticas:
     } else if (msg.includes('proveedor')) {
       reply += `Contamos con ${metrics.providers} proveedores o técnicos registrados para atender solicitudes.`;
     } else if (msg.includes('politica') || msg.includes('regla')) {
-      reply += `He revisado mis directrices; mis políticas activas son: "${brain.policies || 'No hay políticas estrictas guardadas'}".`;
+      reply += `He revisado mis directrices; mis políticas activas son: "${brain.policies ?? 'No hay políticas estrictas guardadas'}".`;
     } else {
       reply += `Tengo contexto de todo el sistema. Mi tono está configurado como "${brain.tone}". ¿En qué área operativa te puedo asistir hoy?`;
     }
@@ -215,7 +245,7 @@ You have full authority to decide if a ticket should be created.
 - If it's just a general question or greeting, set Action to GENERAL_REPLY.
 
 3. System Action:
-The backend system might provide context: "${context?.systemAction || 'No system action provided'}". You can use this context if applicable, but prioritize your routing logic.
+The backend system might provide context: "${context?.systemAction ?? 'No system action provided'}". You can use this context if applicable, but prioritize your routing logic.
 
 4. Output Format (Mandatory):
 Your response must exactly follow this structure:
@@ -226,7 +256,7 @@ Action: {CREATE_TICKET | DE_ESCALATE | GENERAL_REPLY}
 [/METADATA]
 {Your empathetic and helpful response in Spanish to the user here}
 
-Context: The user is ${context?.name || 'a client'}. Property: ${context?.address || 'Unknown'}.
+Context: The user is ${context?.name ?? 'a client'}. Property: ${context?.address ?? 'Unknown'}.
 `;
 
     const messages = [
@@ -264,7 +294,7 @@ Hola, en este momento no puedo procesar tu mensaje por IA (cupo mensual agotado)
         }
       }
 
-      const response = await axios.post(
+      const response = (await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
           model: 'gpt-4o-mini',
@@ -279,7 +309,7 @@ Hola, en este momento no puedo procesar tu mensaje por IA (cupo mensual agotado)
           },
           timeout: 15000,
         },
-      );
+      )) as OpenAiChatResponse;
 
       // 2. Token Metering & FinOps Logic
       const usage = response.data.usage;
@@ -301,7 +331,7 @@ Hola, en este momento no puedo procesar tu mensaje por IA (cupo mensual agotado)
     } catch (error) {
       console.warn(
         '[AiChatService] Error connecting to LLM for WA message:',
-        error.message,
+        (error as Error).message,
       );
       // Fallback response since LLM is unavailable
       return `[METADATA]

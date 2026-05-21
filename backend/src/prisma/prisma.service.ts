@@ -8,10 +8,21 @@ export class PrismaService
 {
   constructor() {
     if (process.env.NODE_ENV === 'production') {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional adapter loading by NODE_ENV; ES6 import would load both adapters at startup
+      /* eslint-disable
+         @typescript-eslint/no-require-imports,
+         @typescript-eslint/no-unsafe-assignment
+         -- Conditional adapter loading by NODE_ENV.
+            Using require() is intentional: static ES6 imports would bundle
+            both pg and better-sqlite3 unconditionally, failing on production
+            (no sqlite3) and bloating the dev bundle (no pg). The any-typed
+            constructors are an inherent consequence of dynamic require() and
+            are safe here because the adapter API contract is validated at
+            runtime by PrismaClient. */
       const { Pool } = require('pg');
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional adapter loading by NODE_ENV
       const { PrismaPg } = require('@prisma/adapter-pg');
+      /* eslint-enable
+         @typescript-eslint/no-require-imports,
+         @typescript-eslint/no-unsafe-assignment */
 
       // P0.2 — pg.Pool tuning. Defaults below target Render Free
       // (512 MB instance). Override via env vars on paid plans; see
@@ -40,6 +51,12 @@ export class PrismaService
           `connect=${connectionTimeoutMillis}ms stmtTimeout=${statementTimeoutMs}ms]`,
       );
 
+      /* eslint-disable
+         @typescript-eslint/no-unsafe-assignment,
+         @typescript-eslint/no-unsafe-call,
+         @typescript-eslint/no-unsafe-member-access
+         -- Pool and PrismaPg are dynamically require()d above; their
+            constructors/methods are any-typed by design. */
       const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         max: poolMax,
@@ -62,15 +79,38 @@ export class PrismaService
       });
 
       const adapter = new PrismaPg(pool);
+      /* eslint-enable
+         @typescript-eslint/no-unsafe-assignment,
+         @typescript-eslint/no-unsafe-call,
+         @typescript-eslint/no-unsafe-member-access */
 
       super({ adapter });
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional adapter loading by NODE_ENV; ES6 import would load both adapters at startup
+      /* eslint-disable
+         @typescript-eslint/no-require-imports,
+         @typescript-eslint/no-unsafe-assignment,
+         @typescript-eslint/no-unsafe-call,
+         @typescript-eslint/no-unsafe-member-access
+         -- Conditional require() for SQLite adapter in dev/test; same
+            rationale as above. */
       const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional require to match adapter context
       const dbPath = require('path').resolve('./dev.db');
+      /* eslint-enable
+         @typescript-eslint/no-require-imports,
+         @typescript-eslint/no-unsafe-assignment,
+         @typescript-eslint/no-unsafe-call,
+         @typescript-eslint/no-unsafe-member-access */
+
       console.log(`[PrismaService] Connecting to SQLite at: ${dbPath}`);
+
+      /* eslint-disable
+         @typescript-eslint/no-unsafe-call,
+         @typescript-eslint/no-unsafe-assignment */
       const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' });
+      /* eslint-enable
+         @typescript-eslint/no-unsafe-call,
+         @typescript-eslint/no-unsafe-assignment */
+
       super({ adapter });
     }
   }

@@ -2,6 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 
+/** Minimal shape of OpenAI chat completion response */
+interface OpenAiChatResponse {
+  data: {
+    choices: { message: { content: string } }[];
+  };
+}
+
+/**
+ * Safely convert an unknown JSON field to a string.
+ * Returns the empty string for objects and arrays to avoid '[object Object]'
+ * output in contract templates.
+ */
+function strField(value: unknown, fallback = ''): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value || fallback;
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value);
+  return fallback;
+}
+
 @Injectable()
 export class LegalAiService {
   constructor(private prisma: PrismaService) {}
@@ -17,10 +37,17 @@ export class LegalAiService {
 
     if (!request) throw new Error('Contract request not found');
 
-    const formData = request.formData as any;
-    const isComercial = formData.tipoContrato
-      ?.toLowerCase()
-      .includes('comercial');
+    // formData is stored as a generic JSON blob — access via Record<string,unknown>
+    const formData = request.formData as Record<string, unknown>;
+    const tipoContrato = typeof formData['tipoContrato'] === 'string'
+      ? formData['tipoContrato']
+      : '';
+    const isComercial = tipoContrato.toLowerCase().includes('comercial');
+
+    // Prospect is a full Prisma model — access governmentId via type assertion
+    const prospectGovernmentId =
+      (request.prospect as { governmentId?: string } | null)?.governmentId ??
+      'VERIFICAR';
 
     const systemPrompt = `
 Eres un Abogado Experto en Derecho Inmobiliario en Colombia, con más de 20 años de experiencia redactando contratos de arrendamiento bajo la Ley 820 de 2003 (para vivienda) y el Código de Comercio (para locales comerciales).
@@ -42,16 +69,16 @@ LEGISLACIÓN APLICABLE:
 
     const userPrompt = `
 Genera el contrato de arrendamiento con los siguientes datos (Formato V3):
-- Dirección Inmueble: ${formData.direccionInmueble}
-- Arrendatario: ${formData.nombreResidente}
-- Cédula/NIT: ${(request.prospect as any).governmentId || 'VERIFICAR'}
-- Valor Canon: ${formData.valorCanonSinAdmon}
-- Valor Administración: ${formData.valorAdmon}
-- Vigencia: ${formData.vigenciaContrato}
-- Fecha Inicio: ${formData.fechaInicioContrato}
-- Tipo de Contrato: ${formData.tipoContrato}
-- Observaciones Especiales: ${formData.observaciones || 'Ninguna'}
-- Aumento Sugerido: ${isComercial ? formData.aumentoCanonIpcPuntos : 'IPC Anual (Ley 820)'}
+- Dirección Inmueble: ${strField(formData['direccionInmueble'])}
+- Arrendatario: ${strField(formData['nombreResidente'])}
+- Cédula/NIT: ${prospectGovernmentId}
+- Valor Canon: ${strField(formData['valorCanonSinAdmon'])}
+- Valor Administración: ${strField(formData['valorAdmon'])}
+- Vigencia: ${strField(formData['vigenciaContrato'])}
+- Fecha Inicio: ${strField(formData['fechaInicioContrato'])}
+- Tipo de Contrato: ${tipoContrato}
+- Observaciones Especiales: ${strField(formData['observaciones'], 'Ninguna')}
+- Aumento Sugerido: ${isComercial ? strField(formData['aumentoCanonIpcPuntos']) : 'IPC Anual (Ley 820)'}
 
 Por favor, devuelve el texto del contrato listo para revisión del Coordinador.
     `;
@@ -74,7 +101,7 @@ Por favor, devuelve el texto del contrato listo para revisión del Coordinador.
             'Content-Type': 'application/json',
           },
         },
-      );
+      ) as unknown as OpenAiChatResponse;
 
       const draft = response.data.choices[0].message.content;
 

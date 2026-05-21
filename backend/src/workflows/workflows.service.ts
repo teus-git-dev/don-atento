@@ -1,5 +1,17 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client';
+
+/** Typed input for a single workflow state during creation. */
+interface WorkflowStateInput {
+  name: string;
+  order?: number;
+  slaHours?: number;
+  assignedRole?: UserRole | null;
+  assignedUserId?: string;
+  aiInstructions?: string;
+  color?: string;
+}
 
 /**
  * Whitelist of User fields safe to expose in workflow responses.
@@ -52,7 +64,7 @@ export class WorkflowsService {
     tenantId: string;
     name: string;
     description?: string;
-    states?: any[];
+    states?: WorkflowStateInput[];
   }) {
     const { states, ...workflowData } = data;
 
@@ -63,9 +75,9 @@ export class WorkflowsService {
           ? {
               create: states.map((state, index) => ({
                 name: state.name,
-                order: state.order || index + 1,
+                order: state.order ?? index + 1,
                 slaHours: state.slaHours ? Number(state.slaHours) : null,
-                assignedRole: state.assignedRole,
+                assignedRole: state.assignedRole ?? undefined,
                 assignedUserId: state.assignedUserId,
                 aiInstructions: state.aiInstructions,
                 color: state.color,
@@ -79,7 +91,9 @@ export class WorkflowsService {
     });
 
     this.logger.log(
-      `Workflow created id=${created.id} tenant=${data.tenantId} states=${created.states.length}`,
+      `Workflow created id=${created.id} tenant=${data.tenantId} states=${
+        (created as unknown as { states?: unknown[] }).states?.length ?? 0
+      }`,
     );
     return created;
   }
@@ -90,7 +104,7 @@ export class WorkflowsService {
       workflowId: string;
       name: string;
       order: number;
-      assignedRole?: any;
+      assignedRole?: UserRole | null;
       assignedUserId?: string;
       aiInstructions?: string;
       slaHours?: number;
@@ -105,8 +119,14 @@ export class WorkflowsService {
 
     return this.prisma.workflowState.create({
       data: {
-        ...data,
+        workflowId: data.workflowId,
+        name: data.name,
+        order: data.order,
         slaHours: data.slaHours ? Number(data.slaHours) : null,
+        assignedRole: data.assignedRole ?? undefined,
+        assignedUserId: data.assignedUserId,
+        aiInstructions: data.aiInstructions,
+        color: data.color,
       },
     });
   }
