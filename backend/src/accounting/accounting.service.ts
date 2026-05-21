@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, EntryStatus } from '@prisma/client';
+import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
+import { TransactionLineDto } from './dto/transaction-line.dto';
 
 /**
  * Tolerancia permitida en el chequeo de doble partida. 0.0001 COP =
@@ -72,7 +74,7 @@ export class AccountingService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createJournalEntry(tenantId: string, data: any, userId: string) {
+  async createJournalEntry(tenantId: string, data: CreateJournalEntryDto, userId: string) {
     // 1. Cross-tenant FK validation. Prisma checks the FK row exists
     // but NOT that the referenced row belongs to the caller's tenant.
     // Without this, a tenant-A caller could insert lines pointing at
@@ -147,7 +149,7 @@ export class AccountingService {
           status: EntryStatus.DRAFT,
           createdByUserId: userId,
           lines: {
-            create: data.lines.map((line: any) => ({
+            create: data.lines.map((line: TransactionLineDto) => ({
               accountId: line.accountId,
               debit: line.debit || 0,
               credit: line.credit || 0,

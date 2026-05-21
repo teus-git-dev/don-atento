@@ -11,6 +11,7 @@ import {
 import { AccountingService } from './accounting.service';
 import { AnnulJournalEntryDto } from './dto/annul-journal-entry.dto';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -43,11 +44,11 @@ export class AccountingController {
   @Roles('ADMIN_TENANT', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear asiento contable (DRAFT)' })
   async createJournalEntry(
-    @Req() req: any,
+    @Req() req: Request,
     @Body() body: CreateJournalEntryDto,
   ) {
-    const tenantId = req['tenantId'];
-    const userId = req.user.id;
+    const tenantId = req.tenantId!;
+    const userId = req.user!.id;
     return this.accountingService.createJournalEntry(tenantId, body, userId);
   }
 
@@ -56,9 +57,9 @@ export class AccountingController {
   @ApiOperation({
     summary: 'Postear asiento (DRAFT → POSTED, atómico, audit trail)',
   })
-  async postJournalEntry(@Req() req: any, @Param('id') id: string) {
-    const tenantId = req['tenantId'];
-    const userId = req.user.id;
+  async postJournalEntry(@Req() req: Request, @Param('id') id: string) {
+    const tenantId = req.tenantId!;
+    const userId = req.user!.id;
     return this.accountingService.postJournalEntry(tenantId, id, userId);
   }
 
@@ -68,12 +69,12 @@ export class AccountingController {
     summary: 'Anular asiento POSTED (registra annulledAt/by/reason)',
   })
   async annulJournalEntry(
-    @Req() req: any,
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() body: AnnulJournalEntryDto,
   ) {
-    const tenantId = req['tenantId'];
-    const userId = req.user.id;
+    const tenantId = req.tenantId!;
+    const userId = req.user!.id;
     return this.accountingService.annulJournalEntry(
       tenantId,
       id,
@@ -89,10 +90,10 @@ export class AccountingController {
   })
   @ApiQuery({ name: 'includeInactive', required: false, example: 'false' })
   async getPuc(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('includeInactive') includeInactive?: string,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
     return this.accountingService.getPuc(tenantId, includeInactive === 'true');
   }
 
@@ -111,7 +112,7 @@ export class AccountingController {
   @ApiQuery({ name: 'accountId', required: false })
   @ApiQuery({ name: 'documentType', required: false })
   async getJournalEntries(
-    @Req() req: any,
+    @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('dateFrom') dateFrom?: string,
@@ -120,7 +121,7 @@ export class AccountingController {
     @Query('accountId') accountId?: string,
     @Query('documentType') documentType?: string,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
     const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
     const requestedLimit = limit ? parseInt(limit, 10) : 20;
     const limitNum = Math.max(1, isNaN(requestedLimit) ? 20 : requestedLimit);
