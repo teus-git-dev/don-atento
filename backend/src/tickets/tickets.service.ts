@@ -8,7 +8,7 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
-import { Ticket, TicketPriority, RelationType, Prisma } from '@prisma/client';
+import { Ticket, TicketPriority, RelationType, UserRole, Prisma } from '@prisma/client';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { EmailService } from '../cognitive/email.service';
 import { CognitiveService } from '../cognitive/cognitive.service';
@@ -71,6 +71,71 @@ const TICKET_LIST_INCLUDE = {
 
 /** Pagination opts accepted by the list endpoints' service methods. */
 type PageOpts = { page: number; limit: number };
+
+// ─── Domain interfaces for notification helpers ───────────────────────────────
+// These model the Prisma-included shapes used inside sendTicketNotifications
+// and notifyRoleAssignment. They are intentionally structural (not relying on
+// Prisma's generated types) so they remain stable across schema iterations.
+
+interface PublicUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  whatsappId: string | null;
+}
+
+interface PropertyRelationWithUser {
+  relationType: string;
+  user: PublicUser | null;
+}
+
+interface TicketProperty {
+  title?: string | null;
+  relations?: PropertyRelationWithUser[];
+}
+
+/** Ticket as returned by createTicket (includes property relations + users). */
+interface TicketForNotification {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string;
+  property?: TicketProperty | null;
+  reportedByUser: PublicUser;
+  assignedTechnician?: PublicUser | null;
+  dueDate?: Date | null;
+}
+
+/** Minimal WorkflowState shape used by notifyRoleAssignment. */
+interface WorkflowStateShape {
+  id: string;
+  name: string;
+  assignedRole?: string | null;
+  assignedUserId?: string | null;
+  order: number;
+}
+
+/** Quote line item for the executive quotation flow. */
+interface QuoteItem {
+  description?: string;
+  price?: number;
+  quantity?: number;
+  unitPrice?: number;
+  [key: string]: unknown;
+}
+
+/** Attachment record stored on a ticket or state-log. Implements an index
+ * signature so it is assignable to Prisma's `InputJsonValue` / `JsonObject`. */
+interface AttachmentRecord {
+  name: string;
+  url: string;
+  type: string;
+  category: string;
+  [key: string]: unknown;
+}
 
 @Injectable()
 export class TicketsService {
@@ -203,13 +268,13 @@ export class TicketsService {
     }
   }
 
-  private async sendTicketNotifications(ticket: any) {
+  private async sendTicketNotifications(ticket: TicketForNotification) {
     const property = ticket.property;
     const tenantRel = property?.relations?.find(
-      (r: any) => r.relationType === RelationType.TENANT,
+      (r: PropertyRelationWithUser) => r.relationType === RelationType.TENANT,
     );
     const ownerRel = property?.relations?.find(
-      (r: any) => r.relationType === RelationType.OWNER,
+      (r: PropertyRelationWithUser) => r.relationType === RelationType.OWNER,
     );
 
     const reporter = ticket.reportedByUser;
@@ -368,14 +433,14 @@ export class TicketsService {
     return ticket;
   }
 
-  private async notifyRoleAssignment(ticket: any, state: any) {
+  private async notifyRoleAssignment(ticket: TicketForNotification & { property?: TicketProperty | null }, state: WorkflowStateShape) {
     if (!state.assignedRole) return;
 
     // Find users with this role in the tenant
     const relevantUsers = await this.prisma.user.findMany({
       where: {
         tenantId: ticket.tenantId,
-        role: state.assignedRole,
+        role: state.assignedRole as UserRole,
       },
       select: USER_PUBLIC_SELECT,
     });
@@ -400,10 +465,13 @@ export class TicketsService {
     closureReason: string,
     signature?: string,
   ): Promise<Ticket> {
-    let ticket: any = await this.prisma.ticket.findUnique({
+    type TicketWithWorkflow = NonNullable<Awaited<ReturnType<typeof this.prisma.ticket.findUnique>>> & {
+      workflow?: { states: WorkflowStateShape[]; id: string } | null;
+    };
+    let ticket: TicketWithWorkflow = await this.prisma.ticket.findUnique({
       where: { id, tenantId },
       include: { workflow: { include: { states: true } } },
-    });
+    }) as TicketWithWorkflow;
 
     if (!ticket) throw new Error('Ticket not found');
 
@@ -423,10 +491,11 @@ export class TicketsService {
             currentStateId: defaultWf.states[0]?.id,
           },
         });
+        // Non-null: we just updated this very row, so findUnique must return it.
         ticket = (await this.prisma.ticket.findUnique({
           where: { id, tenantId },
           include: { workflow: { include: { states: true } } },
-        })) as any;
+        }))! as typeof ticket;
       } else {
         throw new Error(
           'Ticket or Workflow not found and no default available',
@@ -434,14 +503,14 @@ export class TicketsService {
       }
     }
 
-    let resolvedState = ticket.workflow.states.find((s: any) =>
+    let resolvedState = ticket.workflow!.states.find((s: WorkflowStateShape) =>
       s.name.toLowerCase().includes('resuelto'),
     );
 
     // Fallback: If no "Resuelto" named state, pick the one with the highest order
-    if (!resolvedState && ticket.workflow.states.length > 0) {
-      resolvedState = [...ticket.workflow.states].sort(
-        (a, b) => b.order - a.order,
+    if (!resolvedState && ticket.workflow!.states.length > 0) {
+      resolvedState = [...ticket.workflow!.states].sort(
+        (a: WorkflowStateShape, b: WorkflowStateShape) => b.order - a.order,
       )[0];
     }
 
@@ -465,19 +534,24 @@ export class TicketsService {
     tenantId: string,
     userId: string,
     comment: string,
-    attachments?: any[],
+    attachments?: AttachmentRecord[],
   ): Promise<Ticket> {
     let finalComment = comment;
 
     // 0. Fetch Ticket to check state
-    let ticket: any = await this.prisma.ticket.findUnique({
+    type TicketWithStateAndWorkflow = NonNullable<Awaited<ReturnType<typeof this.prisma.ticket.findUnique>>> & {
+      currentState?: { name?: string | null; order?: number | null } | null;
+      workflow?: { states: WorkflowStateShape[]; id: string } | null;
+      reportedByUser?: PublicUser | null;
+    };
+    let ticket: TicketWithStateAndWorkflow = await this.prisma.ticket.findUnique({
       where: { id: ticketId, tenantId },
       include: {
         currentState: true,
         reportedByUser: { select: USER_PUBLIC_SELECT },
         workflow: { include: { states: { orderBy: { order: 'asc' } } } },
       },
-    });
+    }) as TicketWithStateAndWorkflow;
     if (!ticket) throw new Error('Ticket not found');
 
     if (!ticket.workflow) {
@@ -496,21 +570,22 @@ export class TicketsService {
             currentStateId: defaultWf.states[0]?.id,
           },
         });
-        ticket = await this.prisma.ticket.findUnique({
+        // Non-null: we just updated this very row, so findUnique must return it.
+        ticket = (await this.prisma.ticket.findUnique({
           where: { id: ticketId, tenantId },
           include: {
             currentState: true,
             reportedByUser: { select: USER_PUBLIC_SELECT },
             workflow: { include: { states: { orderBy: { order: 'asc' } } } },
           },
-        });
+        }))! as TicketWithStateAndWorkflow;
       }
     }
 
     // SPECIAL AI POLISH: Executive Quotation
     if (ticket.currentState?.name?.toLowerCase().includes('cotización')) {
       try {
-        let quoteItems: any[] = [];
+        let quoteItems: QuoteItem[] = [];
         if (comment.startsWith('[{')) {
           try {
             quoteItems = JSON.parse(comment);
@@ -520,8 +595,8 @@ export class TicketsService {
             );
           }
           finalComment = await this.cognitiveService.generateExecutiveQuotation(
-            ticket.tenantId,
-            quoteItems,
+            ticket.tenantId!,
+            quoteItems as { description: string; price: number; quantity: number }[],
           );
         }
         // Note: previous code path detected an image/PDF attachment and
@@ -537,14 +612,14 @@ export class TicketsService {
         if (quoteItems.length > 0) {
           this.logger.log('Smart Quotation: generating official documents');
           const docxUrl = await this.cognitiveService.generateQuotationDocx(
-            ticket.tenantId,
-            ticket.id,
-            quoteItems,
+            ticket.tenantId!,
+            ticket.id!,
+            quoteItems as { description: string; price: number; quantity: number }[],
           );
           const pdfUrl = await this.cognitiveService.generateQuotationPdf(
-            ticket.tenantId,
-            ticket.id,
-            quoteItems,
+            ticket.tenantId!,
+            ticket.id!,
+            quoteItems as { description: string; price: number; quantity: number }[],
           );
 
           // Add to process attachments
@@ -561,11 +636,12 @@ export class TicketsService {
             category: 'quotation',
           };
 
-          if (!attachments) attachments = [];
-          attachments.push(newDocx, newPdf);
+          attachments = attachments ?? [];
+          (attachments as AttachmentRecord[]).push(newDocx, newPdf);
 
           // Update Ticket historical attachments
-          const currentTicketAttachments = (ticket.attachments as any[]) || [];
+          const currentTicketAttachments =
+            ((ticket.attachments as unknown) as AttachmentRecord[]) || [];
           await this.prisma.ticket.update({
             where: { id: ticketId },
             data: {
@@ -588,7 +664,9 @@ export class TicketsService {
         completedAt: new Date(),
         comment: finalComment,
         completedByUserId: userId,
-        attachments: attachments ? (attachments as any) : undefined,
+        attachments: attachments
+          ? (attachments as unknown as Prisma.InputJsonValue)
+          : undefined,
       },
     });
 
@@ -615,8 +693,12 @@ export class TicketsService {
 
         // Trigger WhatsApp (Simulated/Real)
         if (this.whatsappService) {
-          await (this.whatsappService as any).sendRawMessage(
-            ticket.reportedByUser.phone,
+          // safe: sendRawMessage is not in the WhatsappService public interface
+          // because it bypasses the tenant-scoped channel lookup (for internal
+          // scheduling proposals only). Cast is narrowly scoped here.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          await (this.whatsappService as unknown as Record<string, (phone: string, msg: string) => Promise<void>>).sendRawMessage(
+            ticket.reportedByUser?.phone ?? '',
             message,
           );
         }
@@ -639,7 +721,7 @@ export class TicketsService {
 
     const currentOrder = ticket.currentState?.order ?? 0;
     const nextState = ticket.workflow.states.find(
-      (s: any) => s.order > currentOrder,
+      (s: WorkflowStateShape) => s.order > currentOrder,
     );
 
     if (!nextState) {
