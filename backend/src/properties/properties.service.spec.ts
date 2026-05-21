@@ -137,6 +137,42 @@ describe('PropertiesService', () => {
         data: expect.objectContaining({ title: 'New Title', bathrooms: 2 }),
       });
     });
+
+    it('updates tenant user and updates/creates tenant relation if tenantInfo is provided', async () => {
+      const txMock = {
+        property: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        user: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'tenant-user-1' }),
+          update: jest.fn().mockResolvedValue({ id: 'tenant-user-1' }),
+        },
+        propertyRelation: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'existing-tenant-rel-1' }),
+          update: jest.fn().mockResolvedValue({ id: 'existing-tenant-rel-1' }),
+        },
+      };
+
+      prismaMock.$transaction.mockImplementation(
+        async (cb: (tx: any) => Promise<any>) => cb(txMock),
+      );
+
+      await service.update('prop-1', 'tenant-1', {
+        title: 'Updated Apto',
+        tenantInfo: {
+          firstName: 'New Tenant Name',
+          email: 'newtenant@test.com',
+        },
+      });
+
+      expect(txMock.property.updateMany).toHaveBeenCalled();
+      expect(txMock.user.findFirst).toHaveBeenCalled();
+      expect(txMock.user.update).toHaveBeenCalled();
+      expect(txMock.propertyRelation.findFirst).toHaveBeenCalledWith({
+        where: { propertyId: 'prop-1', relationType: 'TENANT' },
+      });
+      expect(txMock.propertyRelation.update).toHaveBeenCalled();
+    });
   });
 
   describe('updateStatus()', () => {

@@ -398,7 +398,6 @@ export class PropertiesService {
   }
 
   async update(id: string, tenantId: string, data: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- BUG tracked in AUDIT_REPORT.md: tenantInfo destructured but update() never persists it. Frontend edits to arrendatario data are silently dropped.
     const { ownerInfo, tenantInfo, attachments, ...propertyFields } = data;
 
     // All writes wrapped in a single $transaction: property update + (if
@@ -500,6 +499,106 @@ export class PropertiesService {
               userId: ownerUser.id,
               relationType: 'OWNER',
               startDate: new Date(),
+              status: 'ACTIVE',
+            },
+          });
+        }
+      }
+
+      // Handle Tenant/Arrendatario Persistence
+      if (
+        tenantInfo &&
+        (tenantInfo.firstName ||
+          tenantInfo.lastName ||
+          tenantInfo.email ||
+          tenantInfo.governmentId ||
+          tenantInfo.phone)
+      ) {
+        const tenantLookupConditions: any[] = [];
+        if (tenantInfo.email)
+          tenantLookupConditions.push({ email: tenantInfo.email });
+        if (tenantInfo.governmentId)
+          tenantLookupConditions.push({
+            governmentId: tenantInfo.governmentId,
+          });
+        if (tenantInfo.phone)
+          tenantLookupConditions.push({ phone: tenantInfo.phone });
+
+        let tenantUser =
+          tenantLookupConditions.length > 0
+            ? await tx.user.findFirst({
+                where: {
+                  tenantId: tenantId,
+                  OR: tenantLookupConditions,
+                },
+              })
+            : null;
+
+        if (!tenantUser) {
+          const passwordHash = await bcrypt.hash(generateTempPassword(), 10);
+
+          tenantUser = await tx.user.create({
+            data: {
+              tenantId: tenantId,
+              email:
+                tenantInfo.email || `tenant_${randomEmailSuffix()}@teus.com`,
+              passwordHash,
+              mustChangePassword: true,
+              firstName: tenantInfo.firstName || 'Arrendatario',
+              lastName: tenantInfo.lastName || 'Sin Apellido',
+              governmentId: tenantInfo.governmentId || null,
+              role: 'TENANT_USER',
+              phone: tenantInfo.phone || null,
+              personType: tenantInfo.personType || 'NATURAL',
+            },
+          });
+        } else {
+          await tx.user.update({
+            where: { id: tenantUser.id },
+            data: {
+              firstName: tenantInfo.firstName || tenantUser.firstName,
+              lastName: tenantInfo.lastName || tenantUser.lastName,
+              phone: tenantInfo.phone || tenantUser.phone,
+              governmentId: tenantInfo.governmentId || tenantUser.governmentId,
+              personType: tenantInfo.personType || tenantUser.personType,
+            },
+          });
+        }
+
+        const existingRel = await tx.propertyRelation.findFirst({
+          where: { propertyId: id, relationType: 'TENANT' },
+        });
+
+        const safeDate = (d: any) => {
+          if (!d) return null;
+          const date = new Date(d);
+          return isNaN(date.getTime()) ? null : date;
+        };
+
+        if (existingRel) {
+          await tx.propertyRelation.update({
+            where: { id: existingRel.id },
+            data: {
+              userId: tenantUser.id,
+              startDate:
+                safeDate(tenantInfo.contractStart) || existingRel.startDate,
+              endDate:
+                safeDate(tenantInfo.contractEnd) !== undefined
+                  ? safeDate(tenantInfo.contractEnd)
+                  : existingRel.endDate,
+              contractType: tenantInfo.contractType || existingRel.contractType,
+            },
+          });
+        } else {
+          await tx.propertyRelation.create({
+            data: {
+              propertyId: id,
+              userId: tenantUser.id,
+              relationType: 'TENANT',
+              startDate: safeDate(tenantInfo.contractStart) || new Date(),
+              endDate: safeDate(tenantInfo.contractEnd),
+              contractNumber: propertyFields.propertyCode || null,
+              contractType: tenantInfo.contractType || 'RESIDENTIAL',
               status: 'ACTIVE',
             },
           });
