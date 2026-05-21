@@ -45,6 +45,20 @@ const ALLOWED_AI_ACTIONS = new Set([
   'OFFLINE_FALLBACK',
 ]);
 
+/**
+ * Typed payload stored in Redis for the AWAITING_TICKET_DISAMBIGUATION step.
+ * Stored as part of ConversationState.data (Record<string,unknown>) and cast
+ * back at the consumption point to recover type safety.
+ */
+interface DisambiguationStateData {
+  activeTickets: { id: string; title: string; shortId?: string }[];
+  originalText: string;
+  finalCleanResponse: string;
+  propertyId: string;
+  propertyName: string;
+  dbSentiment: import('@prisma/client').SentimentAnalysis;
+}
+
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -107,13 +121,13 @@ export class WhatsappService {
   /** Get conversation state from Redis (returns null on miss or Redis error) */
   private async getState(
     key: string,
-  ): Promise<{ step: string; timestamp: number; data?: any } | null> {
+  ): Promise<{ step: string; timestamp: number; data?: Record<string, unknown> } | null> {
     try {
       const raw = await this.withRedisTimeout(
         this.redis.get(`wa:state:${key}`),
         null,
       );
-      return raw ? JSON.parse(raw) : null;
+      return raw ? (JSON.parse(raw) as { step: string; timestamp: number; data?: Record<string, unknown> }) : null;
     } catch {
       return null;
     }
@@ -122,7 +136,7 @@ export class WhatsappService {
   /** Set conversation state in Redis with automatic TTL */
   private async setState(
     key: string,
-    value: { step: string; timestamp: number; data?: any },
+    value: { step: string; timestamp: number; data?: Record<string, unknown> },
   ): Promise<void> {
     try {
       await this.withRedisTimeout(
@@ -135,7 +149,7 @@ export class WhatsappService {
         null,
       );
     } catch (err) {
-      this.logger.warn(`[Redis] setState failed for ${key}: ${err.message}`);
+      this.logger.warn(`[Redis] setState failed for ${key}: ${(err as Error).message}`);
     }
   }
 
@@ -356,7 +370,7 @@ export class WhatsappService {
         // authoritative tenant for this webhook invocation. Re-reading
         // from state.data would re-introduce the cross-tenant any-typing
         // and bypass the fail-closed guard.
-      } = state.data;
+      } = state.data as unknown as DisambiguationStateData;
 
       await this.deleteState(from);
 
@@ -394,9 +408,7 @@ export class WhatsappService {
             priority: 'MEDIUM',
             attachments: undefined,
           });
-          const short =
-            (newTicket as any).shortId ||
-            newTicket.id.split('-')[0].toUpperCase();
+          const short = newTicket.id.split('-')[0].toUpperCase();
           const response =
             finalCleanResponse +
             `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
@@ -465,7 +477,7 @@ export class WhatsappService {
         text.length > MAX_LLM_INPUT_CHARS
           ? text.substring(0, MAX_LLM_INPUT_CHARS) + '…[truncated]'
           : text;
-      aiResponse = await this.cognitiveService.processWhatsappWithAi(
+      aiResponse = String(await this.cognitiveService.processWhatsappWithAi(
         resolvedTenantId,
         safeText,
         {
@@ -473,7 +485,7 @@ export class WhatsappService {
           address: propertyName,
           systemAction: '',
         },
-      );
+      ));
 
       const match = aiResponse.match(/\[METADATA\]([\s\S]*?)\[\/METADATA\]/);
       if (match) {
@@ -550,7 +562,7 @@ export class WhatsappService {
         resolvedTenantId,
       );
       if (latestTicket && !latestTicket.resolvedAt) {
-        finalResponse = `He recibido el archivo/evidencia y lo he anexado a tu reporte actual (Ticket #${(latestTicket as any).shortId || latestTicket.id.split('-')[0].toUpperCase()}).`;
+        finalResponse = `He recibido el archivo/evidencia y lo he anexado a tu reporte actual (Ticket #${latestTicket.id.split('-')[0].toUpperCase()}).`;
       } else {
         finalResponse = `He recibido la evidencia, pero no encuentro un ticket activo. ¿Necesitas crear un nuevo reporte de mantenimiento en *${propertyName}*?`;
       }
@@ -575,8 +587,7 @@ export class WhatsappService {
           // INTERCEPT: Ask for disambiguation
           let menuMsg = `¡Hola, ${user.firstName}! Veo que actualmente tienes los siguientes reportes activos en ${propertyName}:\n\n`;
           activeTickets.forEach((t, i) => {
-            const short =
-              (t as any).shortId || t.id.split('-')[0].toUpperCase();
+            const short = t.id.split('-')[0].toUpperCase();
             menuMsg += `*${i + 1}.* ${short} - ${t.title}\n`;
           });
           menuMsg += `\n*0.* 🆕 Es un problema totalmente nuevo.\n\n¿Este mensaje está relacionado con alguno de esos reportes? *Por favor, responde únicamente con el número de la opción.*`;
@@ -615,9 +626,7 @@ export class WhatsappService {
             priority: 'MEDIUM',
             attachments: undefined,
           });
-          const short =
-            (newTicket as any).shortId ||
-            newTicket.id.split('-')[0].toUpperCase();
+          const short = newTicket.id.split('-')[0].toUpperCase();
           finalResponse =
             finalCleanResponse +
             `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
@@ -635,7 +644,7 @@ export class WhatsappService {
         );
         if (latestTicket) {
           const status =
-            (latestTicket as any).currentState?.name ||
+            (latestTicket as unknown as { currentState?: { name?: string } }).currentState?.name ??
             'Pendiente de asignación';
           finalResponse = `Hola ${user.firstName}. Sobre tu reporte (Ticket #${latestTicket.id.split('-')[0].toUpperCase()}), te informo que actualmente se encuentra en estado: *${status}*. ¿Te puedo ayudar con algo más?`;
         } else {
