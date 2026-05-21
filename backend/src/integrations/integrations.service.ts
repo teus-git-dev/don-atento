@@ -1,6 +1,45 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PropertyType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PropertiesService } from '../properties/properties.service';
+
+// ─── Finca Raiz Webhook payload shapes ───────────────────────────────────────
+// These interfaces reflect the fields that the code accesses from the external
+// webhook. The external API may send additional unknown keys — that's fine, as
+// we only extract what we need and leave the rest untouched.
+
+interface FincaRaizPropertyData {
+  title?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  area?: number;
+  rooms?: number;
+  bathrooms?: number;
+  type?: string;
+  externalId?: string;
+  price?: number;
+}
+
+interface FincaRaizLeadData {
+  name?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  listingId?: string;
+}
+
+interface FincaRaizWebhookPayload {
+  type?: string;
+  propertyData?: FincaRaizPropertyData;
+  lead?: FincaRaizLeadData;
+  // Lead fields may appear at the top level when there's no `lead` wrapper
+  name?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  listingId?: string;
+}
 
 @Injectable()
 export class IntegrationsService {
@@ -11,7 +50,7 @@ export class IntegrationsService {
     private propertiesService: PropertiesService,
   ) {}
 
-  async handleFincaRaizWebhook(tenantId: string, data: any) {
+  async handleFincaRaizWebhook(tenantId: string, data: FincaRaizWebhookPayload) {
     this.logger.log(`Received Finca Raiz Webhook for tenant: ${tenantId}`);
 
     // 1. Determine if it's a Property or a Prospect
@@ -23,14 +62,14 @@ export class IntegrationsService {
     }
   }
 
-  private async handleNewListing(tenantId: string, data: any) {
-    const propertyData = data.propertyData;
+  private async handleNewListing(tenantId: string, data: FincaRaizWebhookPayload) {
+    const propertyData = data.propertyData ?? {};
 
     // Map Finca Raiz fields to Don Atento Property
     const newProperty = await this.propertiesService.create({
       tenantId,
-      title: propertyData.title || `Finca Raiz: ${propertyData.address}`,
-      propertyType: this.mapPropertyType(propertyData.type),
+      title: propertyData.title ?? `Finca Raiz: ${propertyData.address ?? ''}`,
+      propertyType: this.mapPropertyType(propertyData.type ?? ''),
       address: propertyData.address,
       city: propertyData.city,
       department: propertyData.state,
@@ -39,25 +78,26 @@ export class IntegrationsService {
       rooms: propertyData.rooms,
       bathrooms: propertyData.bathrooms,
       status: 'AVAILABLE',
-      propertyCode: propertyData.externalId || `FR-${Date.now()}`,
+      propertyCode: propertyData.externalId ?? `FR-${Date.now()}`,
       rentAmount: propertyData.price,
       // Integration specific metadata
-      visionAnalysis: `Imported via Finca Raiz Webhook on ${new Date().toISOString()}` as string,
+      visionAnalysis: `Imported via Finca Raiz Webhook on ${new Date().toISOString()}`,
     });
 
     this.logger.log(`Property auto-created from Finca Raiz: ${newProperty.id}`);
     return { status: 'SUCCESS', type: 'PROPERTY', id: newProperty.id };
   }
 
-  private async handleNewLead(tenantId: string, data: any) {
-    const leadData = data.lead || data;
+  private async handleNewLead(tenantId: string, data: FincaRaizWebhookPayload) {
+    // Lead fields may appear under `data.lead` or directly on `data`
+    const leadData: FincaRaizLeadData = data.lead ?? data;
 
     // Map to Prospect
     const prospect = await this.prisma.prospect.create({
       data: {
         tenantId,
-        firstName: leadData.name || 'Finca Raiz Prospect',
-        lastName: leadData.lastName || '',
+        firstName: leadData.name ?? 'Finca Raiz Prospect',
+        lastName: leadData.lastName ?? '',
         email: leadData.email,
         phone: leadData.phone,
         source: 'WEB',
@@ -71,7 +111,7 @@ export class IntegrationsService {
             // parent's tenantId.
             tenantId,
             channel: 'SYSTEM_AI',
-            message: `Lead automatically created from Finca Raiz webhook. Interest in listing: ${leadData.listingId || 'N/A'}`,
+            message: `Lead automatically created from Finca Raiz webhook. Interest in listing: ${leadData.listingId ?? 'N/A'}`,
           },
         },
       },
@@ -81,14 +121,14 @@ export class IntegrationsService {
     return { status: 'SUCCESS', type: 'PROSPECT', id: prospect.id };
   }
 
-  private mapPropertyType(frType: string): import('@prisma/client').PropertyType {
-    const mapping: Record<string, import('@prisma/client').PropertyType> = {
-      Apartamento: 'APARTMENT',
-      Casa: 'HOUSE',
-      Oficina: 'OFFICE',
-      Bodega: 'WAREHOUSE',
-      Local: 'OFFICE',
+  private mapPropertyType(frType: string): PropertyType {
+    const mapping: Record<string, PropertyType> = {
+      Apartamento: PropertyType.APARTMENT,
+      Casa: PropertyType.HOUSE,
+      Oficina: PropertyType.OFFICE,
+      Bodega: PropertyType.WAREHOUSE,
+      Local: PropertyType.OFFICE,
     };
-    return mapping[frType] ?? 'APARTMENT';
+    return mapping[frType] ?? PropertyType.APARTMENT;
   }
 }
