@@ -69,7 +69,7 @@ export class TicketsController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
   async create(@Req() req: Request, @Body() createTicketDto: CreateTicketDto) {
-    createTicketDto.tenantId = req['tenantId'];
+    createTicketDto.tenantId = req.tenantId!;
     return this.ticketsService.createTicket(createTicketDto);
   }
 
@@ -84,7 +84,7 @@ export class TicketsController {
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
     const wantsPaginated = pageStr !== undefined || limitStr !== undefined;
 
     if (!wantsPaginated) {
@@ -115,7 +115,7 @@ export class TicketsController {
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
   ) {
-    const tenantId = req['tenantId'];
+    const tenantId = req.tenantId!;
     const wantsPaginated = pageStr !== undefined || limitStr !== undefined;
 
     if (!wantsPaginated) {
@@ -134,7 +134,7 @@ export class TicketsController {
   @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver detalle de un ticket' })
   async findOne(@Req() req: Request, @Param('id') id: string) {
-    return this.ticketsService.findOne(id, req['tenantId']);
+    return this.ticketsService.findOne(id, req.tenantId!);
   }
 
   @Patch(':id/status')
@@ -147,8 +147,8 @@ export class TicketsController {
   ) {
     return this.ticketsService.transitionState(
       id,
-      req['tenantId'],
-      req.user.id,
+      req.tenantId!,
+      req.user!.id,
       data.newStateId,
     );
   }
@@ -163,7 +163,7 @@ export class TicketsController {
   ) {
     return this.ticketsService.resolveTicket(
       id,
-      req['tenantId'],
+      req.tenantId!,
       data.closureReason,
       data.signature,
     );
@@ -179,8 +179,8 @@ export class TicketsController {
   ) {
     return this.ticketsService.completeStateTask(
       id,
-      req['tenantId'],
-      req.user.id,
+      req.tenantId!,
+      req.user!.id,
       data.comment,
       data.attachments,
     );
