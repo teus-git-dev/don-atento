@@ -52,6 +52,10 @@ export default tseslint.config(
       // AUDIT_REPORT.md. eslint-disable-next-line comments were added
       // inline in 4b474bd; this rule-level override removes the need.
       '@typescript-eslint/require-await': 'off',
+      // Prisma-generated types resolve as `any` in some union contexts
+      // (e.g. Promise<Ticket | null>) triggering false positives.
+      // Tracked for cleanup once Prisma client types are fully resolved.
+      '@typescript-eslint/no-redundant-type-constituents': 'off',
       // Allow `_`-prefixed unused vars and args (codebase convention).
       '@typescript-eslint/no-unused-vars': [
         'error',
