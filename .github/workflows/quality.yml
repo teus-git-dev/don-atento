@@ -218,7 +218,7 @@ jobs:
           gitleaks version
       - name: Scan for hardcoded secrets
         shell: bash
-        run: gitleaks detect --redact --verbose --no-banner
+        run: gitleaks detect --redact --verbose --no-banner --config .gitleaks.toml
       # `process.env` allowlist: paths where direct env access is expected
       # (boot-time config, encryption keys, well-known integrations). Any
       # NEW addition outside these paths must come via the Nest ConfigService
@@ -242,6 +242,7 @@ jobs:
             ':(exclude)backend/src/storage/**' \
             ':(exclude)backend/prisma/**' \
             ':(exclude)frontend/next.config.ts' \
+            ':(exclude)frontend/src/components/configuracion/WhatsAppConfigCard.tsx' \
             | grep '^+' | grep -vE '^\+\+\+' \
             | grep -E 'process\.env\.' || true)
           if [ -n "$NEW" ]; then

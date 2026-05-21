@@ -74,7 +74,7 @@ export class WorkflowsController {
   @ApiOperation({
     summary: 'Agregar un estado a un workflow existente del tenant',
   })
-  // Fail-fast: any leftover NULL tenantId means we'd break Section B
+  // Guard: tenantId must be set by TenantGuard before reaching this handler
   async createState(@Req() req: Request, @Body() data: CreateWorkflowStateDto) {
     return this.workflowsService.createState(req.tenantId!, data);
   }
