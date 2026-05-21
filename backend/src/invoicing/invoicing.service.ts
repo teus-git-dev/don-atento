@@ -13,6 +13,19 @@ import { CreateResolutionDto } from './dto/create-resolution.dto';
 import { CreateBillingItemDto } from './dto/create-billing-item.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { encryptDianSecret } from './dian-encryption.util';
+import {
+  DianInvoiceData,
+  DianInvoiceLine,
+} from './dian-xml.service';
+
+/** Shape of an InvoiceLine row to create inside the $transaction. */
+interface InvoiceLineCreateData {
+  billingItemId: string;
+  quantity: { toString(): string };
+  unitPrice: { toString(): string };
+  taxAmount: { toString(): string };
+  total: { toString(): string };
+}
 
 /** Fields stripped from any API response — these contain ciphertext credentials. */
 const RESOLUTION_SECRET_FIELDS = ['softwarePin', 'technicalKey'] as const;
@@ -209,8 +222,8 @@ export class InvoicingService {
     let invoiceSubtotal = new Prisma.Decimal(0);
     let invoiceTaxAmount = new Prisma.Decimal(0);
 
-    const linesToCreate: any[] = [];
-    const populatedLinesForXml: any[] = [];
+    const linesToCreate: InvoiceLineCreateData[] = [];
+    const populatedLinesForXml: DianInvoiceLine[] = [];
 
     for (const line of data.lines) {
       const billingItem = await this.prisma.billingItem.findUnique({
@@ -268,13 +281,18 @@ export class InvoicingService {
           lines: {
             create: linesToCreate,
           },
-        } as any,
+        } as Prisma.InvoiceUncheckedCreateInput,
       });
       return invoice;
     });
 
     // 5. Generate the XML UBL 2.1 Preview (buildDianXml is sync — pure
     // XML construction. No await needed.)
+    if (!tenant) {
+      throw new Error(
+        `Tenant ${tenantId} not found — cannot build DIAN XML without supplier data.`,
+      );
+    }
     const rawXml = this.dianXml.buildDianXml(
       result,
       resolution,
@@ -344,7 +362,7 @@ export class InvoicingService {
       where: { id: result.id },
       data: {
         xmlResponse: signedXml,
-        dianStatus: finalStatus as any,
+        dianStatus: finalStatus,
         dianZipKey: zipKey,
       },
     });
