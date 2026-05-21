@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { EvidenceType } from '@prisma/client';
-import { IsEnum, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsEnum, IsUrl, MaxLength } from 'class-validator';
 
 /**
  * Nested evidence shape inside `CreateInventoryItemDto.evidences` and

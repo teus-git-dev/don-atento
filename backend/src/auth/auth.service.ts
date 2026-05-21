@@ -96,14 +96,6 @@ export class AuthService {
     };
   }
 
-  async validateToken(token: string) {
-    try {
-      return this.jwtService.verify(token);
-    } catch {
-      throw new UnauthorizedException('Token inválido o expirado.');
-    }
-  }
-
   /**
    * Logout invalidates EVERY active refresh token for the user identified
    * by the access token. "Logout from this device" semantics is impossible

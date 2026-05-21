@@ -144,7 +144,7 @@ export class OnboardingService {
           name: input.companyName,
           nit: input.nit,
           status: 'ACTIVE',
-          subscriptionPlanId: planId!,
+          subscriptionPlanId: planId,
         },
       });
 

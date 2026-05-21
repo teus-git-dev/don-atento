@@ -45,7 +45,9 @@ export class WorkflowStateDto {
   @IsEnum(UserRole)
   assignedRole?: UserRole;
 
-  @ApiPropertyOptional({ description: 'Specific user ID assigned to the state' })
+  @ApiPropertyOptional({
+    description: 'Specific user ID assigned to the state',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(64)

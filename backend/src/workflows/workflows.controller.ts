@@ -73,10 +73,7 @@ export class WorkflowsController {
   @ApiOperation({
     summary: 'Agregar un estado a un workflow existente del tenant',
   })
-  async createState(
-    @Req() req: any,
-    @Body() data: CreateWorkflowStateDto,
-  ) {
+  async createState(@Req() req: any, @Body() data: CreateWorkflowStateDto) {
     return this.workflowsService.createState(req['tenantId'], data);
   }
 

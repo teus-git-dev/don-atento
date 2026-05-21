@@ -3,12 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { TicketsService } from '../tickets/tickets.service';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  TicketPriority,
-  InteractionChannel,
-  SentimentAnalysis,
-  ProspectSource,
-} from '@prisma/client';
+import { InteractionChannel, SentimentAnalysis } from '@prisma/client';
 import { CognitiveService } from '../cognitive/cognitive.service';
 import { CrmService } from '../crm/crm.service';
 import { BaileysManager } from './baileys.manager';
@@ -348,9 +343,13 @@ export class WhatsappService {
         activeTickets,
         originalText,
         finalCleanResponse,
-        propertyName,
         propertyId,
         dbSentiment,
+        // propertyName is intentionally NOT destructured — the cached
+        // state.data had it from the disambiguation menu, but we don't
+        // need it to create the ticket (only propertyId). The fresh
+        // `propertyName` defined later in this function is the
+        // authoritative one for echoing back to the user.
         // resolvedTenantId is intentionally NOT destructured from
         // state.data — the outer-scope `resolvedTenantId` was validated
         // non-null at the top of processIncomingMessage and is the

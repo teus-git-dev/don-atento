@@ -14,6 +14,7 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- cookie-parser is CJS-only; require() is the documented Nest pattern
   const cookieParser = require('cookie-parser');
   app.use(cookieParser());
 

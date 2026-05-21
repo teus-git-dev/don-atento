@@ -19,10 +19,7 @@ describe('AiChatController', () => {
     controller = module.get<AiChatController>(AiChatController);
   });
 
-  const fakeReq = (
-    tenantId = 't1',
-    userId = 'u1',
-  ): Request =>
+  const fakeReq = (tenantId = 't1', userId = 'u1'): Request =>
     ({ tenantId, user: { id: userId } }) as unknown as Request;
 
   it('passes tenantId from JWT (not from body) to the service', async () => {
@@ -72,12 +69,7 @@ describe('AiChatController', () => {
 
     await controller.chat(fakeReq(), dto);
 
-    expect(mockService.processChat).toHaveBeenCalledWith(
-      't1',
-      'u1',
-      'hi',
-      [],
-    );
+    expect(mockService.processChat).toHaveBeenCalledWith('t1', 'u1', 'hi', []);
   });
 
   it('forwards history when provided', async () => {

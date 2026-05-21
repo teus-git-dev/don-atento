@@ -219,7 +219,8 @@ export class RadarService {
       // Reject scripts that smuggle URLs or long digit runs (phone
       // numbers) into the agent's outgoing message — a prompt-injection
       // attacker's primary payload.
-      if (/https?:\/\//i.test(aiScript) || /\b\d{7,}\b/.test(aiScript)) continue;
+      if (/https?:\/\//i.test(aiScript) || /\b\d{7,}\b/.test(aiScript))
+        continue;
 
       valid.push({ id, captureScore, aiScript });
     }

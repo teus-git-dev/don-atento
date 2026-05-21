@@ -72,7 +72,6 @@ const TICKET_LIST_INCLUDE = {
 /** Pagination opts accepted by the list endpoints' service methods. */
 type PageOpts = { page: number; limit: number };
 
-
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
@@ -214,6 +213,7 @@ export class TicketsService {
     );
 
     const reporter = ticket.reportedByUser;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- gap tracked in AUDIT_REPORT.md: sendTicketNotifications does not notify the assigned technician. Investigate if missing feature.
     const technician = ticket.assignedTechnician;
 
     // Omnichannel logic for WhatsApp (Short Response)
@@ -781,9 +781,7 @@ export class TicketsService {
       }
     }
     if (allowedHosts.size === 0 || !allowedHosts.has(parsed.host)) {
-      throw new BadRequestException(
-        'Dominio de attachmentUrl no permitido.',
-      );
+      throw new BadRequestException('Dominio de attachmentUrl no permitido.');
     }
   }
 

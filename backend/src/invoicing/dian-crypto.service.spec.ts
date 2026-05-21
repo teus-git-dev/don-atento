@@ -82,12 +82,14 @@ describe('DianCryptoService', () => {
   });
 
   it('throws a sanitized error when the p12 password is wrong', () => {
-    expect(() => service.signXml(sampleInvoice, p12Buffer, 'wrong-pass'))
-      .toThrow(/XADES-EPES signing failed/);
+    expect(() =>
+      service.signXml(sampleInvoice, p12Buffer, 'wrong-pass'),
+    ).toThrow(/XADES-EPES signing failed/);
   });
 
   it('throws when xml does not contain an Invoice element to sign', () => {
-    expect(() => service.signXml('<NotAnInvoice/>', p12Buffer, PASSWORD))
-      .toThrow(/XADES-EPES signing failed/);
+    expect(() =>
+      service.signXml('<NotAnInvoice/>', p12Buffer, PASSWORD),
+    ).toThrow(/XADES-EPES signing failed/);
   });
 });

@@ -7,7 +7,7 @@ export class DianXmlService {
    * Construye el esqueleto UBL 2.1 (Invoice) exigido por el Anexo Técnico 1.8 de la DIAN.
    * Este es un Draft sin XADES (Firma Digital .p12) que se usará para visualizar la estructura.
    */
-  async buildDianXml(
+  buildDianXml(
     invoice: any,
     resolution: any,
     tenant: any,

@@ -19,8 +19,6 @@ import {
 @Injectable()
 export class FeatureDisabledGuard implements CanActivate {
   canActivate(_context: ExecutionContext): boolean {
-    throw new ForbiddenException(
-      'Feature en desarrollo — disponible en v2',
-    );
+    throw new ForbiddenException('Feature en desarrollo — disponible en v2');
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
@@ -79,8 +79,12 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
 
     // --- Event Handlers ---
 
-    // Credenciales actualizadas → guardar
-    this.sock.ev.on('creds.update', saveCreds);
+    // Credenciales actualizadas → guardar. Baileys' .on() callback expects
+    // void; saveCreds returns a Promise — wrap in `void` to fire-and-forget.
+    // Errors in saveCreds are non-fatal (will retry on next creds.update).
+    this.sock.ev.on('creds.update', () => {
+      void saveCreds();
+    });
 
     // Estado de conexión
     this.sock.ev.on('connection.update', (update) => {
@@ -107,7 +111,9 @@ export class BaileysAdapter extends EventEmitter implements WhatsappProvider {
           this.logger.log(
             `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT})...`,
           );
-          setTimeout(() => this.connect(), delay);
+          setTimeout(() => {
+            void this.connect();
+          }, delay);
         } else {
           this.status = 'disconnected';
           this.emit('disconnected', { reason: statusCode });

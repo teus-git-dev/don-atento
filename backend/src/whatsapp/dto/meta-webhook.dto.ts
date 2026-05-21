@@ -9,9 +9,17 @@
  * HMAC signature BEFORE this shape is trusted; once verified, missing
  * fields just short-circuit (return 'EVENT_RECEIVED') rather than 500.
  */
+/**
+ * Known Meta WhatsApp message types we explicitly handle. Meta evolves
+ * its API and may add new types — the wire-level `type` field is widened
+ * to `string` at MetaWebhookMessage.type so the controller can safely
+ * branch on the known values while not rejecting an unknown one.
+ */
+export type KnownMetaMessageType = 'text' | 'image' | 'video' | 'document';
+
 export interface MetaWebhookMessage {
   from?: string;
-  type?: 'text' | 'image' | 'video' | 'document' | string;
+  type?: string;
   text?: { body?: string };
   image?: { id?: string };
   video?: { id?: string };

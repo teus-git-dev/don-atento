@@ -161,41 +161,50 @@ export class BaileysManager implements OnModuleInit, OnModuleDestroy {
       this.antiBan,
     );
 
-    // Escuchar eventos
+    // Escuchar eventos. adapter.on() expects void return; the handlers
+    // below are intentionally async — fire-and-forget via inner IIFE +
+    // try/catch. Returning the Promise directly would trigger
+    // no-misused-promises; we want to handle errors locally and not
+    // propagate to the EventEmitter (which would cause unhandled-
+    // rejection crashes).
     adapter.on(
       'message',
-      async (data: { from: string; text: string; mediaType?: string }) => {
-        if (this.onMessageCallback) {
-          try {
-            await this.onMessageCallback(
-              tenantId,
-              data.from,
-              data.text,
-              data.mediaType || undefined,
-            );
-          } catch (err) {
-            this.logger.error(
-              `Error processing incoming message for tenant ${tenantId}:`,
-              err,
-            );
+      (data: { from: string; text: string; mediaType?: string }) => {
+        void (async () => {
+          if (this.onMessageCallback) {
+            try {
+              await this.onMessageCallback(
+                tenantId,
+                data.from,
+                data.text,
+                data.mediaType || undefined,
+              );
+            } catch (err) {
+              this.logger.error(
+                `Error processing incoming message for tenant ${tenantId}:`,
+                err,
+              );
+            }
           }
-        }
+        })();
       },
     );
 
-    adapter.on('connected', async () => {
-      this.logger.log(`✅ Tenant ${tenantId} connected via Baileys`);
-      // Actualizar estado en DB
-      try {
-        await this.prisma.tenant.update({
-          where: { id: tenantId },
-          data: { whatsappProvider: 'baileys' },
-        });
-      } catch (e) {
-        this.logger.warn(
-          `Could not update tenant provider field: ${e.message}`,
-        );
-      }
+    adapter.on('connected', () => {
+      void (async () => {
+        this.logger.log(`✅ Tenant ${tenantId} connected via Baileys`);
+        // Actualizar estado en DB
+        try {
+          await this.prisma.tenant.update({
+            where: { id: tenantId },
+            data: { whatsappProvider: 'baileys' },
+          });
+        } catch (e) {
+          this.logger.warn(
+            `Could not update tenant provider field: ${(e as Error).message}`,
+          );
+        }
+      })();
     });
 
     adapter.on('disconnected', (data: { reason: number }) => {

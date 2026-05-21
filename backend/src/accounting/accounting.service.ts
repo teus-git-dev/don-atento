@@ -112,7 +112,8 @@ export class AccountingService {
     let totalCredit = new Prisma.Decimal(0);
 
     for (const line of data.lines) {
-      if (line.debit) totalDebit = totalDebit.plus(new Prisma.Decimal(line.debit));
+      if (line.debit)
+        totalDebit = totalDebit.plus(new Prisma.Decimal(line.debit));
       if (line.credit) {
         totalCredit = totalCredit.plus(new Prisma.Decimal(line.credit));
       }
@@ -178,11 +179,7 @@ export class AccountingService {
    *  - Wraps the whole sequence in $transaction so a balance re-check
    *    failure doesn't leave a half-applied state.
    */
-  async postJournalEntry(
-    tenantId: string,
-    id: string,
-    postedByUserId: string,
-  ) {
+  async postJournalEntry(tenantId: string, id: string, postedByUserId: string) {
     return this.prisma.$transaction(async (tx) => {
       const entry = await tx.journalEntry.findFirst({
         where: { id, tenantId },
@@ -347,10 +344,7 @@ export class AccountingService {
         if (!isNaN(to.getTime())) where.date.lte = to;
       }
     }
-    if (
-      opts.status &&
-      ['DRAFT', 'POSTED', 'ANNULLED'].includes(opts.status)
-    ) {
+    if (opts.status && ['DRAFT', 'POSTED', 'ANNULLED'].includes(opts.status)) {
       where.status = opts.status as EntryStatus;
     }
     if (opts.documentType) where.documentType = opts.documentType;

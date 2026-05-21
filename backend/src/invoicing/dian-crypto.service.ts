@@ -33,8 +33,7 @@ export class DianCryptoService {
       const sig = new SignedXml({
         privateKey: privateKeyPem,
         publicCert: certPem,
-        signatureAlgorithm:
-          'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+        signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
         canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
         getKeyInfoContent: () =>
           `<X509Data><X509Certificate>${certX509}</X509Certificate></X509Data>`,
@@ -100,9 +99,7 @@ export class DianCryptoService {
     }
 
     if (!privateKeyPem || !certPem) {
-      throw new Error(
-        'Could not extract private key or certificate from .p12',
-      );
+      throw new Error('Could not extract private key or certificate from .p12');
     }
     return { privateKeyPem, certPem };
   }

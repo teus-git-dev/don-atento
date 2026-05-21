@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateInventoryTemplateDto } from './dto/create-inventory-template.dto';
 
 @Injectable()
 export class InventoryTemplatesService {

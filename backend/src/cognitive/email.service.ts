@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class EmailService {
+  // eslint-disable-next-line @typescript-eslint/require-await -- async signature preserved for future SMTP/SES implementation
   async sendEmail(
     to: string,
     subject: string,

@@ -429,7 +429,7 @@ describe('TicketsService', () => {
         satisfactionComment: 'Excelente servicio',
       });
 
-      const result = await service.updateSatisfaction(
+      await service.updateSatisfaction(
         'ticket-1',
         'tenant-1',
         5,
@@ -508,7 +508,10 @@ describe('TicketsService', () => {
 
   describe('findAllByTenant() — paginated shape (P0.3)', () => {
     it('returns paginated shape when opts is provided', async () => {
-      prismaMock.ticket.findMany.mockResolvedValue([makeTicket(), makeTicket()]);
+      prismaMock.ticket.findMany.mockResolvedValue([
+        makeTicket(),
+        makeTicket(),
+      ]);
       prismaMock.ticket.count.mockResolvedValue(42);
 
       const result = await service.findAllByTenant('tenant-1', {
@@ -536,10 +539,7 @@ describe('TicketsService', () => {
       expect(call.skip).toBe(50); // (3 - 1) * 25
       expect(call.take).toBe(25);
       // id tiebreaker for stable pagination across rows sharing createdAt
-      expect(call.orderBy).toEqual([
-        { createdAt: 'desc' },
-        { id: 'asc' },
-      ]);
+      expect(call.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'asc' }]);
     });
 
     it('issues count with the same where clause as findMany', async () => {
@@ -596,14 +596,17 @@ describe('TicketsService', () => {
 
   describe('findAllByTechnician() — paginated shape (P0.3)', () => {
     it('returns paginated shape when opts is provided', async () => {
-      prismaMock.ticket.findMany.mockResolvedValue([makeTicket(), makeTicket(), makeTicket()]);
+      prismaMock.ticket.findMany.mockResolvedValue([
+        makeTicket(),
+        makeTicket(),
+        makeTicket(),
+      ]);
       prismaMock.ticket.count.mockResolvedValue(15);
 
-      const result = await service.findAllByTechnician(
-        'tech-1',
-        'tenant-1',
-        { page: 1, limit: 5 },
-      );
+      const result = await service.findAllByTechnician('tech-1', 'tenant-1', {
+        page: 1,
+        limit: 5,
+      });
 
       expect(result).toEqual(
         expect.objectContaining({

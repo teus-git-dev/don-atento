@@ -273,8 +273,9 @@ export class InvoicingService {
       return invoice;
     });
 
-    // 5. Generate the XML UBL 2.1 Preview
-    const rawXml = await this.dianXml.buildDianXml(
+    // 5. Generate the XML UBL 2.1 Preview (buildDianXml is sync — pure
+    // XML construction. No await needed.)
+    const rawXml = this.dianXml.buildDianXml(
       result,
       resolution,
       tenant,

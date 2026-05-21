@@ -8,7 +8,9 @@ export class PrismaService
 {
   constructor() {
     if (process.env.NODE_ENV === 'production') {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional adapter loading by NODE_ENV; ES6 import would load both adapters at startup
       const { Pool } = require('pg');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional adapter loading by NODE_ENV
       const { PrismaPg } = require('@prisma/adapter-pg');
 
       // P0.2 — pg.Pool tuning. Defaults below target Render Free
@@ -63,7 +65,9 @@ export class PrismaService
 
       super({ adapter });
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional adapter loading by NODE_ENV; ES6 import would load both adapters at startup
       const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional require to match adapter context
       const dbPath = require('path').resolve('./dev.db');
       console.log(`[PrismaService] Connecting to SQLite at: ${dbPath}`);
       const adapter = new PrismaBetterSqlite3({ url: 'file:./dev.db' });
