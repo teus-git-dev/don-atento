@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { InventoryTemplatesService } from './inventory-templates.service';
-import { CreateInventoryTemplateDto } from './dto/create-inventory-template.dto';
+import { CreateInventoryTemplateDto, UpdateInventoryTemplateDto } from './dto/create-inventory-template.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -48,7 +48,7 @@ export class InventoryTemplatesController {
   @Patch(':id')
   @UseGuards(FeatureDisabledGuard)
   @ApiOperation({ summary: 'Actualiza una plantilla (deshabilitado en v1)' })
-  async update(@Param('id') id: string, @Body() data: any) {
+  async update(@Param('id') id: string, @Body() data: UpdateInventoryTemplateDto) {
     return this.service.update(id, data);
   }
 

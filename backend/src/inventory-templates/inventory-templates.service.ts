@@ -1,40 +1,51 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TemplateStatus } from '@prisma/client';
+import {
+  CreateInventoryTemplateDto,
+  CreateInventoryTemplateItemDto,
+  CreateInventoryTemplateZoneDto,
+  UpdateInventoryTemplateDto,
+} from './dto/create-inventory-template.dto';
 
 @Injectable()
 export class InventoryTemplatesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: any) {
+  async create(dto: CreateInventoryTemplateDto) {
     return this.prisma.inventoryTemplate.create({
       data: {
         tenantId: dto.tenantId,
         name: dto.name,
         description: dto.description,
-        status: dto.status || 'ACTIVE',
+        status: dto.status ?? TemplateStatus.ACTIVE,
         // Support structured zones
         zones: {
-          create: (dto.zones || []).map((zone: any) => ({
+          create: (dto.zones ?? []).map((zone: CreateInventoryTemplateZoneDto) => ({
             name: zone.name,
-            type: zone.type || 'ZONAS_COMUNES',
+            type: zone.type ?? 'ZONAS_COMUNES',
             templateItems: {
-              create: (zone.items || []).map((item: any) => ({
-                name: item.name,
-                category: item.category || 'GENERAL',
-                description: item.description,
-                material: item.material,
-              })),
+              create: (zone.items ?? []).map(
+                (item: CreateInventoryTemplateItemDto) => ({
+                  name: item.name,
+                  category: item.category ?? 'GENERAL',
+                  description: item.description,
+                  material: item.material,
+                }),
+              ),
             },
           })),
         },
         // Support top-level items (flat structure)
         items: {
-          create: (dto.items || []).map((item: any) => ({
-            name: item.name,
-            category: item.category || 'GENERAL',
-            description: item.description,
-            material: item.material,
-          })),
+          create: (dto.items ?? []).map(
+            (item: CreateInventoryTemplateItemDto) => ({
+              name: item.name,
+              category: item.category ?? 'GENERAL',
+              description: item.description,
+              material: item.material,
+            }),
+          ),
         },
       },
       include: {
@@ -73,14 +84,14 @@ export class InventoryTemplatesService {
     });
   }
 
-  async update(id: string, dto: any) {
+  async update(id: string, dto: UpdateInventoryTemplateDto) {
     // Basic update for name/description/status
     return this.prisma.inventoryTemplate.update({
       where: { id },
       data: {
         name: dto.name,
         description: dto.description,
-        status: dto.status,
+        status: dto.status as TemplateStatus | undefined,
       },
     });
   }
