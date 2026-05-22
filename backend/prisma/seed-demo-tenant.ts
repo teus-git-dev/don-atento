@@ -267,26 +267,51 @@ async function main() {
     await prisma.brandBrain.create({
       data: {
         tenantId: tenant.id,
-        tone: 'FRIENDLY_PROFESSIONAL',
+        tone: 'FRIENDLY',
         policies: 'Nuestra inmobiliaria se rige por la Ley 820 de 2003 de Colombia. Los daños causados por el desgaste natural del inmueble (humedades estructurales, tuberías internas rotas, daños eléctricos generales) son responsabilidad del Propietario. Los daños por mal uso, descuido o mantenimiento preventivo básico (bombillos, empaques de grifería desgastados por el uso diario) son responsabilidad del Inquilino. Todo reporte debe ser validado por la IA antes de asignar un técnico.',
         faq: [
           {
-            q: '¿Quién paga los arreglos de plomería?',
-            a: 'Si es una tubería rota interna o humedad estructural, lo asume el propietario. Si es un grifo goteando por empaque desgastado o sifón obstruido por residuos del inquilino, lo asume el inquilino.'
+            question: '¿Quién paga los arreglos de plomería?',
+            answer: 'Si es una tubería rota interna o humedad estructural, lo asume el propietario. Si es un grifo goteando por empaque desgastado o sifón obstruido por residuos del inquilino, lo asume el inquilino.'
           },
           {
-            q: '¿Cuál es el tiempo de respuesta para una urgencia?',
-            a: 'Las emergencias (ej. inundación total, corte total de energía) se atienden en menos de 4 horas. Daños medios se atienden en 24-48 horas.'
+            question: '¿Cuál es el tiempo de respuesta para una urgencia?',
+            answer: 'Las emergencias (ej. inundación total, corte total de energía) se atienden en menos de 4 horas. Daños medios se atienden en 24-48 horas.'
           },
           {
-            q: '¿Cómo reporto un daño?',
-            a: 'Puedes reportarlo directamente a través de nuestro canal de WhatsApp enviando una foto o video del daño para que nuestra IA lo pre-diagnostique.'
+            question: '¿Cómo reporto un daño?',
+            answer: 'Puedes reportarlo directamente a través de nuestro canal de WhatsApp enviando una foto o video del daño para que nuestra IA lo pre-diagnostique.'
           }
         ],
         responseRules: 'Saludar amablemente usando el nombre del usuario. Ser claro, empático y profesional. Recordar que las decisiones sobre costos de reparación se toman con base en la Ley 820 de 2003. Siempre ofrecer enviar un técnico de nuestra red certificada.'
       }
     });
     console.log('Brand Brain configured.');
+  } else {
+    // If it exists, update it to make sure the structure is correct
+    console.log('Updating existing Brand Brain for frontend compatibility...');
+    await prisma.brandBrain.update({
+      where: { tenantId: tenant.id },
+      data: {
+        tone: 'FRIENDLY',
+        policies: 'Nuestra inmobiliaria se rige por la Ley 820 de 2003 de Colombia. Los daños causados por el desgaste natural del inmueble (humedades estructurales, tuberías internas rotas, daños eléctricos generales) son responsabilidad del Propietario. Los daños por mal uso, descuido o mantenimiento preventivo básico (bombillos, empaques de grifería desgastados por el uso diario) son responsabilidad del Inquilino. Todo reporte debe ser validado por la IA antes de asignar un técnico.',
+        faq: [
+          {
+            question: '¿Quién paga los arreglos de plomería?',
+            answer: 'Si es una tubería rota interna o humedad estructural, lo asume el propietario. Si es un grifo goteando por empaque desgastado o sifón obstruido por residuos del inquilino, lo asume el inquilino.'
+          },
+          {
+            question: '¿Cuál es el tiempo de respuesta para una urgencia?',
+            answer: 'Las emergencias (ej. inundación total, corte total de energía) se atienden en menos de 4 horas. Daños medios se atienden en 24-48 horas.'
+          },
+          {
+            question: '¿Cómo reporto un daño?',
+            answer: 'Puedes reportarlo directamente a través de nuestro canal de WhatsApp enviando una foto o video del daño para que nuestra IA lo pre-diagnostique.'
+          }
+        ],
+        responseRules: 'Saludar amablemente usando el nombre del usuario. Ser claro, empático y profesional. Recordar que las decisiones sobre costos de reparación se toman con base en la Ley 820 de 2003. Siempre ofrecer enviar un técnico de nuestra red certificada.'
+      }
+    });
   }
 
   // 8. Data Import Logs
