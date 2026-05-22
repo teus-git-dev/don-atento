@@ -48,10 +48,10 @@ export const tenantService = {
   getCurrentTenant: (): Tenant | null => {
     // Real mode: Use the logged in user's tenant if available
     const user = authService.getUser();
-    if (user && user.tenant) {
+    if (user && (user.tenant || user.tenantId)) {
       return {
-        id: user.tenant.id,
-        name: user.tenant.name,
+        id: user.tenant?.id || user.tenantId || '',
+        name: user.tenant?.name || 'DonAtento Demo Comercial',
         status: 'active',
         plan: 'pro',
         aiTicketLimit: 800,
