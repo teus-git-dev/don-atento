@@ -15,7 +15,7 @@ import { tenantService } from "@/services/tenantService";
 import { brainService, BrandBrain } from "@/services/brainService";
 
 export default function IAConfigPage() {
-  const currentTenant = tenantService.getCurrentTenant();
+  const [currentTenant, setCurrentTenant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'personality' | 'policies' | 'faq'>('personality');
@@ -28,10 +28,17 @@ export default function IAConfigPage() {
   });
 
   useEffect(() => {
-    if (!currentTenant) {
+    const tenant = tenantService.getCurrentTenant();
+    if (!tenant) {
       setLoading(false);
-      return;
+    } else {
+      setCurrentTenant(tenant);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!currentTenant) return;
+    
     const fetchBrain = async () => {
       try {
         const data = await brainService.getBrain(currentTenant.id);
@@ -48,7 +55,7 @@ export default function IAConfigPage() {
       }
     };
     fetchBrain();
-  }, [currentTenant?.id, currentTenant]);
+  }, [currentTenant]);
 
   const handleSave = async () => {
     if (!currentTenant) return;
