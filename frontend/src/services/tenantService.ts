@@ -38,12 +38,28 @@ const saveTenants = () => {
   }
 };
 
+import { authService } from './authService';
+
 export const tenantService = {
   getTenants: (): Tenant[] => {
     return mockTenants;
   },
 
   getCurrentTenant: (): Tenant | null => {
+    // Real mode: Use the logged in user's tenant if available
+    const user = authService.getUser();
+    if (user && user.tenant) {
+      return {
+        id: user.tenant.id,
+        name: user.tenant.name,
+        status: 'active',
+        plan: 'pro',
+        aiTicketLimit: 800,
+        aiTicketsUsed: 0,
+        createdAt: '2026-05-22'
+      };
+    }
+
     if (mockTenants.length === 0) return null;
     return mockTenants.find(t => t.id === currentTenantId) || mockTenants[0];
   },
