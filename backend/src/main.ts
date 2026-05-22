@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import * as dotenv from 'dotenv';
 dotenv.config(); // MUST BE BEFORE IMPORTING APP.MODULE TO SET JWT_SECRET!
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -26,12 +27,13 @@ async function bootstrap() {
     }),
   );
 
-  // ── Security: Restrict CORS to the known frontend origin ──────────────────
   const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002', // Next.js fallback port when 3000 is taken
+    'https://doniq-rho.vercel.app',
+    'https://doniq-ax0tc21ll-teus-git-devs-projects.vercel.app'
   ];
 
   app.enableCors({
