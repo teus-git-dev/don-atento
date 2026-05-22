@@ -65,6 +65,11 @@ export class PrismaService
         connectionTimeoutMillis,
         statement_timeout: statementTimeoutMs,
         application_name: 'don-atento-backend',
+        // Supabase PgBouncer uses a self-signed cert chain; Node.js rejects
+        // it by default (SELF_SIGNED_CERT_IN_CHAIN / P1011). The connection
+        // is still TLS-encrypted — we are only disabling chain verification,
+        // which is the standard workaround for managed Postgres proxies.
+        ssl: { rejectUnauthorized: false },
       });
 
       // pg.Pool emits 'error' when an idle client dies (Postgres
