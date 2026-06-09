@@ -222,38 +222,32 @@ model InvoiceLine {
 }
 
 model JournalEntry {
-  id              String      @id @default(cuid())
-  tenantId        String
-  date            DateTime
-  documentType    String
-  documentNumber  String?
-  description     String
-  status          EntryStatus @default(DRAFT)
-  createdByUserId String
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
+  id               String            @id @default(cuid())
+  tenantId         String
+  date             DateTime
+  documentType     String
+  documentNumber   String?
+  description      String
+  status           EntryStatus       @default(DRAFT)
+  createdByUserId  String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  annullReason     String?
+  annulledAt       DateTime?
+  annulledByUserId String?
   /// Block C — audit trail post-creación. Nullable porque rows
   /// pre-Block-C no los tenían; el backfill script setea
   /// postedAt = createdAt y postedByUserId = createdByUserId como
   /// mejor aproximación para asientos ya POSTED.
   postedAt         DateTime?
   postedByUserId   String?
-  annulledAt       DateTime?
-  annulledByUserId String?
-  annullReason     String?
+  Invoice          Invoice[]
+  annulledBy       User?             @relation("JournalEntryAnnulledBy", fields: [annulledByUserId], references: [id])
+  createdBy        User              @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id])
+  postedBy         User?             @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id])
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines            TransactionLine[]
 
-  Invoice    Invoice[]
-  createdBy  User              @relation("JournalEntryCreatedBy", fields: [createdByUserId], references: [id])
-  postedBy   User?             @relation("JournalEntryPostedBy", fields: [postedByUserId], references: [id])
-  annulledBy User?             @relation("JournalEntryAnnulledBy", fields: [annulledByUserId], references: [id])
-  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lines      TransactionLine[]
-
-  /// Partial unique on (tenantId, documentType, documentNumber) when
-  /// documentNumber is present — prevents duplicate posting of the
-  /// same legal document soporte. Rows without documentNumber
-  /// coexist (Postgres allows NULL repeats).
   @@unique([tenantId, documentType, documentNumber])
   @@index([tenantId, date])
   @@index([tenantId, status])
@@ -270,39 +264,34 @@ model MeterReading {
 }
 
 model Property {
-  id               String         @id @default(cuid())
-  tenantId         String
-  parentPropertyId String?
-  propertyType     PropertyType
-  title            String
-  description      String?
-  address          String
-  city             String
-  department       String
-  country          String
-  latitude         Float?
-  longitude        Float?
-  areaM2           Float?
-  rooms            Int?
-  bathrooms        Int?
-  status           PropertyStatus @default(AVAILABLE)
-  propertyCode     String?
-  isVip            Boolean        @default(false)
-  isActive         Boolean        @default(true)
-  rentAmount       Decimal?
-  adminAmount      Decimal?
-  taxAmount        Decimal?
-  managementName   String?
-  managementNit    String?
-  insuranceCompany String?
-  splatUrl         String?
-  attachments      Json?
-  createdAt        DateTime       @default(now())
-
-  // Data Import
-  sourceTag  String?
-  importedAt DateTime?
-
+  id                         String                    @id @default(cuid())
+  tenantId                   String
+  parentPropertyId           String?
+  propertyType               PropertyType
+  title                      String
+  description                String?
+  address                    String
+  city                       String
+  department                 String
+  country                    String
+  latitude                   Float?
+  longitude                  Float?
+  areaM2                     Float?
+  rooms                      Int?
+  bathrooms                  Int?
+  status                     PropertyStatus            @default(AVAILABLE)
+  propertyCode               String?
+  isVip                      Boolean                   @default(false)
+  isActive                   Boolean                   @default(true)
+  rentAmount                 Decimal?
+  adminAmount                Decimal?
+  taxAmount                  Decimal?
+  managementName             String?
+  managementNit              String?
+  insuranceCompany           String?
+  splatUrl                   String?
+  attachments                Json?
+  createdAt                  DateTime                  @default(now())
   accessToken                String?                   @unique
   workflowId                 String?
   managementEmail            String?
@@ -313,8 +302,10 @@ model Property {
   admonPhone                 String?
   admonPorteria              String?
   visionVideoUrl             Json?
-  ContractRequest            ContractRequest[]
+  importedAt                 DateTime?
+  sourceTag                  String?
   ContractDocument           ContractDocument[]
+  ContractRequest            ContractRequest[]
   inventoryItems             InventoryItem[]
   meterReadings              MeterReading[]
   property                   Property?                 @relation("PropertyToProperty", fields: [parentPropertyId], references: [id])
@@ -329,16 +320,7 @@ model Property {
   zones                      Zone[]
   Prospect                   Prospect[]                @relation("PropertyInterests")
 
-  /// Block A (data-import): partial unique scoped per tenant. Pre-
-  /// Block-A `propertyCode @unique` was global, which let an
-  /// attacker's Excel import upsert into the victim tenant's row by
-  /// matching propertyCode. Now two tenants can share the same
-  /// propertyCode without collision and updates stay tenant-scoped.
   @@unique([tenantId, propertyCode])
-  // P0.2 — tenant-scoping. Plain (tenantId) is intentionally omitted
-  // because the @@unique above already supports left-prefix scans on
-  // tenantId alone. (tenantId, status) covers the AVAILABLE/RENTED/etc
-  // filter; (tenantId, isActive) covers the "active properties" list.
   @@index([tenantId, status])
   @@index([tenantId, isActive])
 }
@@ -374,9 +356,9 @@ model PropertyRelation {
   contractNumber      String?
   insuranceCompany    String?
   contractType        String?
+  ContractDocument    ContractDocument[]
   property            Property           @relation(fields: [propertyId], references: [id])
   user                User               @relation(fields: [userId], references: [id])
-  ContractDocument    ContractDocument[]
 
   @@index([status, relationType])
 }
@@ -402,11 +384,6 @@ model Prospect {
   tasks                ProspectTask[]
   interestedProperties Property[]            @relation("PropertyInterests")
 
-  // P0.2 — tenant-scoping. (tenantId) base index; (tenantId, status)
-  // serves getFunnel groupBy; (tenantId, updatedAt) supports findAll's
-  // orderBy updatedAt; (tenantId, sentiment) is preventative — the CRM
-  // module is set to grow and getSentimentMetrics + future sentiment
-  // dashboards will hit it.
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, updatedAt])
@@ -422,16 +399,16 @@ model Prospect {
 /// `Prospect.tenantId` in `backfill-tenant-id-children.ts`.
 model ProspectInteraction {
   id         String             @id @default(cuid())
-  tenantId   String
   prospectId String
   userId     String?
   channel    InteractionChannel
   message    String
   sentiment  SentimentAnalysis?
   createdAt  DateTime           @default(now())
+  tenantId   String
   prospect   Prospect           @relation(fields: [prospectId], references: [id])
-  user       User?              @relation(fields: [userId], references: [id])
   tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user       User?              @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([prospectId])
@@ -443,7 +420,6 @@ model ProspectInteraction {
 /// defense-in-depth gap. Backfilled from `Prospect.tenantId`.
 model ProspectTask {
   id          String    @id @default(cuid())
-  tenantId    String
   prospectId  String
   title       String
   description String?
@@ -451,6 +427,7 @@ model ProspectTask {
   isCompleted Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  tenantId    String
   prospect    Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
   tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -529,10 +506,10 @@ model Tenant {
   createdAt              DateTime               @default(now())
   aiTone                 String?
   brandManualUrl         String?
-  whatsappPhoneNumberId  String?                @unique
-  whatsappAccessToken    String?
-  whatsappProvider       String?                @default("meta")
   communicationTemplates Json?
+  whatsappAccessToken    String?
+  whatsappPhoneNumberId  String?                @unique
+  whatsappProvider       String?                @default("meta")
   AccountingAccount      AccountingAccount[]
   AccountingThirdParty   AccountingThirdParty[]
   BillingItem            BillingItem[]
@@ -540,29 +517,27 @@ model Tenant {
   ContractDocument       ContractDocument[]
   DianResolution         DianResolution[]
   DigitalCertificate     DigitalCertificate?
+  fileAssets             FileAsset[]
   InventoryTemplate      InventoryTemplate[]
   Invoice                Invoice[]
   JournalEntry           JournalEntry[]
   interestedProperties   Property[]
   Prospect               Prospect[]
+  prospectInteractions   ProspectInteraction[]
+  prospectTasks          ProspectTask[]
   Provider               Provider[]
   Role                   Role[]
   subscriptionPlan       SubscriptionPlan       @relation(fields: [subscriptionPlanId], references: [id])
+  tenantSubscription     TenantSubscription?
   tickets                Ticket[]
+  ticketInteractions     TicketInteraction[]
+  tokenUsageLogs         TokenUsageLog[]
   technicians            User[]
   Workflow               Workflow[]
-  tenantSubscription     TenantSubscription?
-  tokenUsageLogs         TokenUsageLog[]
-  fileAssets             FileAsset[]
-  // P0.1 — inverse relations for denormalized `tenantId` on child tables.
-  prospectInteractions   ProspectInteraction[]
-  prospectTasks          ProspectTask[]
-  ticketInteractions     TicketInteraction[]
 }
 
 model Ticket {
   id                   String              @id @default(cuid())
-  shortId              String?
   tenantId             String
   propertyId           String
   reportedByUserId     String
@@ -588,6 +563,7 @@ model Ticket {
   attachments          Json?
   clientSignature      String?
   inventoryItemId      String?
+  shortId              String?
   provider             Provider?           @relation(fields: [assignedProviderId], references: [id])
   assignedTechnician   User?               @relation("Ticket_assignedTechnicianIdToUser", fields: [assignedTechnicianId], references: [id])
   currentState         WorkflowState?      @relation(fields: [currentStateId], references: [id])
@@ -601,10 +577,6 @@ model Ticket {
 
   @@index([reportedByUserPhone])
   @@index([resolvedAt])
-  // P0.2 — tenant-scoping. (tenantId) is the base for findAllByTenant;
-  // (tenantId, assignedTechnicianId) covers the technician dashboard;
-  // (tenantId, createdAt) supports paginated chronological lists (the
-  // shape P0.5 will lean on).
   @@index([tenantId])
   @@index([tenantId, assignedTechnicianId])
   @@index([tenantId, createdAt])
@@ -617,16 +589,16 @@ model Ticket {
 /// Backfilled from `Ticket.tenantId`.
 model TicketInteraction {
   id                String             @id @default(cuid())
-  tenantId          String
   ticketId          String
   userId            String?
   channel           InteractionChannel
   message           String
   sentimentAnalysis SentimentAnalysis?
   sentAt            DateTime           @default(now())
+  tenantId          String
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   ticket            Ticket             @relation(fields: [ticketId], references: [id])
   user              User?              @relation(fields: [userId], references: [id])
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([tenantId])
   @@index([ticketId])
@@ -662,27 +634,20 @@ model TransactionLine {
 }
 
 model User {
-  id                 String    @id @default(cuid())
-  tenantId           String?
-  email              String    @unique
-  passwordHash       String
-  firstName          String
-  lastName           String
-  governmentId       String?
-  role               UserRole  @default(TENANT_USER)
-  roleId             String?
-  phone              String?
-  whatsappId         String?
-  photoUrl           String?
-  isActive           Boolean   @default(true)
-  mustChangePassword Boolean   @default(false)
-  passwordChangedAt  DateTime?
-  createdAt          DateTime  @default(now())
-
-  // Data Import
-  sourceTag  String?
-  importedAt DateTime?
-
+  id                                               String                    @id @default(cuid())
+  tenantId                                         String?
+  email                                            String                    @unique
+  passwordHash                                     String
+  firstName                                        String
+  lastName                                         String
+  governmentId                                     String?
+  role                                             UserRole                  @default(TENANT_USER)
+  roleId                                           String?
+  phone                                            String?
+  whatsappId                                       String?
+  photoUrl                                         String?
+  isActive                                         Boolean                   @default(true)
+  createdAt                                        DateTime                  @default(now())
   additionalContacts                               String?
   personType                                       String?
   isTaxDeclarant                                   Boolean                   @default(false)
@@ -694,15 +659,21 @@ model User {
   accountNumber                                    String?
   providerId                                       String?
   accountType                                      String?
+  importedAt                                       DateTime?
+  mustChangePassword                               Boolean                   @default(false)
+  passwordChangedAt                                DateTime?
+  sourceTag                                        String?
   thirdParty                                       AccountingThirdParty?
   ContractRequest                                  ContractRequest[]
+  uploadedFiles                                    FileAsset[]
+  JournalEntry_annulledBy                          JournalEntry[]            @relation("JournalEntryAnnulledBy")
   JournalEntry_createdBy                           JournalEntry[]            @relation("JournalEntryCreatedBy")
   JournalEntry_postedBy                            JournalEntry[]            @relation("JournalEntryPostedBy")
-  JournalEntry_annulledBy                          JournalEntry[]            @relation("JournalEntryAnnulledBy")
   assignments                                      PropertyAgentAssignment[]
   relations                                        PropertyRelation[]
   Prospect                                         Prospect[]
   interactions                                     ProspectInteraction[]
+  RefreshTokens                                    RefreshToken[]
   Ticket_Ticket_assignedTechnicianIdToUser         Ticket[]                  @relation("Ticket_assignedTechnicianIdToUser")
   Ticket_Ticket_reportedByUserIdToUser             Ticket[]                  @relation("Ticket_reportedByUserIdToUser")
   ticketInteractions                               TicketInteraction[]
@@ -710,33 +681,26 @@ model User {
   provider                                         Provider?                 @relation(fields: [providerId], references: [id])
   roleRef                                          Role?                     @relation(fields: [roleId], references: [id])
   tenant                                           Tenant?                   @relation(fields: [tenantId], references: [id])
+  phoneContacts                                    UserPhoneContact[]
   WorkflowState_WorkflowState_assignedUserIdToUser WorkflowState[]           @relation("WorkflowState_assignedUserIdToUser")
   WorkflowState_RoleAssignments                    WorkflowState[]           @relation("RoleAssignments")
-  RefreshTokens                                    RefreshToken[]
-  uploadedFiles                                    FileAsset[]
-  phoneContacts                                    UserPhoneContact[]
 
   @@index([phone])
   @@index([whatsappId])
-  // P0.2 — tenant-scoping. tenantId is nullable here (SUPERADMIN has
-  // no tenant); Postgres handles NULLs natively in the B-tree and the
-  // SUPERADMIN row is one in N. (tenantId, role) speeds up technician/
-  // agent lookups during ticket assignment.
   @@index([tenantId])
   @@index([tenantId, role])
 }
 
-/**
- * UserPhoneContact — additional WhatsApp / phone numbers authorized to
- * speak on behalf of a User. Replaces the legacy CSV string in
- * `User.additionalContacts` (which is preserved during the backfill
- * window; cutover and column drop happen in Phase E.2).
- * `verified=false` is the default for new rows written by the WA
- * enrolment flow — verification arrives in Phase E.2 via an OTP sent
- * to the user's primary `phone`. The unique constraint
- * `@@unique([userId, phone])` closes the race where two concurrent
- * webhooks both append the same number.
- */
+/// *
+///  * UserPhoneContact — additional WhatsApp / phone numbers authorized to
+///  * speak on behalf of a User. Replaces the legacy CSV string in
+///  * `User.additionalContacts` (which is preserved during the backfill
+///  * window; cutover and column drop happen in Phase E.2).
+///  * `verified=false` is the default for new rows written by the WA
+///  * enrolment flow — verification arrives in Phase E.2 via an OTP sent
+///  * to the user's primary `phone`. The unique constraint
+///  * `@@unique([userId, phone])` closes the race where two concurrent
+///  * webhooks both append the same number.
 model UserPhoneContact {
   id         String    @id @default(cuid())
   userId     String
@@ -761,8 +725,6 @@ model Workflow {
   tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   states               WorkflowState[]
 
-  // P0.2 — tenant-scoping. Single index suffices; workflow config
-  // queries are always full-tenant scans (list all workflows of a tenant).
   @@index([tenantId])
 }
 
@@ -793,6 +755,107 @@ model Zone {
   templateItems     InventoryTemplateItem[]
   property          Property?               @relation(fields: [propertyId], references: [id])
   InventoryTemplate InventoryTemplate?      @relation(fields: [templateId], references: [id])
+}
+
+model DataImportTemplate {
+  id         String          @id @default(cuid())
+  tenantId   String
+  name       String
+  categoryId String
+  mapping    Json
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  logs       DataImportLog[]
+}
+
+model DataImportLog {
+  id           String              @id @default(cuid())
+  tenantId     String
+  templateId   String?
+  fileName     String
+  sourceTag    String
+  status       String
+  recordsRead  Int                 @default(0)
+  recordsSaved Int                 @default(0)
+  errors       Json?
+  createdAt    DateTime            @default(now())
+  template     DataImportTemplate? @relation(fields: [templateId], references: [id])
+}
+
+model ContractDocument {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  propertyId         String
+  propertyRelationId String?
+  fileUrl            String
+  status             DocumentStatus    @default(PENDING_AI)
+  extractedData      Json?
+  legalVerdict       Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  property           Property          @relation(fields: [propertyId], references: [id])
+  propertyRelation   PropertyRelation? @relation(fields: [propertyRelationId], references: [id])
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, propertyId])
+}
+
+model TenantSubscription {
+  id                  String   @id @default(cuid())
+  tenantId            String   @unique
+  planType            String   @default("BASIC")
+  monthlyTokenQuota   Int      @default(500000)
+  billingCycleStart   DateTime @default(now())
+  billingCycleEnd     DateTime
+  softLimitThreshold  Float    @default(0.8)
+  hardLimitEnabled    Boolean  @default(true)
+  currentTokensInput  Int      @default(0)
+  currentTokensOutput Int      @default(0)
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model TokenUsageLog {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String?
+  feature      String
+  tokensInput  Int
+  tokensOutput Int
+  modelUsed    String   @default("gpt-4o-mini")
+  costUsd      Float
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([usedAt, expiresAt])
+}
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  tenantId     String
+  filename     String   @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+  bucketKey    String?
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+
+  @@index([tenantId])
 }
 
 enum AIAnalysisStatus {
@@ -997,117 +1060,8 @@ enum ZoneType {
   EXTERIORES
 }
 
-// ============================================
-// Data Import Models
-// ============================================
-
-model DataImportTemplate {
-  id         String          @id @default(cuid())
-  tenantId   String
-  name       String
-  categoryId String // OWNER, TENANT, PROPERTY, CONTRACT
-  mapping    Json // The stored column mappings
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  logs       DataImportLog[]
-}
-
-model DataImportLog {
-  id           String              @id @default(cuid())
-  tenantId     String
-  templateId   String?
-  fileName     String
-  sourceTag    String
-  status       String // SUCCESS, FAILED, PARTIAL
-  recordsRead  Int                 @default(0)
-  recordsSaved Int                 @default(0)
-  errors       Json? // Detailed error log
-  createdAt    DateTime            @default(now())
-  template     DataImportTemplate? @relation(fields: [templateId], references: [id])
-}
-
 enum DocumentStatus {
   PENDING_AI
   PROCESSED
   FAILED
-}
-
-model ContractDocument {
-  id                 String            @id @default(cuid())
-  tenantId           String
-  propertyId         String
-  propertyRelationId String?
-  fileUrl            String
-  status             DocumentStatus    @default(PENDING_AI)
-  extractedData      Json?
-  legalVerdict       Json?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  property           Property          @relation(fields: [propertyId], references: [id])
-  propertyRelation   PropertyRelation? @relation(fields: [propertyRelationId], references: [id])
-  tenant             Tenant            @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId, propertyId])
-}
-
-model TenantSubscription {
-  id                  String   @id @default(cuid())
-  tenantId            String   @unique
-  planType            String   @default("BASIC")
-  monthlyTokenQuota   Int      @default(500000)
-  billingCycleStart   DateTime @default(now())
-  billingCycleEnd     DateTime
-  softLimitThreshold  Float    @default(0.8)
-  hardLimitEnabled    Boolean  @default(true)
-  currentTokensInput  Int      @default(0)
-  currentTokensOutput Int      @default(0)
-  tenant              Tenant   @relation(fields: [tenantId], references: [id])
-}
-
-model TokenUsageLog {
-  id           String   @id @default(cuid())
-  tenantId     String
-  userId       String?
-  feature      String
-  tokensInput  Int
-  tokensOutput Int
-  modelUsed    String   @default("gpt-4o-mini")
-  costUsd      Float
-  createdAt    DateTime @default(now())
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-
-  // P0.2 — tenant-scoping with chronological prefix. The monthly
-  // billing/quota query is the hot path: `WHERE tenantId = ? AND
-  // createdAt >= billingCycleStart` — covered exactly by this index.
-  @@index([tenantId, createdAt])
-}
-
-model RefreshToken {
-  id        String    @id @default(cuid())
-  userId    String
-  token     String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([usedAt, expiresAt])
-}
-
-model FileAsset {
-  id           String   @id @default(cuid())
-  tenantId     String
-  filename     String   @unique
-  bucketKey    String?
-  originalName String
-  mimeType     String
-  sizeBytes    Int?
-  uploadedById String?
-  createdAt    DateTime @default(now())
-
-  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  uploadedBy User?  @relation(fields: [uploadedById], references: [id])
-
-  @@index([tenantId])
 }

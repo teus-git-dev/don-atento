@@ -39,9 +39,10 @@ export class LegalAiService {
 
     // formData is stored as a generic JSON blob — access via Record<string,unknown>
     const formData = request.formData as Record<string, unknown>;
-    const tipoContrato = typeof formData['tipoContrato'] === 'string'
-      ? formData['tipoContrato']
-      : '';
+    const tipoContrato =
+      typeof formData['tipoContrato'] === 'string'
+        ? formData['tipoContrato']
+        : '';
     const isComercial = tipoContrato.toLowerCase().includes('comercial');
 
     // Prospect is a full Prisma model — access governmentId via type assertion
@@ -85,7 +86,7 @@ Por favor, devuelve el texto del contrato listo para revisión del Coordinador.
 
     try {
       const apiKey = process.env.OPENAI_API_KEY;
-      const response = await axios.post(
+      const response = (await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
           model: 'gpt-4o',
@@ -101,7 +102,7 @@ Por favor, devuelve el texto del contrato listo para revisión del Coordinador.
             'Content-Type': 'application/json',
           },
         },
-      ) as unknown as OpenAiChatResponse;
+      )) as unknown as OpenAiChatResponse;
 
       const draft = response.data.choices[0].message.content;
 

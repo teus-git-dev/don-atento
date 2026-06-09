@@ -54,3 +54,5 @@ backend/test-cert/
 # Claude Code local config
 .claude/
 !backend/prisma/dev.db
+
+.vercel
