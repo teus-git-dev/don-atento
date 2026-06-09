@@ -16,10 +16,17 @@ async function request<T>(
     'Content-Type': 'application/json',
   };
 
+  // Inject Bearer token if available — required for cross-origin (Vercel → Render)
+  // because httpOnly cookies are blocked by SameSite=Lax between different domains.
+  const token = authService.getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
-    credentials: 'include', // Important for sending httpOnly cookies cross-origin
+    credentials: 'include', // Also send cookies for same-origin / local dev
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 

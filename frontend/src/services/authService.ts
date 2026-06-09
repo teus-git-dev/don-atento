@@ -19,6 +19,7 @@ export interface AuthUser {
 }
 
 const USER_KEY  = 'don_atento_user_v1';
+const TOKEN_KEY = 'don_atento_token_local_v1';
 
 export const authService = {
   /** Llama a POST /auth/login y guarda solo el usuario en localStorage. El token se guarda en cookie httpOnly */
@@ -37,9 +38,12 @@ export const authService = {
       );
     }
 
-    const data = (await res.json()) as { user: AuthUser & { mustChangePassword?: boolean } };
+    const data = (await res.json()) as { accessToken?: string; user: AuthUser & { mustChangePassword?: boolean } };
     if (typeof window !== 'undefined') {
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      if (data.accessToken) {
+        localStorage.setItem(TOKEN_KEY, data.accessToken);
+      }
 
       // ── Force-reset guard: redirect before returning ──────────────────
       if (data.user.mustChangePassword) {
@@ -51,9 +55,10 @@ export const authService = {
     return data.user;
   },
 
-  /** No longer used because token is in httpOnly cookie */
+  /** Returns stored accessToken for Bearer header use */
   getToken(): string | null {
-    return null;
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(TOKEN_KEY);
   },
 
   /** Devuelve el usuario autenticado, o null si no hay sesión */
@@ -74,6 +79,7 @@ export const authService = {
   async logout(): Promise<void> {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(TOKEN_KEY);
       
       try {
         await fetch(`${API_URL}/auth/logout`, {

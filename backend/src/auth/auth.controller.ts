@@ -49,7 +49,7 @@ export class AuthController {
       path: '/api/auth/refresh', // only sent to refresh endpoint
     });
 
-    return { user };
+    return { accessToken, user };
   }
 
   @Public()
