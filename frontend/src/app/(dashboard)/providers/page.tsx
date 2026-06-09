@@ -7,6 +7,7 @@ import { providersService, Provider, ProviderSpecialty, ProviderAdditionalContac
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   
@@ -37,7 +38,12 @@ export default function ProvidersPage() {
     try {
       const data = await providersService.getProviders();
       setProviders(data);
-    } catch (error) {
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Error al cargar proveedores';
+      // Don’t crash the page on 401/session-expired — just show a friendly message
+      if (!msg.includes('expirada') && !msg.includes('inválidas')) {
+        setError(msg);
+      }
       console.error("Error loading providers:", error);
     } finally {
       setLoading(false);
@@ -124,9 +130,9 @@ export default function ProvidersPage() {
     }
   };
 
-  const filteredProviders = providers.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProviders = providers.filter(p =>
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.specialty || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -433,7 +439,7 @@ export default function ProvidersPage() {
                       </div>
                       {provider.additionalContacts?.map((c, i) => (
                         <div key={i} className="w-10 h-10 rounded-full border-4 border-[#060b13] bg-white/10 flex items-center justify-center overflow-hidden relative shadow-lg" title={`${c.firstName} ${c.lastName}`} style={{ zIndex: 10 - i }}>
-                          {c.photoUrl ? <img src={c.photoUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] font-bold text-gray-400 uppercase">{c.firstName[0]}</span>}
+                          {c.photoUrl ? <img src={c.photoUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] font-bold text-gray-400 uppercase">{c.firstName?.[0] ?? '?'}</span>}
                         </div>
                       ))}
                       <div className="w-10 h-10 rounded-full border-4 border-[#060b13] bg-white/5 flex items-center justify-center text-[10px] font-bold text-gray-500 z-0">

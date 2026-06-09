@@ -58,14 +58,18 @@ async function request<T>(
       console.error('Failed to refresh token', e);
     }
     
-    // Si falla el refresh o el retry también dio 401
-    authService.logout();
+    // Si falla el refresh o el retry también dio 401, redirigir solo desde contexto seguro
+    if (typeof window !== 'undefined') {
+      setTimeout(() => authService.logout(), 100);
+    }
     throw new Error('Sesión expirada. Por favor ingresa nuevamente.');
   }
 
   // Si da 401 en /auth/refresh o /auth/login, no reintentamos
   if (res.status === 401) {
-    authService.logout();
+    if (typeof window !== 'undefined') {
+      setTimeout(() => authService.logout(), 100);
+    }
     throw new Error('Sesión expirada o credenciales inválidas.');
   }
 
