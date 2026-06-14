@@ -123,7 +123,7 @@ describe('TicketsService', () => {
   let service: TicketsService;
   let prismaMock: ReturnType<typeof makePrismaMock>;
   let cognitiveMock: ReturnType<typeof makeCognitiveMock>;
-  let whatsappMock: Record<string, jest.Mock>;
+  let whatsappMock: ReturnType<typeof makeWhatsappMock>;
 
   beforeEach(async () => {
     prismaMock = makePrismaMock();
@@ -142,7 +142,7 @@ describe('TicketsService', () => {
     }).compile();
 
     service = module.get<TicketsService>(TicketsService);
-    whatsappMock = module.get<WhatsappService>(WhatsappService);
+    whatsappMock = module.get(WhatsappService) as unknown as ReturnType<typeof makeWhatsappMock>;
   });
 
   afterEach(() => jest.clearAllMocks());

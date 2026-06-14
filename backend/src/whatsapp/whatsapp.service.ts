@@ -57,6 +57,7 @@ interface DisambiguationStateData {
   propertyId: string;
   propertyName: string;
   dbSentiment: import('@prisma/client').SentimentAnalysis;
+  issues?: string[];
 }
 
 @Injectable()
@@ -359,6 +360,7 @@ export class WhatsappService {
         finalCleanResponse,
         propertyId,
         dbSentiment,
+        issues,
         // propertyName is intentionally NOT destructured — the cached
         // state.data had it from the disambiguation menu, but we don't
         // need it to create the ticket (only propertyId). The fresh
@@ -391,7 +393,7 @@ export class WhatsappService {
             userId: user.id,
             userPhone: cleanPhone,
             originalText: originalText,
-            issues: parsedMetadata.issues,
+            issues: issues,
           });
           const short = newTicket.id.split('-')[0].toUpperCase();
           const response =
@@ -796,8 +798,8 @@ export class WhatsappService {
     });
     
     // Si hay multiples issues, el ticket principal es un "Reporte Múltiple"
-    const isMultiple = params.issues && params.issues.length > 1;
-    const titleText = isMultiple ? `Reporte Múltiple: ${params.issues.length} daños reportados` : params.originalText;
+    const isMultiple = Array.isArray(params.issues) && params.issues.length > 1;
+    const titleText = isMultiple && params.issues ? `Reporte Múltiple: ${params.issues.length} daños reportados` : params.originalText;
     const title = titleText.length > 50 ? titleText.substring(0, 47) + '...' : titleText;
 
     const parentTicket = await this.ticketsService.createTicket({
@@ -812,7 +814,7 @@ export class WhatsappService {
       attachments: undefined,
     });
 
-    if (isMultiple) {
+    if (isMultiple && params.issues) {
       for (const issue of params.issues) {
         const childTitle = issue.length > 50 ? issue.substring(0, 47) + '...' : issue;
         await this.ticketsService.createTicket({
