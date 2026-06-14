@@ -40,7 +40,7 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
   if (!mounted || !user) return null;
 
   const roleLabel = role === 'TENANT_USER' ? 'Arrendatario' : 'Propietario';
-  const accentColor = role === 'TENANT_USER' ? 'var(--color-neon-blue)' : 'var(--color-neon-cyan)';
+  const accentColor = role === 'TENANT_USER' ? '#1E3A8A' : '#10B981';
   const accentClass = role === 'TENANT_USER' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
 
   const initials = [user.firstName?.[0], user.lastName?.[0]].filter(Boolean).join('').toUpperCase() || '??';
@@ -77,37 +77,37 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Shield size={16} style={{ color: accentColor }} />
-            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Perfil de Contacto</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Perfil de Contacto</span>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            className="p-2 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-[#1F2937] transition-colors"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Avatar + Name */}
-        <div className="px-6 py-6 border-b border-white/5">
+        <div className="px-6 py-6 border-b border-gray-100">
           <div className="flex items-center gap-4">
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white flex-shrink-0"
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-[#1F2937] flex-shrink-0"
               style={{ background: `linear-gradient(135deg, ${accentColor}40, ${accentColor}15)`, border: `1px solid ${accentColor}40` }}
             >
               {initials}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-xl font-bold text-[#1F2937]">
                 {user.firstName} {user.lastName}
               </h2>
               <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${accentClass}`}>
                 <Home size={10} /> {roleLabel}
               </span>
               {user.sourceTag && (
-                <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border border-white/10 text-gray-400">
+                <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border border-gray-200 text-gray-500">
                   {user.sourceTag}
                 </span>
               )}
@@ -124,11 +124,11 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
             <div className="space-y-2">
               {fields.map((f, i) =>
                 f.value ? (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-colors">
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-gray-100 hover:bg-white/[0.05] transition-colors">
                     <div className="mt-0.5 text-gray-500">{f.icon}</div>
                     <div>
                       <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">{f.label}</p>
-                      <p className="text-sm text-white font-mono mt-0.5">{f.value}</p>
+                      <p className="text-sm text-[#1F2937] font-mono mt-0.5">{f.value}</p>
                     </div>
                   </div>
                 ) : null
@@ -141,9 +141,9 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
             <p className="text-[10px] uppercase tracking-widest text-gray-600 font-bold mb-3">Inmueble Asociado</p>
             
             {loading ? (
-              <div className="animate-pulse bg-white/5 rounded-xl h-24 border border-white/10"></div>
+              <div className="animate-pulse bg-gray-50 rounded-xl h-24 border border-gray-200"></div>
             ) : mainProperty ? (
-              <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 relative overflow-hidden group">
+              <div className="rounded-xl bg-white/[0.03] border border-gray-100 p-4 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10 transition-opacity opacity-0 group-hover:opacity-100"></div>
                 
                 <div className="flex items-start justify-between mb-3 relative z-10">
@@ -152,34 +152,34 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
                       <Home size={16} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-white">{mainProperty.title || mainProperty.propertyCode}</h4>
+                      <h4 className="text-sm font-bold text-[#1F2937]">{mainProperty.title || mainProperty.propertyCode}</h4>
                       <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                         <Map size={10} /> {mainProperty.address || mainProperty.city || 'Dirección no registrada'}
                       </p>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${mainProperty.relationContext?.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${mainProperty.relationContext?.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-gray-500/10 text-gray-500 border-gray-500/20'}`}>
                     {mainProperty.relationContext?.status === 'ACTIVE' ? 'Vigente' : 'Inactivo'}
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/5 relative z-10">
+                <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100 relative z-10">
                   <div>
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Canon Mensual</p>
-                    <p className="text-sm text-white font-mono font-bold mt-0.5">
+                    <p className="text-sm text-[#1F2937] font-mono font-bold mt-0.5">
                       {mainProperty.financials?.canon ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(mainProperty.financials.canon) : '$0'}
                     </p>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Contrato N°</p>
-                    <p className="text-sm text-gray-300 font-mono mt-0.5">
+                    <p className="text-sm text-gray-600 font-mono mt-0.5">
                       {mainProperty.relationContext?.contractNumber || 'No especificado'}
                     </p>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/[0.02] border border-white/5 border-dashed">
+              <div className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/[0.02] border border-gray-100 border-dashed">
                 <Home size={24} className="text-gray-600 mb-2 opacity-50" />
                 <p className="text-xs text-gray-500 font-medium">No se encontró ningún inmueble vinculado</p>
               </div>
@@ -196,9 +196,9 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
                 { label: 'Rte. ICA', active: user.applyReteIca },
                 { label: 'Declarante de Renta', active: user.isTaxDeclarant },
               ].map((flag, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.02] border border-white/5">
-                  <span className="text-xs text-gray-400">{flag.label}</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${flag.active ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-white/5 text-gray-600 border border-white/10'}`}>
+                <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.02] border border-gray-100">
+                  <span className="text-xs text-gray-500">{flag.label}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${flag.active ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
                     {flag.active ? 'Sí' : 'No'}
                   </span>
                 </div>
@@ -208,9 +208,9 @@ export function ContactProfilePanel({ user, isOpen, onClose, role }: ContactProf
         </div>
 
         {/* Footer CTA */}
-        <div className="px-6 py-4 border-t border-white/5 bg-black/20">
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
           <button
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold text-white transition-all hover:brightness-125"
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold text-[#1F2937] transition-all hover:brightness-125"
             style={{ background: `linear-gradient(135deg, ${accentColor}25, ${accentColor}10)`, border: `1px solid ${accentColor}30` }}
           >
             <span>Ver historial completo</span>

@@ -56,11 +56,11 @@ export default function NotificationCenter() {
       {/* Bell Icon Trigger */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
+        className="relative p-2 text-gray-500 hover:text-[#1E3A8A] transition-colors rounded-full hover:bg-gray-100"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-2 h-2 bg-[var(--color-neon-cyan)] rounded-full shadow-[0_0_8px_rgba(0,255,255,0.8)]"></span>
+          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#10B981] border-2 border-white rounded-full"></span>
         )}
       </button>
 
@@ -68,16 +68,16 @@ export default function NotificationCenter() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 mt-4 w-80 glass-strong rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="p-5 border-b border-white/5 bg-white/5 flex justify-between items-center">
-              <h3 className="text-xs font-black uppercase tracking-widest text-gray-300">Tareas por Rol</h3>
-              <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-lg">{unreadCount} Pendientes</span>
+          <div className="absolute right-0 mt-4 w-80 bg-white rounded-xl border border-gray-200 shadow-xl z-40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tareas por Rol</h3>
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded-md border border-blue-100">{unreadCount} Pendientes</span>
             </div>
             
             <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
               {tasks.length === 0 ? (
                 <div className="p-10 text-center">
-                  <CheckSquare size={32} className="mx-auto text-gray-700 mb-3" />
+                  <CheckSquare size={32} className="mx-auto text-gray-300 mb-3" />
                   <p className="text-xs text-gray-500">Todo al día</p>
                 </div>
               ) : (
@@ -85,16 +85,16 @@ export default function NotificationCenter() {
                   <div 
                     key={task.id} 
                     onClick={() => handleTaskClick(task.id)}
-                    className="p-4 border-b border-white/5 hover:bg-white/5 transition-all cursor-pointer group"
+                    className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-all cursor-pointer group"
                   >
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="text-[10px] font-mono text-[var(--color-neon-cyan)] uppercase">TKT-{task.id.split('-')[0]}</span>
-                      <span className="text-[9px] text-gray-600 flex items-center gap-1 font-mono uppercase">
-                        <Clock size={8} /> 2H ANS
+                    <div className="flex justify-between items-start mb-1.5">
+                      <span className="text-[10px] font-bold text-[#1E3A8A] uppercase bg-[#1E3A8A]/10 px-1.5 py-0.5 rounded">TKT-{task.id.split('-')[0]}</span>
+                      <span className="text-[9px] text-gray-500 flex items-center gap-1 font-semibold uppercase">
+                        <Clock size={10} /> 2H ANS
                       </span>
                     </div>
-                    <p className="text-xs font-bold text-white group-hover:text-[var(--color-neon-blue)] transition-colors line-clamp-1">{task.title}</p>
-                    <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-tight font-medium">Estado: {task.currentState?.name}</p>
+                    <p className="text-xs font-bold text-[#1F2937] group-hover:text-[#1E3A8A] transition-colors line-clamp-1">{task.title}</p>
+                    <p className="text-[10px] text-gray-500 mt-1.5 uppercase tracking-wide font-medium">Estado: {task.currentState?.name}</p>
                   </div>
                 ))
               )}
@@ -102,7 +102,7 @@ export default function NotificationCenter() {
             
             <button 
               onClick={() => handleTaskClick()}
-              className="w-full py-3 bg-white/5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all"
+              className="w-full py-3 bg-gray-50 border-t border-gray-100 text-[11px] font-bold uppercase tracking-wider text-[#1E3A8A] hover:bg-gray-100 transition-all"
             >
               Ver Todas las Tareas
             </button>
@@ -112,25 +112,25 @@ export default function NotificationCenter() {
 
       {/* Login / Dynamic Reminder Toast */}
       {showLoginReminder && unreadCount > 0 && (
-        <div className="fixed bottom-8 right-8 z-[100] glass p-6 rounded-[2rem] border border-[var(--color-neon-blue)]/30 shadow-[0_10px_40px_rgba(0,0,0,0.5)] max-w-sm animate-in slide-in-from-right-10 duration-500">
+        <div className="fixed bottom-8 right-8 z-[100] bg-white p-6 rounded-xl border border-gray-200 shadow-2xl max-w-sm animate-in slide-in-from-right-10 duration-500">
           <button 
             onClick={() => setShowLoginReminder(false)}
-            className="absolute top-4 right-4 text-gray-500 hover:text-white"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
           >
-            <X size={14} />
+            <X size={16} />
           </button>
           <div className="flex gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--color-neon-blue)]/20 border border-[var(--color-neon-blue)]/40 flex items-center justify-center text-[var(--color-neon-blue)]">
+            <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
               <AlertCircle size={24} />
             </div>
             <div>
-              <h4 className="text-sm font-black text-white uppercase tracking-tight">Recordatorio de Tareas</h4>
-              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                Bienvenido. Tienes <span className="text-white font-bold">{unreadCount} tickets</span> pendientes que requieren atención de tu rol.
+              <h4 className="text-sm font-bold text-[#1F2937] uppercase tracking-tight">Recordatorio de Tareas</h4>
+              <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">
+                Bienvenido. Tienes <span className="text-[#1F2937] font-bold">{unreadCount} tickets</span> pendientes que requieren atención de tu rol.
               </p>
               <button 
                 onClick={() => { setShowLoginReminder(false); setIsOpen(true); }}
-                className="mt-4 text-[10px] font-black uppercase tracking-widest text-[var(--color-neon-cyan)] hover:text-white transition-colors"
+                className="mt-3 text-[11px] font-bold uppercase tracking-wider text-[#1E3A8A] hover:text-blue-700 transition-colors"
               >
                 Revisar ahora →
               </button>

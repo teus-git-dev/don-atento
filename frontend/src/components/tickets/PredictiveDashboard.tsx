@@ -17,7 +17,7 @@ export default function PredictiveDashboard() {
       
       {/* Health & Brand Alignment Overview */}
       <div className="lg:col-span-4 flex flex-col gap-6">
-        <div className="glass p-6 rounded-3xl border border-white/5 flex flex-col items-center justify-center text-center flex-1">
+        <div className="bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 flex flex-col items-center justify-center text-center flex-1">
           <div className="relative w-40 h-40 mb-4">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -29,13 +29,13 @@ export default function PredictiveDashboard() {
                   endAngle={450}
                   dataKey="value"
                 >
-                  <Cell fill="var(--color-neon-blue)" />
+                  <Cell fill="#1E3A8A" />
                   <Cell fill="rgba(255,255,255,0.05)" />
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold text-white">0/100</span>
+              <span className="text-3xl font-bold text-[#1F2937]">0/100</span>
               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Health Score</span>
             </div>
           </div>
@@ -48,7 +48,7 @@ export default function PredictiveDashboard() {
           </p>
         </div>
 
-        <div className="glass p-6 rounded-3xl border border-white/5 flex flex-col items-center justify-center text-center flex-1 bg-gradient-to-br from-purple-500/5 to-transparent">
+        <div className="bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 flex flex-col items-center justify-center text-center flex-1 bg-gradient-to-br from-purple-500/5 to-transparent">
           <div className="relative w-40 h-40 mb-4">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -66,7 +66,7 @@ export default function PredictiveDashboard() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold text-white">0%</span>
+              <span className="text-3xl font-bold text-[#1F2937]">0%</span>
               <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Brand Clone</span>
             </div>
           </div>
@@ -81,9 +81,9 @@ export default function PredictiveDashboard() {
       </div>
 
       {/* Probability Chart */}
-      <div className="lg:col-span-8 glass p-6 rounded-3xl border border-white/5 flex flex-col">
+      <div className="lg:col-span-8 bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 flex flex-col">
         <h3 className="text-xs uppercase font-bold tracking-widest text-gray-500 mb-6 flex items-center gap-2">
-            <Zap size={14} className="text-[var(--color-neon-cyan)]" />
+            <Zap size={14} className="text-[#10B981]" />
             Probabilidad de Falla por Subsistema (6 Meses)
         </h3>
         <div className="flex-1 w-full min-h-[250px]">
@@ -106,7 +106,7 @@ export default function PredictiveDashboard() {
               />
               <Bar 
                 dataKey="score" 
-                fill="var(--color-neon-blue)" 
+                fill="#1E3A8A" 
                 radius={[0, 4, 4, 0]}
                 barSize={12}
               >
@@ -120,19 +120,19 @@ export default function PredictiveDashboard() {
       </div>
 
       {/* Proactive Recommendations */}
-      <div className="lg:col-span-12 glass p-6 rounded-3xl border border-white/5 bg-gradient-to-r from-[var(--color-neon-blue)]/5 to-transparent">
-        <h4 className="text-xs uppercase font-bold tracking-widest text-white mb-4 flex items-center gap-2">
-            <ShieldCheck size={16} className="text-[var(--color-neon-cyan)]" />
+      <div className="lg:col-span-12 bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 bg-gradient-to-r from-[#1E3A8A]/5 to-transparent">
+        <h4 className="text-xs uppercase font-bold tracking-widest text-[#1F2937] mb-4 flex items-center gap-2">
+            <ShieldCheck size={16} className="text-[#10B981]" />
             Recomendaciones Proactivas de Don Atento
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[].map((rec, i) => (
-                <div key={i} className="p-4 rounded-2xl bg-black/40 border border-white/5 hover:border-[var(--color-neon-cyan)]/30 transition-all cursor-pointer group">
+                <div key={i} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-[#10B981]/30 transition-all cursor-pointer group">
                     <div className="flex justify-between items-start mb-2">
                         <span className="text-[10px] font-mono text-gray-500">{(rec as any).label}</span>
-                        <span className="text-[10px] font-bold text-[var(--color-neon-cyan)]">{(rec as any).score} Conf.</span>
+                        <span className="text-[10px] font-bold text-[#10B981]">{(rec as any).score} Conf.</span>
                     </div>
-                    <p className="text-sm text-white font-medium mb-1">{(rec as any).action}</p>
+                    <p className="text-sm text-[#1F2937] font-medium mb-1">{(rec as any).action}</p>
                     <p className="text-[10px] text-gray-500 italic">{(rec as any).impact}</p>
                 </div>
             ))}

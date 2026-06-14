@@ -7,7 +7,7 @@ interface SkeletonProps {
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-white/10 ${className}`}
+      className={`animate-pulse rounded-md bg-gray-100 ${className}`}
     />
   );
 }
@@ -15,7 +15,7 @@ export function Skeleton({ className = '' }: SkeletonProps) {
 // Pre-built skeletons for specific UI elements
 export function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
   return (
-    <tr className="border-b border-white/5">
+    <tr className="border-b border-gray-100">
       {Array.from({ length: columns }).map((_, i) => (
         <td key={i} className="py-4 px-4">
           <Skeleton className="h-4 w-3/4" />

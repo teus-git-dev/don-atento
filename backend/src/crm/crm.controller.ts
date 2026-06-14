@@ -62,7 +62,7 @@ export class CrmController {
   ) {}
 
   @Post('prospects')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear nuevo prospect en el tenant' })
   create(@Body() data: CreateProspectDto, @Req() req: Request) {
     return this.crmService.createProspect({
@@ -72,7 +72,7 @@ export class CrmController {
   }
 
   @Get('prospects')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Listar prospects del tenant (paginado)' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'limit', required: false, example: '20' })
@@ -88,7 +88,7 @@ export class CrmController {
   }
 
   @Patch('prospects/:id')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Actualizar campos mutables de un prospect' })
   update(
     @Param('id') id: string,
@@ -99,21 +99,21 @@ export class CrmController {
   }
 
   @Get('analytics/funnel')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Métricas de embudo por estado de prospect' })
   getFunnel(@Req() req: Request) {
     return this.crmService.getFunnel(req.tenantId!);
   }
 
   @Get('analytics/sentiment')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Distribución de sentimiento de prospects' })
   getSentiment(@Req() req: Request) {
     return this.crmService.getSentimentMetrics(req.tenantId!);
   }
 
   @Post('prospects/:id/tasks')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear tarea asociada a un prospect' })
   createTask(
     @Param('id') prospectId: string,
@@ -124,7 +124,7 @@ export class CrmController {
   }
 
   @Patch('tasks/:taskId')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Actualizar campos mutables de una tarea' })
   updateTask(
     @Param('taskId') taskId: string,
@@ -135,7 +135,7 @@ export class CrmController {
   }
 
   @Post('prospects/:id/convert')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary:
       'Conversión simple prospect→User (legacy; requiere email en el prospect)',
@@ -145,7 +145,7 @@ export class CrmController {
   }
 
   @Post('prospects/:id/contract')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Iniciar proceso de contrato sobre un prospect' })
   startContract(
     @Param('id') prospectId: string,
@@ -166,7 +166,7 @@ export class CrmController {
   }
 
   @Post('contracts/:requestId/generate-draft')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Generar borrador de contrato vía IA (billable)',
   })
@@ -193,7 +193,7 @@ export class CrmController {
    * - Returns a 7-day signed URL (see CONTRACT_SIGNED_URL_TTL_SECONDS).
    */
   @Post('upload')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Subir documento de contrato (PDF/DOCX/imagen)' })
   @UseInterceptors(
     FileInterceptor('file', {
@@ -241,7 +241,7 @@ export class CrmController {
   }
 
   @Post('contracts/:requestId/approve')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary:
       'Aprobar contrato: crea User, vincula Property, marca RENTED (atómico)',

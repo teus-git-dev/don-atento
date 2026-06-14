@@ -66,7 +66,7 @@ export class TicketsController {
   }
 
   @Post()
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
   async create(@Req() req: Request, @Body() createTicketDto: CreateTicketDto) {
     createTicketDto.tenantId = req.tenantId!;
@@ -74,7 +74,7 @@ export class TicketsController {
   }
 
   @Get()
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({
     summary: 'Listar todos los tickets por tenant o propietario (paginado)',
   })
@@ -83,6 +83,7 @@ export class TicketsController {
     @Query('ownerId') ownerId?: string,
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
+    @Query('search') search?: string,
   ) {
     const tenantId = req.tenantId!;
     const wantsPaginated = pageStr !== undefined || limitStr !== undefined;
@@ -96,24 +97,25 @@ export class TicketsController {
         `[deprecation] GET /tickets without pagination — tenant=${tenantId} ownerId=${ownerId ?? '-'}`,
       );
       return ownerId
-        ? this.ticketsService.findAllByOwner(ownerId, tenantId)
-        : this.ticketsService.findAllByTenant(tenantId);
+        ? this.ticketsService.findAllByOwner(ownerId, tenantId, undefined, search)
+        : this.ticketsService.findAllByTenant(tenantId, undefined, search);
     }
 
     const opts = this.parsePagination(pageStr, limitStr);
     return ownerId
-      ? this.ticketsService.findAllByOwner(ownerId, tenantId, opts)
-      : this.ticketsService.findAllByTenant(tenantId, opts);
+      ? this.ticketsService.findAllByOwner(ownerId, tenantId, opts, search)
+      : this.ticketsService.findAllByTenant(tenantId, opts, search);
   }
 
   @Get('technician/:id')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver tickets asignados a un técnico (paginado)' })
   async findByTechnician(
     @Req() req: Request,
     @Param('id') id: string,
     @Query('page') pageStr?: string,
     @Query('limit') limitStr?: string,
+    @Query('search') search?: string,
   ) {
     const tenantId = req.tenantId!;
     const wantsPaginated = pageStr !== undefined || limitStr !== undefined;
@@ -123,22 +125,22 @@ export class TicketsController {
       this.logger.warn(
         `[deprecation] GET /tickets/technician/:id without pagination — tenant=${tenantId} technicianId=${id}`,
       );
-      return this.ticketsService.findAllByTechnician(id, tenantId);
+      return this.ticketsService.findAllByTechnician(id, tenantId, undefined, search);
     }
 
     const opts = this.parsePagination(pageStr, limitStr);
-    return this.ticketsService.findAllByTechnician(id, tenantId, opts);
+    return this.ticketsService.findAllByTechnician(id, tenantId, opts, search);
   }
 
   @Get(':id')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
   @ApiOperation({ summary: 'Ver detalle de un ticket' })
   async findOne(@Req() req: Request, @Param('id') id: string) {
     return this.ticketsService.findOne(id, req.tenantId!);
   }
 
   @Patch(':id/status')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Transición de estado y cálculo automático de ANS' })
   async transition(
     @Req() req: Request,
@@ -154,7 +156,7 @@ export class TicketsController {
   }
 
   @Patch(':id/resolve')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Cerrar ticket con motivo de resolución y firma' })
   async resolve(
     @Req() req: Request,
@@ -170,7 +172,7 @@ export class TicketsController {
   }
 
   @Patch(':id/complete-task')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Completar tarea de estado actual y avanzar' })
   async completeTask(
     @Req() req: Request,
@@ -187,7 +189,7 @@ export class TicketsController {
   }
 
   @Post('upload')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'MAINTENANCE')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'MAINTENANCE')
   @ApiOperation({ summary: 'Sube un archivo de evidencia para un ticket' })
   @UseInterceptors(
     FileInterceptor('file', {

@@ -10,7 +10,13 @@ export enum ProviderSpecialty {
   CARPENTRY = 'CARPENTRY',
   PAINTING = 'PAINTING',
   AC_HEATING = 'AC_HEATING',
-  GENERAL = 'GENERAL'
+  GENERAL = 'GENERAL',
+  LOCKSMITH = 'LOCKSMITH',
+  BLINDS_CURTAINS = 'BLINDS_CURTAINS',
+  ROOFING = 'ROOFING',
+  ELECTRONICS = 'ELECTRONICS',
+  GARDENING = 'GARDENING',
+  OTHERS = 'OTHERS'
 }
 
 export const SpecialtyLabels: Record<ProviderSpecialty, string> = {
@@ -20,7 +26,13 @@ export const SpecialtyLabels: Record<ProviderSpecialty, string> = {
   [ProviderSpecialty.CARPENTRY]: 'Carpintería',
   [ProviderSpecialty.PAINTING]: 'Pintura',
   [ProviderSpecialty.AC_HEATING]: 'Aire Acondicionado',
-  [ProviderSpecialty.GENERAL]: 'General'
+  [ProviderSpecialty.GENERAL]: 'General',
+  [ProviderSpecialty.LOCKSMITH]: 'Cerrajería',
+  [ProviderSpecialty.BLINDS_CURTAINS]: 'Persianas y Cortinas',
+  [ProviderSpecialty.ROOFING]: 'Techos',
+  [ProviderSpecialty.ELECTRONICS]: 'Aparatos Electrónicos',
+  [ProviderSpecialty.GARDENING]: 'Jardinero',
+  [ProviderSpecialty.OTHERS]: 'Otros'
 };
 
 export interface ProviderAdditionalContact {

@@ -385,28 +385,13 @@ export class WhatsappService {
       if (choice === 0) {
         // Create new ticket
         try {
-          // Tenant-scoped workflow lookup. Block A also eliminates the
-          // previous global `findFirst()` fallback that would let one
-          // tenant inherit another's state machine when its own had
-          // none configured.
-          const workflow = await this.prisma.workflow.findFirst({
-            where: { tenantId: resolvedTenantId },
-          });
-
-          const title =
-            originalText.length > 50
-              ? originalText.substring(0, 47) + '...'
-              : originalText;
-          const newTicket = await this.ticketsService.createTicket({
+          const newTicket = await this.createTicketWithPossibleSubtickets({
             tenantId: resolvedTenantId,
             propertyId: propertyId,
-            reportedByUserId: user.id,
-            workflowId: workflow?.id,
-            title: `Reporte Incasa: ${title}`,
-            description: originalText,
-            reportedByUserPhone: cleanPhone,
-            priority: 'MEDIUM',
-            attachments: undefined,
+            userId: user.id,
+            userPhone: cleanPhone,
+            originalText: originalText,
+            issues: parsedMetadata.issues,
           });
           const short = newTicket.id.split('-')[0].toUpperCase();
           const response =
@@ -462,6 +447,7 @@ export class WhatsappService {
       sentiment?: string;
       intensity?: number;
       action?: string;
+      issues?: string[];
     } = {};
     let finalCleanResponse = '';
 
@@ -495,8 +481,13 @@ export class WhatsappService {
         const sentimentMatch = metaStr.match(/Sentiment:\s*(.*)/);
         const intensityMatch = metaStr.match(/Intensity Score:\s*(.*)/);
         const actionMatch = metaStr.match(/Action:\s*(.*)/);
+        const issuesMatch = metaStr.match(/Issues:\s*(.*)/);
 
         if (sentimentMatch) parsedMetadata.sentiment = sentimentMatch[1].trim();
+        if (issuesMatch) {
+          const issuesStr = issuesMatch[1].trim();
+          parsedMetadata.issues = issuesStr ? issuesStr.split('|').map(i => i.trim()).filter(Boolean) : [];
+        }
         if (intensityMatch)
           parsedMetadata.intensity = parseInt(intensityMatch[1].trim(), 10);
         if (actionMatch) {
@@ -603,28 +594,19 @@ export class WhatsappService {
               propertyId,
               resolvedTenantId,
               dbSentiment,
+              issues: parsedMetadata.issues,
             },
           });
 
           finalResponse = menuMsg;
         } else {
-          // Normal creation — tenant-scoped workflow lookup; no global
-          // fallback (cross-tenant workflow injection avoided).
-          const workflow = await this.prisma.workflow.findFirst({
-            where: { tenantId: resolvedTenantId },
-          });
-
-          const title = text.length > 50 ? text.substring(0, 47) + '...' : text;
-          const newTicket = await this.ticketsService.createTicket({
+          const newTicket = await this.createTicketWithPossibleSubtickets({
             tenantId: resolvedTenantId,
             propertyId: propertyId,
-            reportedByUserId: user.id,
-            workflowId: workflow?.id,
-            title: `Reporte Incasa: ${title}`,
-            description: text,
-            reportedByUserPhone: cleanPhone,
-            priority: 'MEDIUM',
-            attachments: undefined,
+            userId: user.id,
+            userPhone: cleanPhone,
+            originalText: text,
+            issues: parsedMetadata.issues,
           });
           const short = newTicket.id.split('-')[0].toUpperCase();
           finalResponse =
@@ -799,5 +781,54 @@ export class WhatsappService {
         `[Meta API] Send failed: status=${status ?? 'n/a'} code=${code ?? 'n/a'} type=${type ?? 'n/a'}`,
       );
     }
+  }
+
+  private async createTicketWithPossibleSubtickets(params: {
+    tenantId: string;
+    propertyId: string;
+    userId: string;
+    userPhone: string;
+    originalText: string;
+    issues?: string[];
+  }) {
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { tenantId: params.tenantId },
+    });
+    
+    // Si hay multiples issues, el ticket principal es un "Reporte Múltiple"
+    const isMultiple = params.issues && params.issues.length > 1;
+    const titleText = isMultiple ? `Reporte Múltiple: ${params.issues.length} daños reportados` : params.originalText;
+    const title = titleText.length > 50 ? titleText.substring(0, 47) + '...' : titleText;
+
+    const parentTicket = await this.ticketsService.createTicket({
+      tenantId: params.tenantId,
+      propertyId: params.propertyId,
+      reportedByUserId: params.userId,
+      workflowId: workflow?.id,
+      title: `Reporte Incasa: ${title}`,
+      description: params.originalText,
+      reportedByUserPhone: params.userPhone,
+      priority: 'MEDIUM',
+      attachments: undefined,
+    });
+
+    if (isMultiple) {
+      for (const issue of params.issues) {
+        const childTitle = issue.length > 50 ? issue.substring(0, 47) + '...' : issue;
+        await this.ticketsService.createTicket({
+          tenantId: params.tenantId,
+          propertyId: params.propertyId,
+          reportedByUserId: params.userId,
+          workflowId: workflow?.id,
+          title: `${childTitle}`,
+          description: `Problema reportado como parte del caso #${parentTicket.id.split('-')[0].toUpperCase()}: ${issue}`,
+          reportedByUserPhone: params.userPhone,
+          priority: 'MEDIUM',
+          parentTicketId: parentTicket.id,
+        });
+      }
+    }
+    
+    return parentTicket;
   }
 }

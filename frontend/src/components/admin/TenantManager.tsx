@@ -46,27 +46,27 @@ function TenantActionsMenu({ tenant, onEdit, onInactivate, onDelete }: {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="p-2 glass rounded-lg border border-white/10 text-gray-400 hover:text-white hover:border-white/30 transition-colors"
+        className="p-2 bg-white shadow-sm border border-gray-200 rounded-lg border border-gray-200 text-gray-500 hover:text-[#1F2937] hover:border-white/30 transition-colors"
       >
         <MoreVertical size={14} />
       </button>
 
       {open && (
-        <div className="absolute bottom-10 right-0 z-50 w-52 rounded-2xl border border-white/10 bg-[#0d1525] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="absolute bottom-10 right-0 z-50 w-52 rounded-2xl border border-gray-200 bg-[#0d1525] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
           <button
             onClick={() => { setOpen(false); onEdit(); }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#1F2937] transition-colors"
           >
             <Pencil size={14} className="text-blue-400" /> Modificar Tenant
           </button>
           <button
             onClick={() => { setOpen(false); onInactivate(); }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#1F2937] transition-colors"
           >
             <Ban size={14} className="text-yellow-400" />
             {tenant.status === 'active' ? 'Inactivar Tenant' : 'Activar Tenant'}
           </button>
-          <div className="border-t border-white/5" />
+          <div className="border-t border-gray-100" />
           <button
             onClick={() => { setOpen(false); onDelete(); }}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
@@ -211,8 +211,8 @@ export default function TenantManager() {
     setDeleteConfirmText('');
   };
 
-  const inputCls = "w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50";
-  const labelCls = "block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5";
+  const inputCls = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:border-blue-500/50";
+  const labelCls = "block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5";
 
   // ── Shared form fields ───────────────────────────────────────────────────
   const TenantFormFields = () => (
@@ -250,7 +250,7 @@ export default function TenantManager() {
         <h3 className="text-xs uppercase font-bold tracking-widest text-gray-500">Cartera de Clientes Inmobiliarios</h3>
         <button
           onClick={() => { setFormData(emptyForm); setIsCreateOpen(true); }}
-          className="bg-[var(--color-neon-blue)] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-600 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(0,112,243,0.3)]"
+          className="bg-[#1E3A8A] text-[#1F2937] px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-600 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(0,112,243,0.3)]"
         >
           <Plus size={14} /> Nueva Inmobiliaria
         </button>
@@ -259,22 +259,22 @@ export default function TenantManager() {
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tenants.map((tenant) => (
-          <div key={tenant.id} className={`glass p-6 rounded-3xl border transition-all group relative overflow-hidden ${
-            tenant.status !== 'active' ? 'opacity-50 border-white/5 grayscale' : 'border-white/5 hover:border-[var(--color-neon-blue)]/50'
+          <div key={tenant.id} className={`bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border transition-all group relative overflow-hidden ${
+            tenant.status !== 'active' ? 'opacity-50 border-gray-100 grayscale' : 'border-gray-100 hover:border-[#1E3A8A]/50'
           }`}>
             {/* Plan Badge */}
             <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[8px] font-bold uppercase tracking-wider ${
-              tenant.plan === 'pro' ? 'bg-[var(--color-neon-blue)]/20 text-[var(--color-neon-blue)]' : 'bg-gray-500/20 text-gray-400'
+              tenant.plan === 'pro' ? 'bg-[#1E3A8A]/20 text-[#1E3A8A]' : 'bg-gray-500/20 text-gray-500'
             }`}>
               PLAN {tenant.plan === 'pro' ? 'PREMIUM' : 'BÁSICO'}
             </div>
 
             <div className="flex items-start gap-4 mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-400">
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-500">
                 <Building2 size={24} />
               </div>
               <div>
-                <h4 className="text-lg font-bold text-white group-hover:text-[var(--color-neon-cyan)] transition-colors">{tenant.name}</h4>
+                <h4 className="text-lg font-bold text-[#1F2937] group-hover:text-[#10B981] transition-colors">{tenant.name}</h4>
                 <span className="text-[10px] font-mono text-gray-500">{tenant.id} • Desde {tenant.createdAt}</span>
               </div>
             </div>
@@ -283,14 +283,14 @@ export default function TenantManager() {
               <div className="space-y-2">
                 <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
                   <span className="text-gray-500">Tickets IA (Mensual)</span>
-                  <span className="text-white">{tenant.aiTicketsUsed} / {tenant.aiTicketLimit}</span>
+                  <span className="text-[#1F2937]">{tenant.aiTicketsUsed} / {tenant.aiTicketLimit}</span>
                 </div>
-                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                <div className="h-1.5 w-full bg-gray-50 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-1000 ${
                       (tenant.aiTicketsUsed / tenant.aiTicketLimit) > 0.9
                         ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                        : 'bg-[var(--color-neon-cyan)] shadow-[0_0_8px_rgba(0,255,255,0.5)]'
+                        : 'bg-[#10B981] shadow-[0_0_8px_rgba(0,255,255,0.5)]'
                     }`}
                     style={{ width: `${Math.min(tenant.aiTicketsUsed / tenant.aiTicketLimit, 1) * 100}%` }}
                   />
@@ -298,21 +298,21 @@ export default function TenantManager() {
               </div>
 
               {(tenant.subscriptionStart || tenant.subscriptionEnd) && (
-                <div className="flex items-center gap-4 p-3 bg-white/5 rounded-2xl border border-white/5">
-                  <div className="p-2 rounded-xl bg-[var(--color-neon-blue)]/10 text-[var(--color-neon-blue)]">
+                <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div className="p-2 rounded-xl bg-[#1E3A8A]/10 text-[#1E3A8A]">
                     <Calendar size={14} />
                   </div>
                   <div className="flex-1 flex flex-col">
                     <span className="text-[8px] uppercase font-bold text-gray-500 tracking-widest">Vencimiento Suscripción</span>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-white font-bold">{tenant.subscriptionEnd || '--'}</span>
-                      <span className="text-[9px] text-[var(--color-neon-cyan)] font-mono">Inicia: {tenant.subscriptionStart}</span>
+                      <span className="text-[10px] text-[#1F2937] font-bold">{tenant.subscriptionEnd || '--'}</span>
+                      <span className="text-[9px] text-[#10B981] font-mono">Inicia: {tenant.subscriptionStart}</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-4 border-t border-white/5">
+              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                 <div className="flex items-center gap-2">
                   {tenant.status === 'active' ? (
                     <div className="flex items-center gap-1.5 text-green-400 text-[10px] font-bold uppercase">
@@ -327,7 +327,7 @@ export default function TenantManager() {
                 <div className="flex gap-2 items-center">
                   <button
                     onClick={() => setInactivateTarget(tenant)}
-                    className={`p-2 glass rounded-lg border transition-colors ${
+                    className={`p-2 bg-white shadow-sm border border-gray-200 rounded-lg border transition-colors ${
                       tenant.status === 'active'
                         ? 'border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20'
                         : 'border-green-500/30 text-green-400 hover:bg-green-500/20'
@@ -351,19 +351,19 @@ export default function TenantManager() {
 
       {/* ── CREATE MODAL ─────────────────────────────────────────────── */}
       {isCreateOpen && mounted && createPortal(
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="glass w-full max-w-2xl rounded-3xl p-8 border border-blue-500/30 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
+          <div className="bg-white shadow-sm border border-gray-200 w-full max-w-2xl rounded-3xl p-8 border border-blue-500/30 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
               <div>
-                <h2 className="text-2xl font-bold text-white">Nueva Inmobiliaria</h2>
-                <p className="text-sm text-[var(--color-neon-cyan)] font-mono mt-1">Panel Exclusivo Teus SuperAdmin</p>
+                <h2 className="text-2xl font-bold text-[#1F2937]">Nueva Inmobiliaria</h2>
+                <p className="text-sm text-[#10B981] font-mono mt-1">Panel Exclusivo Teus SuperAdmin</p>
               </div>
-              <button onClick={() => setIsCreateOpen(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+              <button onClick={() => setIsCreateOpen(false)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500 hover:text-[#1F2937] transition-colors"><X size={20} /></button>
             </div>
             <form onSubmit={handleCreate} className="space-y-6">
               <TenantFormFields />
-              <div className="pt-4 border-t border-white/5 space-y-4">
-                <h3 className="text-sm font-bold text-[var(--color-neon-cyan)] uppercase tracking-widest flex items-center gap-2">
+              <div className="pt-4 border-t border-gray-100 space-y-4">
+                <h3 className="text-sm font-bold text-[#10B981] uppercase tracking-widest flex items-center gap-2">
                   <ShieldCheck size={16} /> Admin Tenant
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -388,9 +388,9 @@ export default function TenantManager() {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                <button type="button" onClick={() => setIsCreateOpen(false)} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
-                <button type="submit" className="px-8 py-3 bg-[var(--color-neon-blue)] hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(0,112,243,0.5)] flex items-center gap-2">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setIsCreateOpen(false)} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-[#1F2937] hover:bg-gray-50 transition-colors">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-[#1E3A8A] hover:bg-blue-500 text-[#1F2937] rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(0,112,243,0.5)] flex items-center gap-2">
                   <ShieldCheck size={16} /> Registrar y Activar
                 </button>
               </div>
@@ -402,14 +402,14 @@ export default function TenantManager() {
 
       {/* ── EDIT MODAL ───────────────────────────────────────────────── */}
       {editTarget && mounted && createPortal(
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="glass w-full max-w-2xl rounded-3xl p-8 border border-blue-500/30 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
+          <div className="bg-white shadow-sm border border-gray-200 w-full max-w-2xl rounded-3xl p-8 border border-blue-500/30 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
               <div>
-                <h2 className="text-xl font-bold text-white">Modificar Tenant</h2>
-                <p className="text-xs text-gray-400 font-mono mt-1">{editTarget.id}</p>
+                <h2 className="text-xl font-bold text-[#1F2937]">Modificar Tenant</h2>
+                <p className="text-xs text-gray-500 font-mono mt-1">{editTarget.id}</p>
               </div>
-              <button onClick={() => setEditTarget(null)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+              <button onClick={() => setEditTarget(null)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500 hover:text-[#1F2937] transition-colors"><X size={20} /></button>
             </div>
 
             <form onSubmit={handleEdit} className="space-y-6">
@@ -417,8 +417,8 @@ export default function TenantManager() {
               <TenantFormFields />
 
               {/* Admin section */}
-              <div className="pt-4 border-t border-white/5 space-y-4">
-                <h3 className="text-sm font-bold text-[var(--color-neon-cyan)] uppercase tracking-widest flex items-center gap-2">
+              <div className="pt-4 border-t border-gray-100 space-y-4">
+                <h3 className="text-sm font-bold text-[#10B981] uppercase tracking-widest flex items-center gap-2">
                   <ShieldCheck size={15} /> Información del Admin Tenant
                 </h3>
                 <p className="text-[11px] text-yellow-400/80 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-2">
@@ -456,9 +456,9 @@ export default function TenantManager() {
                 <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2">{editError}</p>
               )}
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                <button type="button" onClick={() => setEditTarget(null)} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
-                <button type="submit" disabled={editLoading} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setEditTarget(null)} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-[#1F2937] hover:bg-gray-50 transition-colors">Cancelar</button>
+                <button type="submit" disabled={editLoading} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-[#1F2937] rounded-xl text-sm font-bold transition-all flex items-center gap-2">
                   <Pencil size={14} /> {editLoading ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
@@ -471,27 +471,27 @@ export default function TenantManager() {
       {/* ── NEW CREDENTIAL MODAL (shown ONCE after email change) ────── */}
       {newCredential && mounted && createPortal(
         <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-          <div className="glass w-full max-w-md rounded-3xl p-8 border border-yellow-500/40 shadow-[0_0_40px_rgba(245,158,11,0.15)]">
+          <div className="bg-white shadow-sm border border-gray-200 w-full max-w-md rounded-3xl p-8 border border-yellow-500/40 shadow-[0_0_40px_rgba(245,158,11,0.15)]">
             <div className="flex flex-col items-center text-center mb-6">
               <div className="w-14 h-14 mb-4 rounded-full bg-yellow-500/10 flex items-center justify-center">
                 <ShieldCheck size={28} className="text-yellow-400" />
               </div>
-              <h2 className="text-xl font-bold text-white mb-1">Nuevas Credenciales Generadas</h2>
-              <p className="text-sm text-gray-400">
-                Email de bienvenida enviado a <span className="text-white font-bold">{newCredential.email}</span>.
+              <h2 className="text-xl font-bold text-[#1F2937] mb-1">Nuevas Credenciales Generadas</h2>
+              <p className="text-sm text-gray-500">
+                Email de bienvenida enviado a <span className="text-[#1F2937] font-bold">{newCredential.email}</span>.
                 Guarda la contraseña ahora — <span className="text-yellow-400 font-bold">no se mostrará de nuevo.</span>
               </p>
             </div>
 
-            <div className="bg-black/60 border border-white/10 rounded-2xl p-5 mb-6">
+            <div className="bg-black/60 border border-gray-200 rounded-2xl p-5 mb-6">
               <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Contraseña Temporal (Un Solo Uso)</p>
               <div className="flex items-center gap-3">
-                <code className="flex-1 font-mono text-lg font-bold text-white tracking-wider break-all">
+                <code className="flex-1 font-mono text-lg font-bold text-[#1F2937] tracking-wider break-all">
                   {newCredential.password}
                 </code>
                 <button
                   onClick={() => copyToClipboard(newCredential.password)}
-                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                  className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-[#1F2937] transition-colors flex-shrink-0"
                   title="Copiar"
                 >
                   {copied ? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}
@@ -501,7 +501,7 @@ export default function TenantManager() {
 
             <button
               onClick={() => setNewCredential(null)}
-              className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-white rounded-xl text-sm font-bold transition-all"
+              className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-[#1F2937] rounded-xl text-sm font-bold transition-all"
             >
               Entendido — He guardado la contraseña
             </button>
@@ -512,22 +512,22 @@ export default function TenantManager() {
 
       {/* ── INACTIVATE CONFIRMATION ──────────────────────────────────── */}
       {inactivateTarget && mounted && createPortal(
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="glass w-full max-w-md rounded-3xl p-8 border border-yellow-500/30 shadow-2xl text-center">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
+          <div className="bg-white shadow-sm border border-gray-200 w-full max-w-md rounded-3xl p-8 border border-yellow-500/30 shadow-2xl text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-500/10 flex items-center justify-center">
               <Ban size={32} className="text-yellow-400" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">
+            <h2 className="text-xl font-bold text-[#1F2937] mb-2">
               {inactivateTarget.status === 'active' ? 'Inactivar' : 'Activar'} Tenant
             </h2>
-            <p className="text-sm text-gray-400 mb-6">
+            <p className="text-sm text-gray-500 mb-6">
               ¿Estás seguro que deseas {inactivateTarget.status === 'active' ? 'inactivar' : 'activar'} a{' '}
-              <span className="text-white font-bold">{inactivateTarget.name}</span>?
+              <span className="text-[#1F2937] font-bold">{inactivateTarget.name}</span>?
               {inactivateTarget.status === 'active' && ' El acceso al sistema quedará bloqueado.'}
             </p>
             <div className="flex justify-center gap-3">
-              <button onClick={() => setInactivateTarget(null)} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
-              <button onClick={confirmInactivate} className="px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+              <button onClick={() => setInactivateTarget(null)} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-[#1F2937] hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={confirmInactivate} className="px-8 py-3 bg-yellow-600 hover:bg-yellow-500 text-[#1F2937] rounded-xl text-sm font-bold transition-all flex items-center gap-2">
                 <Ban size={14} /> {inactivateTarget.status === 'active' ? 'Inactivar' : 'Activar'}
               </button>
             </div>
@@ -538,17 +538,17 @@ export default function TenantManager() {
 
       {/* ── DELETE DOUBLE CONFIRMATION ───────────────────────────────── */}
       {deleteTarget && mounted && createPortal(
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="glass w-full max-w-md rounded-3xl p-8 border border-red-500/40 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
+          <div className="bg-white shadow-sm border border-gray-200 w-full max-w-md rounded-3xl p-8 border border-red-500/40 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
             <div className="flex flex-col items-center text-center mb-6">
               <div className="w-16 h-16 mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
                 <AlertTriangle size={32} className="text-red-400" />
               </div>
-              <h2 className="text-xl font-bold text-white mb-1">Eliminar Tenant</h2>
-              <p className="text-sm text-gray-400">
+              <h2 className="text-xl font-bold text-[#1F2937] mb-1">Eliminar Tenant</h2>
+              <p className="text-sm text-gray-500">
                 Esta acción es <span className="text-red-400 font-bold">permanente e irreversible</span>.
                 Todos los datos de{' '}
-                <span className="text-white font-bold">{deleteTarget.name}</span> serán eliminados.
+                <span className="text-[#1F2937] font-bold">{deleteTarget.name}</span> serán eliminados.
               </p>
             </div>
 
@@ -560,17 +560,17 @@ export default function TenantManager() {
                 type="text"
                 value={deleteConfirmText}
                 onChange={e => setDeleteConfirmText(e.target.value)}
-                className="w-full bg-red-950/30 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-red-950/30 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:outline-none focus:border-red-500"
                 placeholder={deleteTarget.name}
               />
             </div>
 
             <div className="flex justify-end gap-3">
-              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmText(''); }} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmText(''); }} className="px-6 py-3 rounded-xl text-sm font-bold text-gray-500 hover:text-[#1F2937] hover:bg-gray-50 transition-colors">Cancelar</button>
               <button
                 onClick={confirmDelete}
                 disabled={deleteConfirmText !== deleteTarget.name}
-                className="px-8 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2"
+                className="px-8 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed text-[#1F2937] rounded-xl text-sm font-bold transition-all flex items-center gap-2"
               >
                 <Trash2 size={14} /> Eliminar Definitivamente
               </button>

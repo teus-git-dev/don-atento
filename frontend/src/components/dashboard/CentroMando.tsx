@@ -24,19 +24,19 @@ export default function CentroMando() {
           label="Prospectos Activos" 
           value="0" 
           trend="Sin datos" 
-          icon={<Users className="text-[var(--color-neon-blue)]" />}
+          icon={<Users className="text-[#1E3A8A]" />}
         />
         <StatCard 
           label="Salud del Inventario" 
           value="0%" 
           trend="N/A" 
-          icon={<Home className="text-[var(--color-neon-cyan)]" />}
+          icon={<Home className="text-[#10B981]" />}
         />
         <StatCard 
           label="Tickets Resueltos Hoy" 
           value="0" 
           trend="0" 
-          icon={<TicketCheck className="text-[var(--color-neon-purple)]" />}
+          icon={<TicketCheck className="text-[#1E3A8A]" />}
         />
         <StatCard 
           label="Sentiment Score" 
@@ -49,13 +49,13 @@ export default function CentroMando() {
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pillar 1: CRM & Growth */}
-        <section className="glass p-6 rounded-3xl border border-white/5 space-y-4">
+        <section className="bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400 flex items-center gap-2">
-              <Users size={16} className="text-[var(--color-neon-blue)]" />
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-2">
+              <Users size={16} className="text-[#1E3A8A]" />
               Embudo de Captación (CRM)
             </h3>
-            <button className="text-xs text-[var(--color-neon-blue)] hover:underline flex items-center gap-1">
+            <button className="text-xs text-[#1E3A8A] hover:underline flex items-center gap-1">
               Ver Leads <ArrowUpRight size={12} />
             </button>
           </div>
@@ -65,10 +65,10 @@ export default function CentroMando() {
         </section>
 
         {/* Pillar 2: Operational Efficiency */}
-        <section className="glass p-6 rounded-3xl border border-white/5 space-y-4">
+        <section className="bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400 flex items-center gap-2">
-              <TicketCheck size={16} className="text-[var(--color-neon-purple)]" />
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-2">
+              <TicketCheck size={16} className="text-[#1E3A8A]" />
               Eficiencia de Servicio
             </h3>
             <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 font-mono">
@@ -81,10 +81,10 @@ export default function CentroMando() {
         </section>
 
         {/* Pillar 3: Inventory Health */}
-        <section className="glass p-6 rounded-3xl border border-white/5 space-y-4">
+        <section className="bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400 flex items-center gap-2">
-              <Home size={16} className="text-[var(--color-neon-cyan)]" />
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-2">
+              <Home size={16} className="text-[#10B981]" />
               Integridad de Inventarios
             </h3>
           </div>
@@ -96,9 +96,9 @@ export default function CentroMando() {
         </section>
 
         {/* Pillar 4: Customer Satisfaction */}
-        <section className="glass p-6 rounded-3xl border border-white/5 space-y-4">
+        <section className="bg-white shadow-sm border border-gray-200 p-6 rounded-3xl border border-gray-100 space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400 flex items-center gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-2">
               <HeartPulse size={16} className="text-green-400" />
               Pulso del Cliente (Feedback)
             </h3>
@@ -111,7 +111,7 @@ export default function CentroMando() {
             {/* Satisfaction Gauge-like display */}
             <div className="flex flex-col items-center justify-center p-4 relative h-[180px]">
               <div className="text-center relative z-10">
-                <div className="text-4xl font-bold text-white mb-1">0%</div>
+                <div className="text-4xl font-bold text-[#1F2937] mb-1">0%</div>
                 <div className="text-[10px] text-gray-500 font-mono">SATISFACCIÓN</div>
               </div>
               {/* Dynamic Pulse based on score */}
@@ -134,28 +134,28 @@ export default function CentroMando() {
 
 function CommentItem({ user, comment, stars }: any) {
   return (
-    <div className="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1">
+    <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 space-y-1">
       <div className="flex justify-between items-center">
-        <span className="text-[10px] font-bold text-gray-300">{user}</span>
+        <span className="text-[10px] font-bold text-gray-600">{user}</span>
         <div className="flex gap-0.5">
           {[...Array(5)].map((_, i) => (
             <Star key={i} size={8} fill={i < stars ? "#4ade80" : "none"} stroke={i < stars ? "#4ade80" : "#444"} />
           ))}
         </div>
       </div>
-      <p className="text-[10px] text-gray-400 italic line-clamp-2">"{comment}"</p>
+      <p className="text-[10px] text-gray-500 italic line-clamp-2">"{comment}"</p>
     </div>
   );
 }
 
 function StatCard({ label, value, trend, icon }: any) {
   return (
-    <div className="glass p-5 rounded-2xl border border-white/5 relative group overflow-hidden">
+    <div className="bg-white shadow-sm border border-gray-200 p-5 rounded-2xl border border-gray-100 relative group overflow-hidden">
       <div className="absolute top-4 right-4 opacity-20 group-hover:opacity-100 transition-opacity">
         {icon}
       </div>
       <p className="text-gray-500 text-xs font-bold uppercase tracking-tighter mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-2xl font-bold text-[#1F2937]">{value}</p>
       <p className="text-[10px] text-green-400 mt-2 font-mono flex items-center gap-1">
         <TrendingUp size={10} /> {trend}
       </p>

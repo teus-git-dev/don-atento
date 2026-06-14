@@ -130,7 +130,7 @@ export default function SplatViewer({ splatUrl }: { splatUrl?: string }) {
   };
 
   return (
-    <div className="relative w-full h-full glass rounded-3xl border border-white/5 overflow-hidden bg-black/40">
+    <div className="relative w-full h-full bg-white shadow-sm border border-gray-200 rounded-3xl border border-gray-100 overflow-hidden bg-gray-50">
       {/* 3D Canvas */}
       <Canvas dpr={[1, 2]}>
         <PerspectiveCamera makeDefault position={[8, 5, 8]} fov={50} />
@@ -169,9 +169,9 @@ export default function SplatViewer({ splatUrl }: { splatUrl?: string }) {
 
       {/* UI Overlay */}
       <div className="absolute top-6 left-6 flex flex-col gap-3">
-        <div className="glass px-4 py-2 rounded-full border border-white/10 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-neon-cyan)] animate-pulse"></div>
-            <span className="text-[10px] uppercase font-bold tracking-widest text-gray-300">Modo: Inspección Digital Twin</span>
+        <div className="bg-white shadow-sm border border-gray-200 px-4 py-2 rounded-full border border-gray-200 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></div>
+            <span className="text-[10px] uppercase font-bold tracking-widest text-gray-600">Modo: Inspección Digital Twin</span>
         </div>
         
         <div className="flex gap-2">
@@ -180,7 +180,7 @@ export default function SplatViewer({ splatUrl }: { splatUrl?: string }) {
                 { icon: <Camera size={16} />, label: "Captura" },
                 { icon: <Box size={16} />, label: "Splat-Click" },
             ].map((btn, i) => (
-                <button key={i} className="glass p-3 rounded-2xl border border-white/10 hover:bg-white/10 transition-all text-gray-400 hover:text-[var(--color-neon-cyan)]">
+                <button key={i} className="bg-white shadow-sm border border-gray-200 p-3 rounded-2xl border border-gray-200 hover:bg-gray-100 transition-all text-gray-500 hover:text-[#10B981]">
                     {btn.icon}
                 </button>
             ))}
@@ -190,24 +190,24 @@ export default function SplatViewer({ splatUrl }: { splatUrl?: string }) {
       {/* Annotation Detail Panel */}
       {selectedAnnotation && (
         <div className="absolute bottom-6 right-6 w-72 animate-in slide-in-from-right duration-300">
-            <div className="glass p-5 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl">
+            <div className="bg-white shadow-sm border border-gray-200 p-5 rounded-2xl border border-gray-200 bg-black/60 backdrop-blur-xl">
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-2">
-                        <MapPin size={16} className="text-[var(--color-neon-cyan)]" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-white">ID: {selectedAnnotation.ticketId}</span>
+                        <MapPin size={16} className="text-[#10B981]" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#1F2937]">ID: {selectedAnnotation.ticketId}</span>
                     </div>
-                    <button onClick={() => setSelectedAnnotation(null)} className="text-gray-500 hover:text-white">&times;</button>
+                    <button onClick={() => setSelectedAnnotation(null)} className="text-gray-500 hover:text-[#1F2937]">&times;</button>
                 </div>
                 
-                <h4 className="text-sm font-bold text-white mb-2">{selectedAnnotation.label}</h4>
-                <p className="text-[10px] text-gray-400 mb-4 leading-relaxed">
+                <h4 className="text-sm font-bold text-[#1F2937] mb-2">{selectedAnnotation.label}</h4>
+                <p className="text-[10px] text-gray-500 mb-4 leading-relaxed">
                     Ubicación espacial: {selectedAnnotation.position.x.toFixed(2)}, {selectedAnnotation.position.y.toFixed(2)}, {selectedAnnotation.position.z.toFixed(2)}
                 </p>
 
                 <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
-                        <CheckCircle2 size={16} className="text-[var(--color-neon-cyan)]" />
-                        <span className="text-xs text-gray-300">Vinculado al Orquestador IA</span>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                        <CheckCircle2 size={16} className="text-[#10B981]" />
+                        <span className="text-xs text-gray-600">Vinculado al Orquestador IA</span>
                     </div>
                 </div>
             </div>
@@ -215,9 +215,9 @@ export default function SplatViewer({ splatUrl }: { splatUrl?: string }) {
       )}
 
       {/* Legend */}
-      <div className="absolute top-6 right-6 glass p-4 rounded-2xl border border-white/10 text-[10px] text-gray-500 space-y-2">
+      <div className="absolute top-6 right-6 bg-white shadow-sm border border-gray-200 p-4 rounded-2xl border border-gray-200 text-[10px] text-gray-500 space-y-2">
         <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-neon-cyan)]"></div>
+            <div className="w-2 h-2 rounded-full bg-[#10B981]"></div>
             <span>Anomalía Generada</span>
         </div>
         <div className="flex items-center gap-2">

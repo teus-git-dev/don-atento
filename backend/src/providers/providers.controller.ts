@@ -33,7 +33,7 @@ export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Get()
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Listar providers (paginado + filtros)' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'limit', required: false, example: '20' })
@@ -62,21 +62,21 @@ export class ProvidersController {
   }
 
   @Get(':id')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Detalle de un provider' })
   findOne(@Req() req: Request, @Param('id') id: string) {
     return this.providersService.findOne(id, req.tenantId!);
   }
 
   @Post()
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear provider con contactos opcionales' })
   create(@Req() req: Request, @Body() data: CreateProviderDto) {
     return this.providersService.create(req.tenantId!, data);
   }
 
   @Patch(':id')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Actualizar provider (whitelist DTO — tenantId no mutable)',
   })
@@ -89,14 +89,14 @@ export class ProvidersController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Eliminar provider' })
   remove(@Req() req: Request, @Param('id') id: string) {
     return this.providersService.remove(id, req.tenantId!);
   }
 
   @Post(':id/assign-technician/:userId')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Asignar técnico (User) a un provider — ambos del tenant',
   })

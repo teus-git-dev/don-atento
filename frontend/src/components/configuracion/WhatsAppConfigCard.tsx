@@ -237,22 +237,22 @@ export default function WhatsAppConfigCard() {
   return (
     <div className="space-y-6">
       {/* Header & Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gray-50 border border-gray-200 rounded-2xl p-4">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isConfigured ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isConfigured ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-500'}`}>
             <MessageSquare size={20} />
           </div>
           <div>
-            <h3 className="text-white font-bold text-sm">Proveedor de WhatsApp</h3>
+            <h3 className="text-[#1F2937] font-bold text-sm">Proveedor de WhatsApp</h3>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Configuración del Agente</p>
           </div>
         </div>
 
-        <div className="flex p-1 bg-black/40 rounded-xl border border-white/5">
+        <div className="flex p-1 bg-gray-50 rounded-xl border border-gray-100">
           <button
             onClick={() => setActiveTab('meta')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'meta' ? 'bg-white/10 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
+              activeTab === 'meta' ? 'bg-gray-100 text-[#1F2937] shadow-lg' : 'text-gray-500 hover:text-gray-600'
             }`}
           >
             <Webhook size={14} /> Oficial (Meta)
@@ -260,7 +260,7 @@ export default function WhatsAppConfigCard() {
           <button
             onClick={() => setActiveTab('baileys')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'baileys' ? 'bg-white/10 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
+              activeTab === 'baileys' ? 'bg-gray-100 text-[#1F2937] shadow-lg' : 'text-gray-500 hover:text-gray-600'
             }`}
           >
             <QrCode size={14} /> Gratuito (Baileys)
@@ -278,10 +278,10 @@ export default function WhatsAppConfigCard() {
                   <CheckCircle size={24} />
                 </div>
                 <div>
-                  <h4 className="text-white font-semibold">Meta API Conectada</h4>
-                  <div className="flex flex-col text-xs text-gray-400 mt-0.5">
-                    <span>Phone ID: <code className="text-gray-300">{currentPhoneId}</code></span>
-                    <span>Token: <code className="text-gray-300">{currentTokenMasked}</code></span>
+                  <h4 className="text-[#1F2937] font-semibold">Meta API Conectada</h4>
+                  <div className="flex flex-col text-xs text-gray-500 mt-0.5">
+                    <span>Phone ID: <code className="text-gray-600">{currentPhoneId}</code></span>
+                    <span>Token: <code className="text-gray-600">{currentTokenMasked}</code></span>
                   </div>
                 </div>
               </div>
@@ -300,7 +300,7 @@ export default function WhatsAppConfigCard() {
                   <Info size={20} />
                 </div>
                 <div>
-                  <h4 className="text-white font-semibold text-sm">Configuración Meta Cloud API</h4>
+                  <h4 className="text-[#1F2937] font-semibold text-sm">Configuración Meta Cloud API</h4>
                   <p className="text-xs text-gray-500 mt-1">
                     Ideal para inmobiliarias con alto volumen que requieren estabilidad total de Meta.
                   </p>
@@ -315,7 +315,7 @@ export default function WhatsAppConfigCard() {
                     placeholder="Ej: 1234567890..."
                     value={phoneNumberId}
                     onChange={(e) => setPhoneNumberId(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:border-blue-500/50 outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-2">
@@ -326,9 +326,9 @@ export default function WhatsAppConfigCard() {
                       placeholder="EAA..."
                       value={accessToken}
                       onChange={(e) => setAccessToken(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 pr-12 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm text-[#1F2937] focus:border-blue-500/50 outline-none transition-all"
                     />
-                    <button onClick={() => setShowToken(!showToken)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
+                    <button onClick={() => setShowToken(!showToken)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#1F2937] transition-colors">
                       {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
@@ -338,7 +338,7 @@ export default function WhatsAppConfigCard() {
               <button
                 onClick={handleSaveMeta}
                 disabled={loading || !phoneNumberId || !accessToken}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm transition-all shadow-[0_0_20px_rgba(37,99,235,0.2)] flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-[#1F2937] font-bold rounded-xl text-sm transition-all shadow-[0_0_20px_rgba(37,99,235,0.2)] flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                 Guardar Configuración Meta
@@ -348,22 +348,22 @@ export default function WhatsAppConfigCard() {
 
           {/* Webhook Settings (only for Meta) */}
           <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6 space-y-4">
-            <h4 className="text-white font-semibold text-xs flex items-center gap-2 uppercase tracking-widest">
+            <h4 className="text-[#1F2937] font-semibold text-xs flex items-center gap-2 uppercase tracking-widest">
               <Activity size={14} className="text-blue-400" /> Webhook Endpoints
             </h4>
             <div className="space-y-3">
               <div>
                 <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Callback URL</span>
                 <div className="flex gap-2 mt-1">
-                  <code className="flex-1 bg-black/50 border border-white/5 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono overflow-hidden text-ellipsis whitespace-nowrap">{webhookUrl}</code>
-                  <button onClick={() => navigator.clipboard.writeText(webhookUrl)} className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] text-gray-400">Copiar</button>
+                  <code className="flex-1 bg-white border border-gray-100 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono overflow-hidden text-ellipsis whitespace-nowrap">{webhookUrl}</code>
+                  <button onClick={() => navigator.clipboard.writeText(webhookUrl)} className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[10px] text-gray-500">Copiar</button>
                 </div>
               </div>
               <div>
                 <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Verify Token</span>
                 <div className="flex gap-2 mt-1">
-                  <code className="flex-1 bg-black/50 border border-white/5 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono">{webhookVerifyToken}</code>
-                  <button onClick={() => navigator.clipboard.writeText(webhookVerifyToken)} className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] text-gray-400">Copiar</button>
+                  <code className="flex-1 bg-white border border-gray-100 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono">{webhookVerifyToken}</code>
+                  <button onClick={() => navigator.clipboard.writeText(webhookVerifyToken)} className="px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[10px] text-gray-500">Copiar</button>
                 </div>
               </div>
             </div>
@@ -383,8 +383,8 @@ export default function WhatsAppConfigCard() {
                     <CheckCircle size={24} />
                   </div>
                   <div>
-                    <h4 className="text-white font-semibold">WhatsApp Baileys Activo</h4>
-                    <p className="text-xs text-gray-400">Sesión vinculada correctamente y protegida.</p>
+                    <h4 className="text-[#1F2937] font-semibold">WhatsApp Baileys Activo</h4>
+                    <p className="text-xs text-gray-500">Sesión vinculada correctamente y protegida.</p>
                   </div>
                 </div>
                 <button
@@ -398,7 +398,7 @@ export default function WhatsAppConfigCard() {
 
               {/* Anti-Ban Health Dashboard */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <ShieldCheck size={18} className="text-blue-400" />
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -410,35 +410,35 @@ export default function WhatsAppConfigCard() {
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Nivel de Seguridad</p>
-                    <h5 className="text-lg text-white font-bold mt-1">Protocolo Activo</h5>
+                    <h5 className="text-lg text-[#1F2937] font-bold mt-1">Protocolo Activo</h5>
                   </div>
-                  <div className="pt-2 border-t border-white/5">
+                  <div className="pt-2 border-t border-gray-100">
                     <p className="text-[9px] text-gray-600">Simulación de typing y jitter gaussiano activados para evitar bloqueos.</p>
                   </div>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <Activity size={18} className="text-purple-400" />
-                    <span className="text-[10px] text-gray-400 font-bold">{health?.messagesLastHour || 0}/{health?.limits?.MAX_MESSAGES_PER_HOUR || 25}</span>
+                    <span className="text-[10px] text-gray-500 font-bold">{health?.messagesLastHour || 0}/{health?.limits?.MAX_MESSAGES_PER_HOUR || 25}</span>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Mensajes / Hora</p>
-                    <div className="w-full h-1.5 bg-white/5 rounded-full mt-2 overflow-hidden">
+                    <div className="w-full h-1.5 bg-gray-50 rounded-full mt-2 overflow-hidden">
                       <div className="h-full bg-purple-500 transition-all duration-500" style={{ width: `${health?.hourUsagePercent || 0}%` }}></div>
                     </div>
                   </div>
                   <p className="text-[9px] text-gray-600">Uso actual de la cuota de seguridad horaria.</p>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <Clock size={18} className="text-orange-400" />
-                    <span className="text-[10px] text-gray-400 font-bold">{health?.messagesLast24h || 0}/{health?.limits?.MAX_MESSAGES_PER_DAY || 250}</span>
+                    <span className="text-[10px] text-gray-500 font-bold">{health?.messagesLast24h || 0}/{health?.limits?.MAX_MESSAGES_PER_DAY || 250}</span>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Mensajes / 24h</p>
-                    <div className="w-full h-1.5 bg-white/5 rounded-full mt-2 overflow-hidden">
+                    <div className="w-full h-1.5 bg-gray-50 rounded-full mt-2 overflow-hidden">
                       <div className="h-full bg-orange-500 transition-all duration-500" style={{ width: `${health?.dayUsagePercent || 0}%` }}></div>
                     </div>
                   </div>
@@ -451,13 +451,13 @@ export default function WhatsAppConfigCard() {
               {baileysStatus === 'qr_required' && qrCode ? (
                 <>
                   <div className="relative">
-                    <div className="absolute -inset-4 bg-white/5 blur-xl rounded-full"></div>
+                    <div className="absolute -inset-4 bg-gray-50 blur-xl rounded-full"></div>
                     <div className="relative bg-white p-4 rounded-3xl shadow-2xl">
                       <QRCodeSVG value={qrCode} size={200} level="H" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <h4 className="text-white font-bold text-lg">Escanea el código QR</h4>
+                    <h4 className="text-[#1F2937] font-bold text-lg">Escanea el código QR</h4>
                     <p className="text-sm text-gray-500 max-w-sm">
                       Abre WhatsApp en tu teléfono → Configuración → Dispositivos vinculados → Vincular un dispositivo.
                     </p>
@@ -473,7 +473,7 @@ export default function WhatsAppConfigCard() {
                     <QrCode size={40} />
                   </div>
                   <div className="space-y-2">
-                    <h4 className="text-white font-bold text-lg">Vincular vía Baileys (Gratis)</h4>
+                    <h4 className="text-[#1F2937] font-bold text-lg">Vincular vía Baileys (Gratis)</h4>
                     <p className="text-sm text-gray-500 max-w-sm mx-auto">
                       Utiliza tu propia línea de WhatsApp escaneando un QR. Sin costos de Meta, pero requiere mayor precaución.
                     </p>
@@ -496,10 +496,10 @@ export default function WhatsAppConfigCard() {
 
           {/* Baileys Instructions */}
           <div className="bg-orange-500/5 border border-orange-500/10 rounded-2xl p-6 space-y-4">
-            <h4 className="text-white font-semibold text-xs flex items-center gap-2 uppercase tracking-widest">
+            <h4 className="text-[#1F2937] font-semibold text-xs flex items-center gap-2 uppercase tracking-widest">
               <ShieldCheck size={14} className="text-orange-400" /> Consejos Anti-Baneo
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-gray-400">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-gray-500">
               <div className="flex gap-3">
                 <div className="w-5 h-5 bg-orange-500/10 rounded flex items-center justify-center text-orange-400 shrink-0 font-bold">1</div>
                 <p>Usa un número con al menos 15 días de antigüedad y uso manual previo.</p>

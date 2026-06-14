@@ -22,7 +22,7 @@ export class RadarController {
   // traffic, get the cluster banned from fincaraiz.com.co, and burn
   // through the tenant's token budget. Additionally rate-limited to
   // 10 scans / hour per IP to bound abuse even from authorized roles.
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @Throttle({ default: { limit: 10, ttl: 3600000 } })
   @ApiOperation({
     summary: 'Escanear portales externos por leads (rate-limited)',

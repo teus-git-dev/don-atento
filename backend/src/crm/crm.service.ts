@@ -131,6 +131,34 @@ export class CrmService {
       }
     }
 
+    let finalAssignedAgentId: string | null | undefined = data.assignedAgentId;
+
+    if (!finalAssignedAgentId) {
+      try {
+        const tenantInfo = await this.prisma.tenant.findUnique({
+          where: { id: data.tenantId },
+          select: { crmDefaultAssigneeEmail: true }
+        });
+        
+        if (tenantInfo?.crmDefaultAssigneeEmail) {
+          const coordinator = await this.prisma.user.findFirst({
+            where: {
+              tenantId: data.tenantId,
+              email: tenantInfo.crmDefaultAssigneeEmail
+            },
+            select: { id: true }
+          });
+          
+          if (coordinator) {
+            finalAssignedAgentId = coordinator.id;
+          }
+        }
+      } catch (err) {
+        // Fallar silenciosamente como se solicitó
+        this.logger.warn(`No se pudo buscar/asignar coordinador por defecto: ${err}`);
+      }
+    }
+
     return this.prisma.prospect.create({
       data: {
         tenantId: data.tenantId,
@@ -140,7 +168,7 @@ export class CrmService {
         phone: phone,
         whatsappId: data.whatsappId,
         source: data.source || ProspectSource.MANUAL,
-        assignedAgentId: data.assignedAgentId,
+        assignedAgentId: finalAssignedAgentId ?? undefined,
         status: ProspectStatus.NEW,
         sentiment: initialSentiment,
         interestedProperties:

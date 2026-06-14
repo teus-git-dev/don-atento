@@ -19,9 +19,9 @@ export default function PredictiveCharts() {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* Revenue Projection Chart */}
-      <div className="glass p-6 rounded-2xl border border-white/5 h-[350px] flex flex-col">
-        <h3 className="text-sm font-medium text-gray-300 mb-6 uppercase tracking-widest flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-neon-blue)]"></div>
+      <div className="bg-white shadow-sm border border-gray-200 p-6 rounded-2xl border border-gray-100 h-[350px] flex flex-col">
+        <h3 className="text-sm font-medium text-gray-600 mb-6 uppercase tracking-widest flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-[#1E3A8A]"></div>
           Proyección de Ingresos Netos (AI Optimized)
         </h3>
         <div className="flex-1 w-full">
@@ -29,8 +29,8 @@ export default function PredictiveCharts() {
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="colorProy" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-neon-blue)" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="var(--color-neon-blue)" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#1E3A8A" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#1E3A8A" stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
@@ -50,12 +50,12 @@ export default function PredictiveCharts() {
               />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#0a0f1e', border: '1px solid #ffffff10', borderRadius: '12px' }}
-                itemStyle={{ color: 'var(--color-neon-blue)' }}
+                itemStyle={{ color: '#1E3A8A' }}
               />
               <Area 
                 type="monotone" 
                 dataKey="proyectado" 
-                stroke="var(--color-neon-blue)" 
+                stroke="#1E3A8A" 
                 fillOpacity={1} 
                 fill="url(#colorProy)" 
                 strokeWidth={3}
@@ -63,7 +63,7 @@ export default function PredictiveCharts() {
               <Area 
                 type="monotone" 
                 dataKey="real" 
-                stroke="var(--color-neon-cyan)" 
+                stroke="#10B981" 
                 fill="transparent" 
                 strokeWidth={2}
                 strokeDasharray="5 5"
@@ -74,9 +74,9 @@ export default function PredictiveCharts() {
       </div>
 
       {/* Maintenance Efficiency Chart */}
-      <div className="glass p-6 rounded-2xl border border-white/5 h-[350px] flex flex-col">
-        <h3 className="text-sm font-medium text-gray-300 mb-6 uppercase tracking-widest flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-neon-cyan)]"></div>
+      <div className="bg-white shadow-sm border border-gray-200 p-6 rounded-2xl border border-gray-100 h-[350px] flex flex-col">
+        <h3 className="text-sm font-medium text-gray-600 mb-6 uppercase tracking-widest flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-[#10B981]"></div>
           Eficiencia en Mantenimiento Proactivo
         </h3>
         <div className="flex-1 w-full">
@@ -102,7 +102,7 @@ export default function PredictiveCharts() {
               />
               <Bar 
                 dataKey="mantenimiento" 
-                fill="var(--color-neon-cyan)" 
+                fill="#10B981" 
                 radius={[4, 4, 0, 0]} 
                 barSize={30}
               />

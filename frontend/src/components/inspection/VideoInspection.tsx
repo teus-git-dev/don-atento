@@ -33,7 +33,7 @@ export default function VideoInspection({ videoUrl, visionAnalysis }: { videoUrl
   return (
     <div className="flex flex-col h-full gap-4">
       {/* Main Player Container */}
-      <div className="relative flex-1 glass rounded-3xl border border-white/5 overflow-hidden bg-black group">
+      <div className="relative flex-1 bg-white shadow-sm border border-gray-200 rounded-3xl border border-gray-100 overflow-hidden bg-black group">
         {/* Real Video Content if available, else Mock */}
         <div className="absolute inset-0 flex items-center justify-center">
             {videoUrl ? (
@@ -53,8 +53,8 @@ export default function VideoInspection({ videoUrl, visionAnalysis }: { videoUrl
             {/* Simulated IA detection markers (Static for now, but linked to repairs) */}
             {visionAnalysis && (
                 <div className="absolute top-[40%] left-[30%] pointer-events-none">
-                    <div className="border border-[var(--color-neon-cyan)]/40 p-1 rounded bg-black/40">
-                         <span className="text-[8px] font-mono text-[var(--color-neon-cyan)] uppercase">AI_TRACKING_ACTIVE</span>
+                    <div className="border border-[#10B981]/40 p-1 rounded bg-gray-50">
+                         <span className="text-[8px] font-mono text-[#10B981] uppercase">AI_TRACKING_ACTIVE</span>
                     </div>
                 </div>
             )}
@@ -64,20 +64,20 @@ export default function VideoInspection({ videoUrl, visionAnalysis }: { videoUrl
         <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="space-y-4">
                 {/* Progress Bar */}
-                <div className="h-1 w-full bg-white/10 rounded-full relative cursor-pointer overflow-hidden">
-                    <div className="absolute left-0 top-0 h-full bg-[var(--color-neon-blue)]" style={{ width: `${progress}%` }}></div>
+                <div className="h-1 w-full bg-gray-100 rounded-full relative cursor-pointer overflow-hidden">
+                    <div className="absolute left-0 top-0 h-full bg-[#1E3A8A]" style={{ width: `${progress}%` }}></div>
                 </div>
 
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-white">
-                        <button className="hover:text-[var(--color-neon-blue)] transition-colors"><SkipBack size={20} /></button>
+                    <div className="flex items-center gap-4 text-[#1F2937]">
+                        <button className="hover:text-[#1E3A8A] transition-colors"><SkipBack size={20} /></button>
                         <button 
                             onClick={togglePlay}
-                            className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                            className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
                         >
                             {isPlaying ? <Pause size={20} fill="white" /> : <Play size={20} fill="white" className="ml-1" />}
                         </button>
-                        <button className="hover:text-[var(--color-neon-blue)] transition-colors"><SkipForward size={20} /></button>
+                        <button className="hover:text-[#1E3A8A] transition-colors"><SkipForward size={20} /></button>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-bold text-blue-400 uppercase tracking-widest">
@@ -90,21 +90,21 @@ export default function VideoInspection({ videoUrl, visionAnalysis }: { videoUrl
       </div>
 
       {/* Insight Feed */}
-      <div className="h-48 glass rounded-3xl border border-white/5 p-5 flex flex-col">
+      <div className="h-48 bg-white shadow-sm border border-gray-200 rounded-3xl border border-gray-100 p-5 flex flex-col">
         <h4 className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-4 flex items-center gap-2">
             <ShieldAlert size={14} className="text-amber-400" />
             Hallazgos Cognitivos (Timeline)
         </h4>
         <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
             {repairs.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer transition-colors group">
+                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100 cursor-pointer transition-colors group">
                     <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-mono text-gray-500 group-hover:text-[var(--color-neon-cyan)]">{item.time || "00:00"}</span>
+                        <span className="text-[10px] font-mono text-gray-500 group-hover:text-[#10B981]">{item.time || "00:00"}</span>
                         <div className="flex items-center gap-2">
                             <ShieldAlert size={14} className={item.severity === 'CRITICAL' ? 'text-red-500' : 'text-amber-500'} />
                             <div className="flex flex-col">
-                                <span className="text-xs text-white font-bold">{item.area}</span>
-                                <span className="text-[10px] text-gray-400">{item.issue}</span>
+                                <span className="text-xs text-[#1F2937] font-bold">{item.area}</span>
+                                <span className="text-[10px] text-gray-500">{item.issue}</span>
                             </div>
                         </div>
                     </div>

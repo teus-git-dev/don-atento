@@ -79,6 +79,12 @@ export class CreateTicketDto {
   @MaxLength(64)
   assignedTechnicianId?: string;
 
+  @ApiPropertyOptional({ example: 'uuid-ticket-123' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  parentTicketId?: string;
+
   // `attachments` accepts heterogeneous payloads from vision pipelines,
   // file-upload responses and bulk imports. Element-level shape is
   // validated at the service layer when the data is consumed (e.g.

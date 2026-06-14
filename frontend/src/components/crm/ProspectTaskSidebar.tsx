@@ -66,13 +66,13 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 glass-strong border-l border-white/10 z-[200] shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
-      <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
+    <div className="fixed inset-y-0 right-0 w-96 bg-white shadow-xl border-gray-200 border-l border-gray-200 z-[200] shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
+      <div className="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-bold text-white uppercase tracking-tight">Seguimiento Lead</h3>
+          <h3 className="text-lg font-bold text-[#1F2937] uppercase tracking-tight">Seguimiento Lead</h3>
           <p className="text-xs text-gray-500 font-mono">{prospect.firstName} {prospect.lastName}</p>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+        <button onClick={onClose} className="text-gray-500 hover:text-[#1F2937] transition-colors">
           <X size={20} />
         </button>
       </div>
@@ -80,17 +80,17 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
       <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
         {/* Progress Section */}
         <div className="space-y-4">
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-neon-cyan)]">Progreso de Conversión</h4>
-          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[#10B981]">Progreso de Conversión</h4>
+          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
             <div className="flex justify-between items-end mb-2">
-               <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Tareas Completadas</span>
-               <span className="text-xs font-mono text-white">
+               <span className="text-xs text-gray-500 font-bold uppercase tracking-tighter">Tareas Completadas</span>
+               <span className="text-xs font-mono text-[#1F2937]">
                  {prospect.tasks?.filter((t: any) => t.isCompleted).length || 0} / {prospect.tasks?.length || 0}
                </span>
             </div>
-            <div className="h-2 bg-black/40 rounded-full overflow-hidden">
+            <div className="h-2 bg-gray-50 rounded-full overflow-hidden">
                <div 
-                 className="h-full bg-gradient-to-r from-[var(--color-neon-blue)] to-[var(--color-neon-cyan)] transition-all duration-500"
+                 className="h-full bg-gradient-to-r from-[#1E3A8A] to-[#10B981] transition-all duration-500"
                  style={{ width: `${(prospect.tasks?.length ? (prospect.tasks.filter((t: any) => t.isCompleted).length / prospect.tasks.length) * 100 : 0)}%` }}
                />
             </div>
@@ -103,15 +103,15 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
             <h4 className="text-[10px] font-black uppercase tracking-widest text-[#00f2ff]">Inmuebles de Interés</h4>
             <div className="grid gap-3">
               {prospect.interestedProperties.map((prop: any) => (
-                <div key={prop.id} className="group p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 hover:border-cyan-500/30 transition-all">
+                <div key={prop.id} className="group p-3 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-gray-100 hover:border-cyan-500/30 transition-all">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-400">
                       <Building2 size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-white truncate">{prop.title}</p>
+                      <p className="text-xs font-bold text-[#1F2937] truncate">{prop.title}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="px-1.5 py-0.5 bg-black/40 rounded text-[8px] font-mono font-bold text-gray-500 border border-white/5">
+                        <span className="px-1.5 py-0.5 bg-gray-50 rounded text-[8px] font-mono font-bold text-gray-500 border border-gray-100">
                           {prop.propertyCode || "S/N"}
                         </span>
                         <span className="text-[9px] text-gray-600 uppercase font-black tracking-widest text-[8px]">
@@ -132,15 +132,15 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
           
           <div className="space-y-3">
             {prospect.tasks?.map((task: any) => (
-              <div key={task.id} className={`group flex items-start gap-3 p-3 rounded-xl border border-white/5 transition-all ${task.isCompleted ? 'bg-white/2 opacity-60' : 'bg-white/5 hover:bg-white/10'}`}>
+              <div key={task.id} className={`group flex items-start gap-3 p-3 rounded-xl border border-gray-100 transition-all ${task.isCompleted ? 'bg-white/2 opacity-60' : 'bg-gray-50 hover:bg-gray-100'}`}>
                 <button 
                   onClick={() => toggleTask(task)}
-                  className={`mt-0.5 transition-colors ${task.isCompleted ? 'text-green-400' : 'text-gray-600 hover:text-white'}`}
+                  className={`mt-0.5 transition-colors ${task.isCompleted ? 'text-green-400' : 'text-gray-600 hover:text-[#1F2937]'}`}
                 >
                   {task.isCompleted ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'text-gray-500 line-through' : 'text-white'}`}>{task.title}</p>
+                  <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'text-gray-500 line-through' : 'text-[#1F2937]'}`}>{task.title}</p>
                   {task.dueDate && (
                     <p className="text-[9px] text-gray-500 mt-1 flex items-center gap-1 font-mono uppercase">
                       <Calendar size={10} /> {new Date(task.dueDate).toLocaleDateString()}
@@ -162,7 +162,7 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
 
       {/* Contract Action Button */}
       {prospect.status !== 'CLOSED_WON' && (
-        <div className="p-6 border-t border-white/10 bg-cyan-500/5 group hover:bg-cyan-500/10 transition-all">
+        <div className="p-6 border-t border-gray-200 bg-cyan-500/5 group hover:bg-cyan-500/10 transition-all">
           <button 
             onClick={() => setIsContractModalOpen(true)}
             className="w-full flex items-center justify-between gap-3 text-cyan-400 font-bold text-xs uppercase tracking-widest"
@@ -179,7 +179,7 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
       )}
 
       {/* New Task Form */}
-      <div className="p-6 border-t border-white/10 bg-white/5">
+      <div className="p-6 border-t border-gray-200 bg-gray-50">
         <form onSubmit={addTask} className="space-y-3">
           <div className="space-y-1">
             <input 
@@ -187,7 +187,7 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
               placeholder="Nueva tarea (ej: Llamar para visita)"
               value={newTaskTitle}
               onChange={e => setNewTaskTitle(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder:text-gray-600 focus:border-[var(--color-neon-blue)]/50 focus:outline-none transition-all"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-[#1F2937] placeholder:text-gray-600 focus:border-[#1E3A8A]/50 focus:outline-none transition-all"
             />
           </div>
           <div className="flex gap-2">
@@ -199,13 +199,13 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
                   onChange={e => setNewTaskDate(e.target.value)}
                   onClick={(e) => (e.target as any).showPicker?.()}
                   onFocus={(e) => (e.target as any).showPicker?.()}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-[10px] text-white focus:outline-none focus:border-white/20"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-[10px] text-[#1F2937] focus:outline-none focus:border-gray-300"
                 />
              </div>
              <button 
                type="submit"
                disabled={loading || !newTaskTitle}
-               className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl transition-all disabled:opacity-50"
+               className="bg-gray-100 hover:bg-gray-200 text-[#1F2937] p-2.5 rounded-xl transition-all disabled:opacity-50"
              >
                {loading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
              </button>

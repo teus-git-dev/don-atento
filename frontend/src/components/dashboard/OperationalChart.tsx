@@ -22,12 +22,12 @@ export default function OperationalChart() {
         <AreaChart data={data}>
           <defs>
             <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--color-neon-blue)" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="var(--color-neon-blue)" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#1E3A8A" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#1E3A8A" stopOpacity={0}/>
             </linearGradient>
             <linearGradient id="colorTick" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--color-neon-cyan)" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="var(--color-neon-cyan)" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#10B981" stopOpacity={0.1}/>
+              <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
@@ -58,7 +58,7 @@ export default function OperationalChart() {
           <Area 
             type="monotone" 
             dataKey="resueltos" 
-            stroke="var(--color-neon-blue)" 
+            stroke="#1E3A8A" 
             strokeWidth={3}
             fillOpacity={1} 
             fill="url(#colorRes)" 
@@ -66,7 +66,7 @@ export default function OperationalChart() {
           <Area 
             type="monotone" 
             dataKey="tickets" 
-            stroke="var(--color-neon-cyan)" 
+            stroke="#10B981" 
             strokeWidth={2}
             strokeDasharray="5 5"
             fillOpacity={1} 

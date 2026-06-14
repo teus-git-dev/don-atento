@@ -16,15 +16,15 @@ export default function ProvidersError({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-in fade-in duration-500">
-      <div className="glass p-10 rounded-[2rem] border border-red-500/20 max-w-lg w-full text-center">
+      <div className="bg-white shadow-sm border border-gray-200 p-10 rounded-[2rem] border border-red-500/20 max-w-lg w-full text-center">
         <AlertTriangle className="mx-auto mb-4 text-red-400" size={48} />
-        <h2 className="text-xl font-bold text-white mb-2">Error al cargar Proveedores</h2>
-        <p className="text-sm text-gray-400 mb-6 font-mono break-all">
+        <h2 className="text-xl font-bold text-[#1F2937] mb-2">Error al cargar Proveedores</h2>
+        <p className="text-sm text-gray-500 mb-6 font-mono break-all">
           {error.message || "Error inesperado en el cliente"}
         </p>
         <button
           onClick={reset}
-          className="flex items-center gap-2 mx-auto px-6 py-3 bg-[var(--color-neon-cyan)] text-black font-bold rounded-xl hover:opacity-90 transition-all"
+          className="flex items-center gap-2 mx-auto px-6 py-3 bg-[#10B981] text-black font-bold rounded-xl hover:opacity-90 transition-all"
         >
           <RefreshCw size={16} />
           Reintentar

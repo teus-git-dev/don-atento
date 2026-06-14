@@ -59,6 +59,7 @@ const TICKET_LIST_INCLUDE = {
   },
   reportedByUser: { select: USER_PUBLIC_SELECT },
   assignedTechnician: { select: USER_PUBLIC_SELECT },
+  subTickets: true,
   currentState: true,
   interactions: {
     orderBy: { sentAt: 'desc' },
@@ -225,6 +226,7 @@ export class TicketsService {
           currentStateId: initialStateId,
           reportedByUserPhone: data.reportedByUserPhone,
           assignedTechnicianId: data.assignedTechnicianId,
+          parentTicketId: data.parentTicketId,
           priority: (finalPriority as TicketPriority) || TicketPriority.MEDIUM,
           title: data.title,
           description: data.description,
@@ -924,6 +926,25 @@ export class TicketsService {
     }
   }
 
+  private getSearchFilter(search?: string): Prisma.TicketWhereInput | undefined {
+    if (!search) return undefined;
+    return {
+      OR: [
+        { id: { contains: search, mode: 'insensitive' } },
+        { shortId: { contains: search, mode: 'insensitive' } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { propertyId: { contains: search, mode: 'insensitive' } },
+        { property: { title: { contains: search, mode: 'insensitive' } } },
+        { property: { propertyCode: { contains: search, mode: 'insensitive' } } },
+        { reportedByUser: { firstName: { contains: search, mode: 'insensitive' } } },
+        { reportedByUser: { lastName: { contains: search, mode: 'insensitive' } } },
+        { assignedTechnician: { firstName: { contains: search, mode: 'insensitive' } } },
+        { assignedTechnician: { lastName: { contains: search, mode: 'insensitive' } } },
+      ]
+    };
+  }
+
   /**
    * P0.3 — dual-shape during Phase 1: legacy array when `opts` is
    * omitted (current frontend behavior), paginated `{ data, totalRecords,
@@ -931,8 +952,12 @@ export class TicketsService {
    * decides which branch to invoke based on presence of `?page=`/`?limit=`.
    * Phase 2 (next commit) removes the legacy branch.
    */
-  async findAllByTenant(tenantId: string, opts?: PageOpts) {
-    const where = { tenantId };
+  async findAllByTenant(tenantId: string, opts?: PageOpts, search?: string) {
+    let where: Prisma.TicketWhereInput = { tenantId };
+    const searchFilter = this.getSearchFilter(search);
+    if (searchFilter) {
+      where = { ...where, ...searchFilter };
+    }
     if (!opts) {
       return this.prisma.ticket.findMany({
         where,
@@ -1004,8 +1029,13 @@ export class TicketsService {
     technicianId: string,
     tenantId: string,
     opts?: PageOpts,
+    search?: string,
   ) {
-    const where = { tenantId, assignedTechnicianId: technicianId };
+    let where: Prisma.TicketWhereInput = { tenantId, assignedTechnicianId: technicianId };
+    const searchFilter = this.getSearchFilter(search);
+    if (searchFilter) {
+      where = { ...where, ...searchFilter };
+    }
     const technicianInclude = {
       property: {
         include: {
@@ -1060,8 +1090,8 @@ export class TicketsService {
    * because the owner view shows the same payload shape as the tenant-
    * admin view (just filtered to properties they own).
    */
-  async findAllByOwner(ownerId: string, tenantId: string, opts?: PageOpts) {
-    const where = {
+  async findAllByOwner(ownerId: string, tenantId: string, opts?: PageOpts, search?: string) {
+    let where: Prisma.TicketWhereInput = {
       tenantId,
       property: {
         relations: {
@@ -1072,7 +1102,11 @@ export class TicketsService {
           },
         },
       },
-    } satisfies Prisma.TicketWhereInput;
+    };
+    const searchFilter = this.getSearchFilter(search);
+    if (searchFilter) {
+      where = { ...where, AND: [searchFilter] };
+    }
 
     if (!opts) {
       return this.prisma.ticket.findMany({

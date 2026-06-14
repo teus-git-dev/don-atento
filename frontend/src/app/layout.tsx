@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Don IQ | Arquitectura Cognitiva Inmobiliaria",
+  title: "DonAtento | Arquitectura Cognitiva Inmobiliaria",
   description: "Plataforma SaaS Inmobiliaria potenciada con IA",
 };
 
@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${inter.variable} dark`}>
+    <html lang="es" className={`${inter.variable}`}>
       <body className="antialiased min-h-screen">
         <ClientMountWrapper>
           {children}

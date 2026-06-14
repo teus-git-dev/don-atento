@@ -141,7 +141,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
     <div className="space-y-4 animate-in slide-in-from-right duration-300">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-gray-400">Inmueble</label>
+          <label className="text-[10px] font-black uppercase text-gray-500">Inmueble</label>
           {!prospect.interestedProperties || prospect.interestedProperties.length === 0 ? (
             <div className="text-[10px] text-amber-500 font-mono bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 italic">
               ❌ Este prospecto aún no tiene inmuebles asignados.
@@ -151,7 +151,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
               name="propertyId" 
               value={propertyId}
               onChange={(e) => setPropertyId(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-cyan-500/50 outline-none transition-all"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-cyan-500/50 outline-none transition-all"
             >
               <option value="" className="bg-slate-900">Selecciona un inmueble...</option>
               {prospect.interestedProperties?.map((p: any) => (
@@ -161,12 +161,12 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
           )}
         </div>
         <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-gray-400">Tipo de Contrato</label>
+          <label className="text-[10px] font-black uppercase text-gray-500">Tipo de Contrato</label>
           <select 
             name="tipoContrato" 
             value={formData.tipoContrato}
             onChange={handleInputChange}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-cyan-500/50 outline-none transition-all"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-cyan-500/50 outline-none transition-all"
           >
             <option value="Vivienda" className="bg-slate-900">Vivienda</option>
             <option value="Comercial" className="bg-slate-900">Comercial</option>
@@ -176,7 +176,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-gray-400">Valor Canon (Sin Admon)</label>
+          <label className="text-[10px] font-black uppercase text-gray-500">Valor Canon (Sin Admon)</label>
           <div className="relative">
             <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
             <input 
@@ -184,40 +184,40 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
               placeholder="4,500,000"
               value={formData.valorCanonSinAdmon}
               onChange={handleInputChange}
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:border-cyan-500/50 outline-none transition-all"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm text-[#1F2937] focus:border-cyan-500/50 outline-none transition-all"
             />
           </div>
         </div>
         <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-gray-400">Inicia Contrato</label>
+          <label className="text-[10px] font-black uppercase text-gray-500">Inicia Contrato</label>
           <input 
             type="date"
             name="fechaInicioContrato" 
             value={formData.fechaInicioContrato}
             onChange={handleInputChange}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-cyan-500/50 outline-none transition-all"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-cyan-500/50 outline-none transition-all"
           />
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-[10px] font-black uppercase text-gray-400">Nombre del Residente</label>
+        <label className="text-[10px] font-black uppercase text-gray-500">Nombre del Residente</label>
         <input 
           name="nombreResidente" 
           value={formData.nombreResidente}
           onChange={handleInputChange}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-cyan-500/50 outline-none transition-all"
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-cyan-500/50 outline-none transition-all"
         />
       </div>
 
       <div className="space-y-2">
-        <label className="text-[10px] font-black uppercase text-gray-400">Observaciones (Alistamiento/Empalme)</label>
+        <label className="text-[10px] font-black uppercase text-gray-500">Observaciones (Alistamiento/Empalme)</label>
         <textarea 
           name="observaciones"
           rows={3}
           value={formData.observaciones}
           onChange={handleInputChange}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-cyan-500/50 outline-none transition-all resize-none"
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-cyan-500/50 outline-none transition-all resize-none"
         />
       </div>
     </div>
@@ -248,10 +248,10 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
           <div key={item.id} className="relative group">
             <label 
               htmlFor={item.id}
-              className={`flex items-center justify-between p-4 bg-white/5 border ${documentFiles[item.id] ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/5'} rounded-2xl hover:bg-white/10 transition-all cursor-pointer`}
+              className={`flex items-center justify-between p-4 bg-gray-50 border ${documentFiles[item.id] ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-gray-100'} rounded-2xl hover:bg-gray-100 transition-all cursor-pointer`}
             >
               <div className="flex flex-col">
-                <span className={`text-[11px] font-bold uppercase tracking-wider ${documentFiles[item.id] ? 'text-cyan-400' : 'text-gray-300'}`}>
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${documentFiles[item.id] ? 'text-cyan-400' : 'text-gray-600'}`}>
                   {item.label}
                 </span>
                 {documentFiles[item.id] && (
@@ -269,7 +269,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
                     <CheckCircle2 size={14} />
                   </div>
                 ) : (
-                  <div className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center text-gray-500 group-hover:text-white transition-all">
+                  <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center text-gray-500 group-hover:text-[#1F2937] transition-all">
                     <Upload size={14} />
                   </div>
                 )}
@@ -308,7 +308,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
           readOnly
           value={generatedDraft || ''}
           rows={12}
-          className="w-full bg-black/40 border border-white/10 rounded-2xl p-6 text-xs text-gray-300 font-mono leading-relaxed focus:outline-none custom-scrollbar whitespace-pre-wrap"
+          className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-6 text-xs text-gray-600 font-mono leading-relaxed focus:outline-none custom-scrollbar whitespace-pre-wrap"
         />
         <button 
           onClick={() => {
@@ -317,7 +317,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
               alert("Copiado al portapapeles");
             }
           }}
-          className="absolute right-4 top-4 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+          className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-[#1F2937] transition-all opacity-0 group-hover:opacity-100"
         >
           <FileText size={14} />
         </button>
@@ -337,15 +337,15 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
   return (
     <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
       <div 
-        className="fixed inset-0 bg-black/80 backdrop-blur-md"
+        className="fixed inset-0 bg-gray-900/60 backdrop-blur-md"
         onClick={onClose}
       />
       
-      <div className="glass w-full max-w-xl border border-white/10 rounded-[2.5rem] overflow-hidden relative shadow-2xl animate-in zoom-in-95 duration-300 transition-all">
-        <div className="p-8 border-b border-white/5 relative">
+      <div className="bg-white shadow-sm border border-gray-200 w-full max-w-xl border border-gray-200 rounded-[2.5rem] overflow-hidden relative shadow-2xl animate-in zoom-in-95 duration-300 transition-all">
+        <div className="p-8 border-b border-gray-100 relative">
           <button 
             onClick={onClose}
-            className="absolute right-6 top-1/2 -translate-y-1/2 p-2 hover:bg-white/5 rounded-full text-gray-500 hover:text-white transition-all"
+            className="absolute right-6 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-50 rounded-full text-gray-500 hover:text-[#1F2937] transition-all"
           >
             <X size={20} />
           </button>
@@ -354,8 +354,8 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
               <FileText size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white uppercase tracking-tighter">Fábrica de Contratos</h2>
-              <p className="text-xs text-gray-400 font-mono">PROCESO V3 • NATALIA TORO / ADRIANA LÓPEZ</p>
+              <h2 className="text-xl font-bold text-[#1F2937] uppercase tracking-tighter">Fábrica de Contratos</h2>
+              <p className="text-xs text-gray-500 font-mono">PROCESO V3 • NATALIA TORO / ADRIANA LÓPEZ</p>
             </div>
           </div>
         </div>
@@ -381,11 +381,11 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
           {renderCurrentStep()}
         </div>
 
-        <div className="p-8 bg-black/40 border-t border-white/5 flex gap-4">
+        <div className="p-8 bg-gray-50 border-t border-gray-100 flex gap-4">
           {(step === 2) && (
             <button 
               onClick={() => setStep(step - 1)}
-              className="flex-1 px-6 py-3 border border-white/10 hover:bg-white/5 text-xs font-black uppercase tracking-widest text-white rounded-2xl transition-all"
+              className="flex-1 px-6 py-3 border border-gray-200 hover:bg-gray-50 text-xs font-black uppercase tracking-widest text-[#1F2937] rounded-2xl transition-all"
             >
               Atrás
             </button>
@@ -397,7 +397,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
                 if (!propertyId) { alert("Selecciona un inmueble"); return; }
                 setStep(2);
               }}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[var(--color-neon-blue)] hover:bg-[var(--color-neon-blue)]/80 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-[0_0_15px_rgba(45,185,255,0.2)]"
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#1E3A8A] hover:bg-[#1E3A8A]/80 text-[#1F2937] text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-[0_0_15px_rgba(45,185,255,0.2)]"
             >
               Siguiente <ArrowRight size={14} />
             </button>
@@ -416,7 +416,7 @@ export default function ContractFormModal({ isOpen, onClose, prospect, onSuccess
           {step === 3 && (
             <button 
               onClick={() => { onSuccess(); onClose(); }}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-[#1F2937] text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
             >
               Finalizar Proceso <CheckCircle2 size={16} />
             </button>

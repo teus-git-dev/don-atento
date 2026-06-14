@@ -136,10 +136,10 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
   const statusName = ticket.currentState?.name || "Pendiente";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="glass-strong w-full max-w-2xl rounded-[2.5rem] border border-white/10 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-2xl rounded-[2.5rem] border border-gray-200 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
         {/* Header with High-Tech Accent */}
-        <div className={`p-6 border-b border-white/5 relative overflow-hidden ${
+        <div className={`p-6 border-b border-gray-100 relative overflow-hidden ${
           isUrgent ? 'bg-red-500/5' : 'bg-blue-500/5'
         }`}>
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[100px] -mr-32 -mt-32 rounded-full"></div>
@@ -147,7 +147,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
           <div className="flex justify-between items-start relative z-10">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-[10px] font-mono text-[var(--color-neon-cyan)] uppercase bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20">
+                <span className="text-[10px] font-mono text-[#10B981] uppercase bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20">
                   {ticket.shortId ? ticket.shortId : `TKT-${ticket.id.toString().split('-')[0].toUpperCase()}`}
                 </span>
                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${
@@ -155,14 +155,14 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                 }`}>
                   {ticket.priority}
                 </span>
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                   <span className="text-[10px] font-bold text-gray-300 uppercase tracking-tighter">Live Monitor</span>
+                   <span className="text-[10px] font-bold text-gray-600 uppercase tracking-tighter">Live Monitor</span>
                 </div>
               </div>
-              <h2 className="text-2xl font-bold text-white leading-tight">{ticket.title}</h2>
+              <h2 className="text-2xl font-bold text-[#1F2937] leading-tight">{ticket.title}</h2>
             </div>
-            <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-all">
+            <button onClick={onClose} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 hover:text-[#1F2937] transition-all">
               <X size={24} />
             </button>
           </div>
@@ -175,7 +175,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
           <section className="space-y-4">
              <div className="flex justify-between items-end">
                 <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black">Línea de Tiempo del Flujo</label>
-                <span className="text-[10px] font-mono text-[var(--color-neon-cyan)] font-bold">{progress}% COMPLETADO</span>
+                <span className="text-[10px] font-mono text-[#10B981] font-bold">{progress}% COMPLETADO</span>
              </div>
              <WorkflowTimeline 
                 states={sortedStates} 
@@ -190,7 +190,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
               <section>
                 <div className="flex justify-between items-center mb-3">
                    <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black">Mapa de Operación</label>
-                   <span className="text-[9px] text-[var(--color-neon-cyan)] font-mono flex items-center gap-1">
+                   <span className="text-[9px] text-[#10B981] font-mono flex items-center gap-1">
                       <Navigation size={10} /> {ticket.property?.title || "Verdanza"}
                    </span>
                 </div>
@@ -200,7 +200,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
               {/* TICKET OWNER SECTION (NEW) */}
               <section className="animate-in slide-in-from-left-4 duration-500">
                 <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black mb-3 block">Dueño del Ticket (Cliente)</label>
-                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-3xl border border-white/5 group hover:border-orange-500/30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.1)]">
+                <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-3xl border border-gray-100 group hover:border-orange-500/30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.1)]">
                   {ticket.reportedByUser ? (
                     <>
                       <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-lg font-bold text-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.1)]">
@@ -208,13 +208,13 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-start">
-                          <p className="text-[13px] font-black text-white uppercase tracking-tighter leading-none">{ticket.reportedByUser.firstName} {ticket.reportedByUser.lastName}</p>
+                          <p className="text-[13px] font-black text-[#1F2937] uppercase tracking-tighter leading-none">{ticket.reportedByUser.firstName} {ticket.reportedByUser.lastName}</p>
                           <span className="text-[9px] font-black text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20 uppercase tracking-widest">
                             {ticket.reportedByUser.role === 'TENANT_USER' ? 'Arrendatario' : 'Propietario'}
                           </span>
                         </div>
-                        <div className="mt-3 space-y-1.5 pt-2 border-t border-white/5">
-                           <div className="flex items-center gap-2 text-[10px] text-gray-400 font-mono">
+                        <div className="mt-3 space-y-1.5 pt-2 border-t border-gray-100">
+                           <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono">
                               <MessageSquare size={12} className="text-gray-600" />
                               <span className="truncate">{ticket.reportedByUser.email}</span>
                            </div>
@@ -237,14 +237,14 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
 
               <section>
                 <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black mb-3 block">Responsable Asignado</label>
-                <div className="flex items-start gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-[var(--color-neon-blue)]/50 transition-colors">
+                <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-[#1E3A8A]/50 transition-colors">
                   {ticket.assignedTechnician ? (
                     <>
                       <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-lg font-bold text-blue-300 shadow-[0_0_15px_rgba(0,112,243,0.2)]">
                         {ticket.assignedTechnician.firstName[0]}
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-bold text-white">{ticket.assignedTechnician.firstName} {ticket.assignedTechnician.lastName}</p>
+                        <p className="text-sm font-bold text-[#1F2937]">{ticket.assignedTechnician.firstName} {ticket.assignedTechnician.lastName}</p>
                         <div className="flex items-center gap-2 mt-1">
                            <span className="text-[10px] text-green-400 font-mono flex items-center gap-1">
                               <div className="w-1 h-1 rounded-full bg-green-400"></div> EN LÍNEA
@@ -267,7 +267,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
               {/* STEP 3: DYNAMIC PROGRESS & ETA */}
               <section>
                 <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black mb-3 block">Estado y Previsión de Cierre</label>
-                <div className="p-5 bg-black/40 rounded-2xl border border-white/10 relative overflow-hidden group">
+                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-200 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
                      <Gauge size={80} />
                   </div>
@@ -275,11 +275,11 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     <div className="flex justify-between items-start mb-4 relative z-10">
                       <div>
                          <span className="text-xs font-bold text-gray-500 block mb-1">Estado Actual</span>
-                         <span className="text-lg font-black text-[var(--color-neon-blue)] uppercase tracking-tight leading-none">{statusName}</span>
+                         <span className="text-lg font-black text-[#1E3A8A] uppercase tracking-tight leading-none">{statusName}</span>
                       </div>
                       <div className="text-right">
                          <span className="text-[10px] font-bold text-gray-500 block mb-1">ETA Restante</span>
-                         <span className="text-lg font-mono font-black text-[var(--color-neon-cyan)] line-clamp-1">~{remainingSLA} HORAS</span>
+                         <span className="text-lg font-mono font-black text-[#10B981] line-clamp-1">~{remainingSLA} HORAS</span>
                       </div>
                     </div>
 
@@ -293,16 +293,16 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                       const deadline = slaHours > 0 ? new Date(startedAt.getTime() + slaHours * 3600000) : null;
 
                       return (
-                        <div className="mb-4 p-2 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2 relative z-10">
+                        <div className="mb-4 p-2 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-2 relative z-10">
                            <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
-                              <span className="text-[10px] font-black text-white uppercase tracking-wider">{name}</span>
+                              <span className="text-[10px] font-black text-[#1F2937] uppercase tracking-wider">{name}</span>
                               <span className="text-[9px] text-gray-500 uppercase">({role})</span>
                            </div>
                            <div className="grid grid-cols-2 gap-2 text-[8px] font-mono text-gray-500">
                               <div className="flex flex-col">
                                  <span className="uppercase text-[7px] text-gray-600">Inicio Proc.</span>
-                                 <span className="text-gray-400">{startedAt.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: 'numeric', minute: 'numeric' })}</span>
+                                 <span className="text-gray-500">{startedAt.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: 'numeric', minute: 'numeric' })}</span>
                               </div>
                               <div className="flex flex-col text-right">
                                  <span className="uppercase text-[7px] text-gray-600">Final Estimado</span>
@@ -316,9 +316,9 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     })()}
 
                     <div className="space-y-2 relative z-10">
-                      <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
+                      <div className="h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
                         <div 
-                            className="h-full bg-gradient-to-r from-[var(--color-neon-blue)] to-[var(--color-neon-cyan)] shadow-[0_0_15px_rgba(0,112,243,0.6)] rounded-full transition-all duration-1000"
+                            className="h-full bg-gradient-to-r from-[#1E3A8A] to-[#10B981] shadow-[0_0_15px_rgba(0,112,243,0.6)] rounded-full transition-all duration-1000"
                             style={{ width: `${progress}%` }}
                         ></div>
                       </div>
@@ -341,7 +341,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
           {/* Description Section */}
           <section>
             <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black mb-4 block">Descripción del Incidente</label>
-            <div className="p-6 bg-black/40 rounded-3xl border border-white/5 text-gray-300 text-sm leading-relaxed relative">
+            <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 text-gray-600 text-sm leading-relaxed relative">
               <MessageSquare className="absolute top-6 right-6 opacity-10" size={20} />
               {ticket.description || "No se proporcionó descripción detallada."}
             </div>
@@ -350,7 +350,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
           {/* Activity Log */}
           <section>
             <label className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black mb-6 block">Historial de Transiciones</label>
-            <div className="space-y-6 pl-4 border-l border-white/10 ml-2">
+            <div className="space-y-6 pl-4 border-l border-gray-200 ml-2">
               {sortedStates.map((state: any, idx: number) => {
                 const log = (ticket.stateLogs || []).find((l: any) => l.state?.id === state.id || l.stateId === state.id);
                 const isActive = ticket.currentStateId === state.id;
@@ -396,22 +396,22 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
         </div>
 
         {/* Footer Actions */}
-        <div className={`transition-all duration-300 ${isCompletingTask ? 'p-6' : 'p-8'} bg-black/40 border-t border-white/5 flex-shrink-0`}>
+        <div className={`transition-all duration-300 ${isCompletingTask ? 'p-6' : 'p-8'} bg-gray-50 border-t border-gray-100 flex-shrink-0`}>
           {isCompletingTask ? (
             <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
                 {ticket.currentState?.name?.toLowerCase().includes('agendamiento') ? (
-                  <div className="space-y-4 bg-white/5 p-6 rounded-3xl border border-[var(--color-neon-blue)]/20 shadow-[0_10px_40px_rgba(0,0,0,0.2)]">
+                  <div className="space-y-4 bg-gray-50 p-6 rounded-3xl border border-[#1E3A8A]/20 shadow-[0_10px_40px_rgba(0,0,0,0.2)]">
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center gap-2">
-                        <Calendar size={18} className="text-[var(--color-neon-blue)]" />
-                        <span className="text-[12px] font-black uppercase tracking-widest text-white">Proponer Disponibilidad</span>
+                        <Calendar size={18} className="text-[#1E3A8A]" />
+                        <span className="text-[12px] font-black uppercase tracking-widest text-[#1F2937]">Proponer Disponibilidad</span>
                       </div>
-                      <div className="flex items-center gap-1 bg-[var(--color-neon-blue)]/10 px-2 py-0.5 rounded border border-[var(--color-neon-blue)]/20 text-[8px] font-black text-[var(--color-neon-blue)]">
+                      <div className="flex items-center gap-1 bg-[#1E3A8A]/10 px-2 py-0.5 rounded border border-[#1E3A8A]/20 text-[8px] font-black text-[#1E3A8A]">
                          <Clock size={10} /> AGENDACIÓN INTELIGENTE
                       </div>
                     </div>
                     
-                    <div className="bg-black/40 rounded-2xl p-4 border border-white/5">
+                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                         <label className="text-[9px] text-gray-500 uppercase font-bold mb-2 block">Nueva Opción de Fecha y Hora</label>
                         <div className="grid grid-cols-2 gap-3 mb-3">
                           <div className="relative">
@@ -419,7 +419,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                               type="date" 
                               value={tempDate}
                               onChange={(e) => setTempDate(e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-[var(--color-neon-blue)]/50 transition-all appearance-none pr-10"
+                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs text-[#1F2937] outline-none focus:border-[#1E3A8A]/50 transition-all appearance-none pr-10"
                               style={{ colorScheme: 'dark' }}
                             />
                           </div>
@@ -428,7 +428,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                               type="time" 
                               value={tempTime}
                               onChange={(e) => setTempTime(e.target.value)}
-                              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-[var(--color-neon-blue)]/50 transition-all appearance-none"
+                              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs text-[#1F2937] outline-none focus:border-[#1E3A8A]/50 transition-all appearance-none"
                               style={{ colorScheme: 'dark' }}
                             />
                             <button 
@@ -440,7 +440,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                                   setTempTime("");
                                 }
                               }}
-                              className="bg-[var(--color-neon-blue)] px-3 rounded-xl text-white hover:bg-blue-600 transition-all shadow-[0_4px_12px_rgba(0,112,243,0.3)]"
+                              className="bg-[#1E3A8A] px-3 rounded-xl text-[#1F2937] hover:bg-blue-600 transition-all shadow-[0_4px_12px_rgba(0,112,243,0.3)]"
                               title="Agregar Opción"
                             >
                               <Plus size={18} />
@@ -451,13 +451,13 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
 
                     {selectedSlots.length > 0 ? (
                       <div className="space-y-2 max-h-[140px] overflow-y-auto pr-2 custom-scrollbar">
-                        <label className="text-[9px] text-gray-400 uppercase font-black">Opciones Seleccionadas</label>
+                        <label className="text-[9px] text-gray-500 uppercase font-black">Opciones Seleccionadas</label>
                         <div className="flex flex-wrap gap-2">
                           {selectedSlots.map((slot, i) => (
-                            <div key={i} className="flex items-center gap-2 bg-[var(--color-neon-blue)]/10 px-3 py-1.5 rounded-full border border-[var(--color-neon-blue)]/30 group animate-in zoom-in duration-200">
-                              <span className="text-[10px] font-bold text-white">{slot.date}</span>
-                              <div className="w-1 h-1 bg-[var(--color-neon-blue)] rounded-full opacity-40"></div>
-                              <span className="text-[10px] font-black text-[var(--color-neon-blue)]">{slot.time}</span>
+                            <div key={i} className="flex items-center gap-2 bg-[#1E3A8A]/10 px-3 py-1.5 rounded-full border border-[#1E3A8A]/30 group animate-in zoom-in duration-200">
+                              <span className="text-[10px] font-bold text-[#1F2937]">{slot.date}</span>
+                              <div className="w-1 h-1 bg-[#1E3A8A] rounded-full opacity-40"></div>
+                              <span className="text-[10px] font-black text-[#1E3A8A]">{slot.time}</span>
                               <button onClick={() => setSelectedSlots(selectedSlots.filter((_, idx) => idx !== i))} className="text-gray-600 hover:text-red-400">
                                 <X size={12} />
                               </button>
@@ -466,7 +466,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                         </div>
                       </div>
                     ) : (
-                      <div className="py-8 border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 opacity-50">
+                      <div className="py-8 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center gap-2 opacity-50">
                          <Calendar className="text-gray-700" size={24} />
                          <span className="text-[10px] text-gray-600 font-medium">No has agregado opciones de agenda</span>
                       </div>
@@ -480,18 +480,18 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     </div>
                   </div>
                 ) : ticket.currentState?.name?.toLowerCase().includes('cotización') ? (
-                 <div className="space-y-4 bg-black/40 p-6 rounded-3xl border border-orange-500/30">
+                 <div className="space-y-4 bg-gray-50 p-6 rounded-3xl border border-orange-500/30">
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center gap-2">
                         <DollarSign size={16} className="text-orange-400" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white">Generador de Cotización Ejecutiva</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#1F2937]">Generador de Cotización Ejecutiva</span>
                       </div>
                       <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 text-[8px] font-bold text-orange-400 animate-pulse">
                         <Zap size={10} /> AI POWERED
                       </div>
                     </div>
 
-                    <div className="p-3 bg-white/5 rounded-xl border border-white/5 border-dashed flex items-center gap-3">
+                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 border-dashed flex items-center gap-3">
                        <ImageIcon size={14} className="text-gray-600" />
                        <p className="text-[9px] text-gray-500 font-medium">
                           Si ya posees un documento físico o digital, **adjúntalo abajo** y nuestro motor **Atento-Vision** lo profesionalizará automáticamente.
@@ -505,7 +505,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                         placeholder="Descripción del item o servicio..."
                         value={tempDesc}
                         onChange={(e) => setTempDesc(e.target.value)}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-orange-500/40"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs text-[#1F2937] outline-none focus:border-orange-500/40"
                       />
                       <div className="grid grid-cols-3 gap-2">
                         <input 
@@ -513,14 +513,14 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                           placeholder="Precio"
                           value={tempPrice}
                           onChange={(e) => setTempPrice(e.target.value)}
-                          className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-orange-500/40"
+                          className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs text-[#1F2937] outline-none focus:border-orange-500/40"
                         />
                         <input 
                           type="number" 
                           placeholder="Cant"
                           value={tempQty}
                           onChange={(e) => setTempQty(e.target.value)}
-                          className="bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-orange-500/40"
+                          className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-xs text-[#1F2937] outline-none focus:border-orange-500/40"
                         />
                         <button 
                            onClick={() => {
@@ -531,7 +531,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                                setTempQty("1");
                              }
                            }}
-                           className="bg-orange-600 py-2 rounded-xl text-[10px] font-black uppercase text-white hover:bg-orange-500 transition-all flex items-center justify-center gap-2"
+                           className="bg-orange-600 py-2 rounded-xl text-[10px] font-black uppercase text-[#1F2937] hover:bg-orange-500 transition-all flex items-center justify-center gap-2"
                         >
                           <Plus size={14} /> AGREGAR
                         </button>
@@ -541,9 +541,9 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     {quoteItems.length > 0 && (
                       <div className="max-h-[120px] overflow-y-auto pr-2 space-y-2">
                         {quoteItems.map((item, i) => (
-                          <div key={i} className="flex justify-between items-center p-2 bg-white/5 rounded-lg border border-white/5 group hover:border-orange-500/20">
+                          <div key={i} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100 group hover:border-orange-500/20">
                             <div className="flex flex-col">
-                              <span className="text-[11px] font-bold text-white">{item.description}</span>
+                              <span className="text-[11px] font-bold text-[#1F2937]">{item.description}</span>
                               <span className="text-[9px] text-gray-500">{item.quantity} x ${item.price.toLocaleString()}</span>
                             </div>
                             <div className="flex items-center gap-3">
@@ -562,16 +562,16 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                      value={comment}
                      onChange={(e) => setComment(e.target.value)}
                      placeholder="Detalla los avances técnicos o hallazgos..."
-                     className="w-full bg-black/50 border border-[var(--color-neon-blue)]/30 rounded-2xl p-4 text-sm text-gray-300 focus:outline-none focus:border-[var(--color-neon-blue)]/60 min-h-[100px] resize-none shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]"
+                     className="w-full bg-white border border-[#1E3A8A]/30 rounded-2xl p-4 text-sm text-gray-600 focus:outline-none focus:border-[#1E3A8A]/60 min-h-[100px] resize-none shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]"
                   />
                )}
 
                {/* Compact Multimedia Upload Area */}
-               <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-4">
+               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mt-4">
                   <div className="flex justify-between items-center mb-3">
                      <div className="flex items-center gap-2">
                         <Paperclip size={14} className="text-gray-500" />
-                        <label className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Documentos y Multimedia</label>
+                        <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Documentos y Multimedia</label>
                      </div>
                      <div className="relative">
                         <input 
@@ -584,7 +584,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                         />
                         <label 
                            htmlFor="ticket-media"
-                           className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-neon-blue)]/20 border border-[var(--color-neon-blue)]/30 rounded-full text-[9px] font-black text-[var(--color-neon-blue)] hover:bg-[var(--color-neon-blue)]/40 cursor-pointer transition-all uppercase tracking-tighter"
+                           className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E3A8A]/20 border border-[#1E3A8A]/30 rounded-full text-[9px] font-black text-[#1E3A8A] hover:bg-[#1E3A8A]/40 cursor-pointer transition-all uppercase tracking-tighter"
                         >
                            {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                            {isUploading ? "Cargando..." : (ticket.currentState?.name?.toLowerCase().includes('cotización') ? "Elegir Archivo" : "Adjuntar")}
@@ -595,7 +595,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                   {attachments.length > 0 && (
                      <div className="flex flex-wrap gap-2">
                         {attachments.map((att: any, i: number) => (
-                           <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 group">
+                           <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-200 group">
                               {att.type === 'video' ? (
                                  <div className="w-full h-full bg-gray-800 flex items-center justify-center"><Film size={16} className="text-gray-500" /></div>
                                ) : att.type === 'pdf' ? (
@@ -630,7 +630,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     setIsCompletingTask(false);
                     setSelectedSlots([]);
                     setQuoteItems([]);
-                  }} className="flex-1 py-3 text-[10px] font-black uppercase text-gray-500 hover:text-white transition-all">Cancelar</button>
+                  }} className="flex-1 py-3 text-[10px] font-black uppercase text-gray-500 hover:text-[#1F2937] transition-all">Cancelar</button>
                   <button 
                     onClick={async () => {
                       if (loading) return;
@@ -700,10 +700,10 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                     disabled={(ticket.currentState?.name?.toLowerCase().includes('agendamiento') ? (selectedSlots.length === 0 && (!tempDate || !tempTime)) : 
                                 ticket.currentState?.name?.toLowerCase().includes('cotización') ? (quoteItems.length === 0 && attachments.length === 0) :
                                 !comment) || loading}
-                    className={`flex-[2] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-lg disabled:opacity-50 ${
+                    className={`flex-[2] py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#1F2937] transition-all shadow-lg disabled:opacity-50 ${
                       ticket.currentState?.name?.toLowerCase().includes('cotización') 
                       ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-500/20' 
-                      : 'bg-[var(--color-neon-blue)] hover:bg-blue-600 shadow-[var(--color-neon-blue)]/40'
+                      : 'bg-[#1E3A8A] hover:bg-blue-600 shadow-[#1E3A8A]/40'
                     }`}
                   >
                     {loading ? <Loader2 className="animate-spin mx-auto" size={16} /> : (
@@ -720,22 +720,22 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
             </div>
           ) : isClosing ? (
             <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                <div className="space-y-4 p-6 bg-white/5 rounded-3xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.2)]">
+                <div className="space-y-4 p-6 bg-gray-50 rounded-3xl border border-gray-200 shadow-[0_10px_40px_rgba(0,0,0,0.2)]">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 size={18} className="text-green-500" />
-                    <span className="text-[12px] font-black uppercase tracking-widest text-white">Certificar Recibido</span>
+                    <span className="text-[12px] font-black uppercase tracking-widest text-[#1F2937]">Certificar Recibido</span>
                   </div>
                   
                   <textarea 
                     value={closureReason}
                     onChange={(e) => setClosureReason(e.target.value)}
                     placeholder="Resumen del cierre (Se enviará al propietario/cliente)..."
-                    className="w-full bg-black/50 border border-green-500/30 rounded-2xl p-4 text-sm text-gray-300 focus:outline-none focus:border-green-500/60 min-h-[80px] resize-none shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]"
+                    className="w-full bg-white border border-green-500/30 rounded-2xl p-4 text-sm text-gray-600 focus:outline-none focus:border-green-500/60 min-h-[80px] resize-none shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]"
                   />
 
                   <div className="space-y-2">
                     <label className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Firma Digital del Cliente</label>
-                    <div className="bg-white rounded-2xl p-2 border-2 border-dashed border-gray-700/30 group hover:border-[var(--color-neon-cyan)]/50 transition-all overflow-hidden h-40 relative">
+                    <div className="bg-white rounded-2xl p-2 border-2 border-dashed border-gray-700/30 group hover:border-[#10B981]/50 transition-all overflow-hidden h-40 relative">
                       <SignatureCanvas 
                         ref={padRef}
                         penColor='black'
@@ -745,7 +745,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                       {signature && (
                         <button 
                           onClick={() => { padRef.current?.clear(); setSignature(null); }}
-                          className="absolute bottom-3 right-3 p-1.5 bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                          className="absolute bottom-3 right-3 p-1.5 bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500 hover:text-[#1F2937] transition-all"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -756,7 +756,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => { setIsClosing(false); setSignature(null); }} className="flex-1 py-3 text-[10px] font-black uppercase text-gray-500 hover:text-white transition-all">Cancelar</button>
+                  <button onClick={() => { setIsClosing(false); setSignature(null); }} className="flex-1 py-3 text-[10px] font-black uppercase text-gray-500 hover:text-[#1F2937] transition-all">Cancelar</button>
                   <button 
                     onClick={async () => {
                       setLoading(true);
@@ -786,7 +786,7 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
                       } finally { setLoading(false); }
                     }}
                     disabled={!closureReason || loading || !signature}
-                    className="flex-[2] bg-green-500 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-green-600 transition-all shadow-[0_0_20px_rgba(34,197,94,0.4)] disabled:opacity-50"
+                    className="flex-[2] bg-green-500 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#1F2937] hover:bg-green-600 transition-all shadow-[0_0_20px_rgba(34,197,94,0.4)] disabled:opacity-50"
                   >
                     {loading ? <Loader2 className="animate-spin mx-auto" size={16} /> : "Certificar Resolución Exitosamente"}
                   </button>
@@ -794,16 +794,16 @@ export default function TicketDetailModal({ isOpen, onClose, ticket: initialTick
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
-               <button onClick={() => setIsCompletingTask(true)} className="bg-[var(--color-neon-blue)]/10 border border-[var(--color-neon-blue)]/50 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[var(--color-neon-blue)] hover:bg-[var(--color-neon-blue)]/20 transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(0,112,243,0.1)]">
-                  <Zap size={16} className="fill-[var(--color-neon-blue)]" /> Próximo Estado
+               <button onClick={() => setIsCompletingTask(true)} className="bg-[#1E3A8A]/10 border border-[#1E3A8A]/50 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#1E3A8A] hover:bg-[#1E3A8A]/20 transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(0,112,243,0.1)]">
+                  <Zap size={16} className="fill-[#1E3A8A]" /> Próximo Estado
                </button>
-               <button onClick={() => setIsClosing(true)} className="bg-green-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-green-500 transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(22,163,74,0.3)]">
+               <button onClick={() => setIsClosing(true)} className="bg-green-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#1F2937] hover:bg-green-500 transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(22,163,74,0.3)]">
                   <CheckCircle2 size={16} /> Cerrar Caso
                </button>
-               <button className="bg-white/5 border border-white/10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all flex items-center justify-center gap-2">
+               <button className="bg-gray-50 border border-gray-200 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-[#1F2937] transition-all flex items-center justify-center gap-2">
                   <Camera size={16} /> Multimedia
                </button>
-               <button className="bg-white/5 border border-white/10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all flex items-center justify-center gap-2">
+               <button className="bg-gray-50 border border-gray-200 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-[#1F2937] transition-all flex items-center justify-center gap-2">
                   <MessageSquare size={16} /> Contactar
                </button>
             </div>
@@ -826,24 +826,24 @@ function WorkflowTimeline({ states, currentIndex }: { states: any[], currentInde
                <div key={state.id} className="flex-1 min-w-[120px] flex items-center relative">
                   {/* Connective Line */}
                   {idx > 0 && (
-                     <div className={`h-1 flex-1 -ml-1 ${isCompleted || isActive ? 'bg-[var(--color-neon-blue)] shadow-[0_0_10px_rgba(0,112,243,0.3)]' : 'bg-white/5'}`}></div>
+                     <div className={`h-1 flex-1 -ml-1 ${isCompleted || isActive ? 'bg-[#1E3A8A] shadow-[0_0_10px_rgba(0,112,243,0.3)]' : 'bg-gray-50'}`}></div>
                   )}
                   
                   {/* Node */}
                   <div className={`relative z-10 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-500 shrink-0 ${
                      isCompleted ? 'bg-green-500/20 border-green-500 text-green-500' :
-                     isActive ? 'bg-[var(--color-neon-blue)] border-white/40 text-white shadow-[0_0_15px_rgba(0,112,243,0.8)]' :
-                     'bg-black/40 border-white/10 text-gray-600'
+                     isActive ? 'bg-[#1E3A8A] border-white/40 text-[#1F2937] shadow-[0_0_15px_rgba(0,112,243,0.8)]' :
+                     'bg-gray-50 border-gray-200 text-gray-600'
                   }`}>
                      {isCompleted ? <CheckCircle2 size={14} /> : <span className="text-[10px] font-black">{idx + 1}</span>}
                      
                      {/* Label (Floating) */}
-                     <div className={`absolute -bottom-6 whitespace-nowrap text-[8px] font-black uppercase tracking-widest ${isActive ? 'text-[var(--color-neon-cyan)]' : 'text-gray-600'}`}>
+                     <div className={`absolute -bottom-6 whitespace-nowrap text-[8px] font-black uppercase tracking-widest ${isActive ? 'text-[#10B981]' : 'text-gray-600'}`}>
                         {state.name}
                      </div>
 
                      {/* Glow for Active */}
-                     {isActive && <div className="absolute inset-0 rounded-full animate-ping bg-[var(--color-neon-blue)] opacity-20"></div>}
+                     {isActive && <div className="absolute inset-0 rounded-full animate-ping bg-[#1E3A8A] opacity-20"></div>}
                   </div>
                </div>
             );
@@ -855,21 +855,21 @@ function WorkflowTimeline({ states, currentIndex }: { states: any[], currentInde
 // DISRUPTIVE: Georeference Radar Component
 function GeoreferenceRadar({ propertyName, address }: any) {
    return (
-      <div className="h-40 bg-black/60 rounded-2xl border border-white/5 relative overflow-hidden flex items-center justify-center">
+      <div className="h-40 bg-black/60 rounded-2xl border border-gray-100 relative overflow-hidden flex items-center justify-center">
          {/* Grid lines animation */}
          <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(0,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
          
          {/* Circular Radar Scan */}
-         <div className="absolute inset-x-0 top-1/2 -mt-[1px] h-[2px] bg-[var(--color-neon-cyan)] opacity-20 shadow-[0_0_20px_var(--color-neon-cyan)]"></div>
+         <div className="absolute inset-x-0 top-1/2 -mt-[1px] h-[2px] bg-[#10B981] opacity-20 shadow-[0_0_20px_#10B981]"></div>
          
          {/* Property Pin */}
          <div className="relative z-10 flex flex-col items-center">
             <div className="relative">
-               <MapPin className="text-[var(--color-neon-cyan)] animate-bounce" size={24} />
-               <div className="absolute -bottom-1 left-1/2 -ml-3 w-6 h-1 bg-black/40 blur-sm rounded-full"></div>
+               <MapPin className="text-[#10B981] animate-bounce" size={24} />
+               <div className="absolute -bottom-1 left-1/2 -ml-3 w-6 h-1 bg-gray-50 blur-sm rounded-full"></div>
             </div>
             <div className="mt-2 text-center">
-               <span className="text-[10px] font-black text-white px-2 py-0.5 bg-black/80 rounded-lg border border-white/10 uppercase">{propertyName || "Conjunto Verdanza"}</span>
+               <span className="text-[10px] font-black text-[#1F2937] px-2 py-0.5 bg-gray-900/60 rounded-lg border border-gray-200 uppercase">{propertyName || "Conjunto Verdanza"}</span>
             </div>
          </div>
 
@@ -889,21 +889,21 @@ function GeoreferenceRadar({ propertyName, address }: any) {
 function OpsIntelligence() {
    return (
       <div className="grid grid-cols-2 gap-3">
-         <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
+         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-2">
             <div className="flex justify-between items-center text-[9px] font-black text-gray-500 uppercase">
                <span>Carga del Técnico</span>
                <span className="text-yellow-500">82%</span>
             </div>
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-1 bg-gray-50 rounded-full overflow-hidden">
                <div className="h-full bg-yellow-500 opacity-60 w-[82%]"></div>
             </div>
          </div>
-         <div className="p-3 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
+         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-2">
             <div className="flex justify-between items-center text-[9px] font-black text-gray-500 uppercase">
                <span>Impacto Tráfico</span>
                <span className="text-green-500">Bajo</span>
             </div>
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-1 bg-gray-50 rounded-full overflow-hidden">
                <div className="h-full bg-green-500 opacity-60 w-[15%]"></div>
             </div>
          </div>
@@ -968,14 +968,14 @@ function ActivityItem({ icon, title, time, desc, active, assignment, deadline, i
   return (
     <div className="relative pb-6">
       <div className={`absolute -left-[23px] top-1.5 w-4 h-4 rounded-full border flex items-center justify-center z-10 transition-all ${
-        active ? 'bg-[var(--color-neon-blue)] border-white/40 shadow-[0_0_15px_rgba(0,112,243,0.5)]' : 'bg-[#1a1c24] border-white/10 text-gray-500'
+        active ? 'bg-[#1E3A8A] border-white/40 shadow-[0_0_15px_rgba(0,112,243,0.5)]' : 'bg-[#1a1c24] border-gray-200 text-gray-500'
       }`}>
-        <div className={active ? 'text-white' : ''}>{icon}</div>
+        <div className={active ? 'text-[#1F2937]' : ''}>{icon}</div>
       </div>
       <div className="animate-in slide-in-from-left-2 duration-500">
         <div className="flex justify-between items-center mb-0.5">
-          <h4 className={`text-xs font-black uppercase tracking-tight ${active ? 'text-white' : 'text-gray-400'}`}>{title}</h4>
-          <span className="text-[9px] font-mono text-gray-600 bg-white/5 px-1 rounded">{time}</span>
+          <h4 className={`text-xs font-black uppercase tracking-tight ${active ? 'text-[#1F2937]' : 'text-gray-500'}`}>{title}</h4>
+          <span className="text-[9px] font-mono text-gray-600 bg-gray-50 px-1 rounded">{time}</span>
         </div>
         
         <div className="flex flex-wrap gap-2 mb-1.5">
@@ -989,7 +989,7 @@ function ActivityItem({ icon, title, time, desc, active, assignment, deadline, i
           )}
           
           {deadline && (
-            <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded border border-white/5 bg-white/5">
+            <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded border border-gray-100 bg-gray-50">
               <span className={`text-[8px] font-black uppercase tracking-tighter ${isOverdue ? 'text-red-500' : (active ? 'text-cyan-400' : 'text-gray-600')}`}>
                 {isOverdue ? "⚠️ Vencido:" : "Vence:"} {deadline}
               </span>
@@ -997,20 +997,20 @@ function ActivityItem({ icon, title, time, desc, active, assignment, deadline, i
           )}
         </div>
 
-        <div className={`text-[11px] leading-relaxed markdown-container ${active ? 'text-gray-300 font-medium' : 'text-gray-500'} mb-2 text-wrap break-words`}>
+        <div className={`text-[11px] leading-relaxed markdown-container ${active ? 'text-gray-600 font-medium' : 'text-gray-500'} mb-2 text-wrap break-words`}>
            <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={{
-                table: ({node, ...props}) => <table className="w-full my-2 border-collapse border border-white/10 rounded-lg overflow-hidden" {...props} />,
-                thead: ({node, ...props}) => <thead className="bg-white/5" {...props} />,
-                th: ({node, ...props}) => <th className="p-1 border border-white/10 text-left font-black uppercase text-[8px]" {...props} />,
-                td: ({node, ...props}) => <td className="p-1 border border-white/10 text-[9px]" {...props} />,
+                table: ({node, ...props}) => <table className="w-full my-2 border-collapse border border-gray-200 rounded-lg overflow-hidden" {...props} />,
+                thead: ({node, ...props}) => <thead className="bg-gray-50" {...props} />,
+                th: ({node, ...props}) => <th className="p-1 border border-gray-200 text-left font-black uppercase text-[8px]" {...props} />,
+                td: ({node, ...props}) => <td className="p-1 border border-gray-200 text-[9px]" {...props} />,
                 p: ({node, ...props}) => <p className="mb-1" {...props} />,
-                h3: ({node, ...props}) => <h3 className="text-[10px] font-black uppercase text-[var(--color-neon-blue)] mt-2 mb-1" {...props} />,
-                blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-[var(--color-neon-blue)] pl-2 italic my-1 opacity-70" {...props} />,
+                h3: ({node, ...props}) => <h3 className="text-[10px] font-black uppercase text-[#1E3A8A] mt-2 mb-1" {...props} />,
+                blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-[#1E3A8A] pl-2 italic my-1 opacity-70" {...props} />,
                 a: ({node, ...props}) => {
                   const fullHref = props.href?.startsWith('/') ? `${API_URL}${props.href}` : props.href;
-                  return <a className="text-[var(--color-neon-blue)] font-bold underline hover:text-[var(--color-neon-cyan)] transition-colors" {...props} href={fullHref} target="_blank" rel="noopener noreferrer" />;
+                  return <a className="text-[#1E3A8A] font-bold underline hover:text-[#10B981] transition-colors" {...props} href={fullHref} target="_blank" rel="noopener noreferrer" />;
                 }
               }}
            >
@@ -1023,10 +1023,10 @@ function ActivityItem({ icon, title, time, desc, active, assignment, deadline, i
               {attachments.map((att: any, i: number) => {
                  const fullUrl = att.url.startsWith('/') ? `${API_URL}${att.url}` : att.url;
                  return (
-                    <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-white/10 bg-black/20 group cursor-pointer hover:border-[var(--color-neon-blue)]/50 transition-all">
+                    <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group cursor-pointer hover:border-[#1E3A8A]/50 transition-all">
                        {att.type === 'video' ? (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                             <Film size={20} className="text-[var(--color-neon-blue)]" />
+                             <Film size={20} className="text-[#1E3A8A]" />
                              <span className="text-[7px] text-gray-500 font-bold uppercase">Video</span>
                           </div>
                        ) : att.url.toLowerCase().endsWith('.pdf') ? (
@@ -1046,9 +1046,9 @@ function ActivityItem({ icon, title, time, desc, active, assignment, deadline, i
                           href={fullUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center"
+                          className="absolute inset-0 bg-black/0 group-hover:bg-gray-50 transition-all flex items-center justify-center"
                        >
-                          <Paperclip size={12} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <Paperclip size={12} className="text-[#1F2937] opacity-0 group-hover:opacity-100 transition-opacity" />
                        </a>
                     </div>
                  );

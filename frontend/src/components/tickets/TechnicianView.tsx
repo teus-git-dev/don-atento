@@ -73,8 +73,8 @@ export default function TechnicianView() {
   if (loading) {
     return (
         <div className="flex flex-col items-center justify-center p-20 opacity-50">
-            <Loader2 className="w-12 h-12 animate-spin text-[var(--color-neon-blue)] mb-4" />
-            <p className="text-gray-400 font-mono animate-pulse text-[10px] uppercase">Sincronizando tareas...</p>
+            <Loader2 className="w-12 h-12 animate-spin text-[#1E3A8A] mb-4" />
+            <p className="text-gray-500 font-mono animate-pulse text-[10px] uppercase">Sincronizando tareas...</p>
         </div>
     );
   }
@@ -82,8 +82,8 @@ export default function TechnicianView() {
   return (
     <div className="flex flex-col gap-4 animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Wrench size={20} className="text-[var(--color-neon-cyan)]" />
+        <h2 className="text-lg font-bold text-[#1F2937] flex items-center gap-2">
+            <Wrench size={20} className="text-[#10B981]" />
             Mis Tareas de Hoy
         </h2>
         <div className="px-3 py-1 bg-green-500/10 rounded-full text-[10px] font-bold text-green-400 border border-green-500/20">
@@ -98,19 +98,19 @@ export default function TechnicianView() {
       )}
 
       {jobs.length === 0 && !loading && (
-        <div className="glass p-8 rounded-2xl border border-white/5 text-center">
+        <div className="bg-white shadow-sm border border-gray-200 p-8 rounded-2xl border border-gray-100 text-center">
             <CheckCircle2 size={40} className="mx-auto mb-3 text-gray-500 opacity-20" />
-            <p className="text-gray-400 text-sm font-medium">No hay tareas pendientes en el radar</p>
+            <p className="text-gray-500 text-sm font-medium">No hay tareas pendientes en el radar</p>
         </div>
       )}
 
       {jobs.map((job) => (
-        <div key={job.id} className="glass p-5 rounded-2xl border border-white/10 active:scale-95 transition-all">
+        <div key={job.id} className="bg-white shadow-sm border border-gray-200 p-5 rounded-2xl border border-gray-200 active:scale-95 transition-all">
             <div className="flex justify-between items-start mb-4">
                 <div>
-                    <span className="text-[10px] font-mono text-[var(--color-neon-cyan)]">{job.id.split('-')[0]}</span>
-                    <h3 className="text-base font-bold text-white">{job.title}</h3>
-                    <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                    <span className="text-[10px] font-mono text-[#10B981]">{job.id.split('-')[0]}</span>
+                    <h3 className="text-base font-bold text-[#1F2937]">{job.title}</h3>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
                         <MapPin size={12} /> {job.property?.title}
                     </div>
                 </div>
@@ -121,13 +121,13 @@ export default function TechnicianView() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
-                <button className="flex items-center justify-center gap-2 bg-white/5 py-3 rounded-xl text-xs font-bold text-gray-300 hover:bg-white/10 transition-all border border-white/10">
+            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
+                <button className="flex items-center justify-center gap-2 bg-gray-50 py-3 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-all border border-gray-200">
                     <Camera size={16} /> Evidencia
                 </button>
                 <button 
                   onClick={() => handleFinishJob(job.id, job.currentState?.workflow?.states || [])}
-                  className="flex items-center justify-center gap-2 bg-[var(--color-neon-blue)] py-3 rounded-xl text-xs font-bold text-white hover:bg-blue-600 transition-all shadow-[0_0_15px_rgba(0,112,243,0.3)]"
+                  className="flex items-center justify-center gap-2 bg-[#1E3A8A] py-3 rounded-xl text-xs font-bold text-[#1F2937] hover:bg-blue-600 transition-all shadow-[0_0_15px_rgba(0,112,243,0.3)]"
                 >
                     Finalizar <CheckCircle2 size={16} />
                 </button>
@@ -135,24 +135,24 @@ export default function TechnicianView() {
             
             <div className="mt-4 flex items-center justify-between text-[10px] text-gray-500 font-mono italic">
                 <span><Clock size={10} className="inline mr-1" /> Iniciado: {new Date(job.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                <span className="text-[var(--color-neon-cyan)] cursor-pointer hover:underline">Ver plano 3D <ChevronRight size={10} className="inline" /></span>
+                <span className="text-[#10B981] cursor-pointer hover:underline">Ver plano 3D <ChevronRight size={10} className="inline" /></span>
             </div>
         </div>
       ))}
 
       {/* Summary Card */}
-      <div className="mt-4 glass p-4 rounded-2xl border border-white/5 bg-black/40">
+      <div className="mt-4 bg-white shadow-sm border border-gray-200 p-4 rounded-2xl border border-gray-100 bg-gray-50">
         <div className="flex gap-4">
             <div className="flex-1 text-center">
-                <div className="text-xl font-bold text-white">0</div>
+                <div className="text-xl font-bold text-[#1F2937]">0</div>
                 <div className="text-[8px] uppercase text-gray-500 font-bold">Resueltos</div>
             </div>
-            <div className="w-px bg-white/5"></div>
+            <div className="w-px bg-gray-50"></div>
             <div className="flex-1 text-center">
-                <div className="text-xl font-bold text-[var(--color-neon-cyan)]">{jobs.length}</div>
+                <div className="text-xl font-bold text-[#10B981]">{jobs.length}</div>
                 <div className="text-[8px] uppercase text-gray-500 font-bold">Pendientes</div>
             </div>
-            <div className="w-px bg-white/5"></div>
+            <div className="w-px bg-gray-50"></div>
             <div className="flex-1 text-center">
                 <div className="text-xl font-bold text-green-500">0%</div>
                 <div className="text-[8px] uppercase text-gray-500 font-bold">Efectividad</div>

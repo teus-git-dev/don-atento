@@ -70,7 +70,7 @@ export class ContractsController {
   ) {}
 
   @Post('upload')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Subir documento de contrato (PDF/DOCX/imagen — multipart)',
   })
@@ -130,7 +130,7 @@ export class ContractsController {
   }
 
   @Get('property/:propertyId')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Listar documentos contractuales de una propiedad (paginado)',
   })
@@ -155,7 +155,7 @@ export class ContractsController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Eliminar registro de documento contractual (no borra el archivo)',
   })

@@ -89,14 +89,14 @@ export default function CrmDashboard() {
                 >
                   General
                 </button>
-                <button 
+                {/* <button 
                   id="tab-radar"
                   onClick={() => setActiveTab('RADAR')}
                   className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'RADAR' ? 'bg-[var(--color-neon-cyan)] text-black shadow-[0_0_10px_rgba(0,255,255,0.3)]' : 'text-gray-500 hover:text-white'}`}
                 >
                   <Radar size={14} className={activeTab === 'RADAR' ? 'animate-pulse' : ''} />
                   Radar IA
-                </button>
+                </button> */}
             </div>
             <button 
                 onClick={() => setIsModalOpen(true)}

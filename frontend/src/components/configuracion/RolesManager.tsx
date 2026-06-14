@@ -156,8 +156,8 @@ export default function RolesManager() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Loader2 className="animate-spin text-[var(--color-neon-blue)]" size={32} />
-        <p className="text-gray-400 text-sm animate-pulse">Cargando equipo y roles...</p>
+        <Loader2 className="animate-spin text-[#1E3A8A]" size={32} />
+        <p className="text-gray-500 text-sm animate-pulse">Cargando equipo y roles...</p>
       </div>
     );
   }
@@ -166,22 +166,22 @@ export default function RolesManager() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="border-b border-warning/10 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-medium text-white mb-1 flex items-center gap-2">
-            <ShieldCheck className="text-[var(--color-neon-cyan)]" size={24} />
+          <h2 className="text-xl font-medium text-[#1F2937] mb-1 flex items-center gap-2">
+            <ShieldCheck className="text-[#10B981]" size={24} />
             Control de Accesos y Equipo
           </h2>
-          <p className="text-sm text-gray-400">Jerarquía corporativa, creación de usuarios y permisos modulares.</p>
+          <p className="text-sm text-gray-500">Jerarquía corporativa, creación de usuarios y permisos modulares.</p>
         </div>
-        <div className="flex bg-white/5 rounded-xl p-1 shrink-0 border border-white/10">
+        <div className="flex bg-gray-50 rounded-xl p-1 shrink-0 border border-gray-200">
           <button 
             onClick={() => setActiveSubTab('roles')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeSubTab === 'roles' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeSubTab === 'roles' ? 'bg-gray-100 text-[#1F2937] shadow-sm' : 'text-gray-500 hover:text-[#1F2937]'}`}
           >
             <Key size={14} /> Roles
           </button>
           <button 
             onClick={() => setActiveSubTab('users')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeSubTab === 'users' ? 'bg-[var(--color-neon-blue)]/20 text-[var(--color-neon-blue)] shadow-sm' : 'text-gray-400 hover:text-[var(--color-neon-blue)]'}`}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeSubTab === 'users' ? 'bg-[#1E3A8A]/20 text-[#1E3A8A] shadow-sm' : 'text-gray-500 hover:text-[#1E3A8A]'}`}
           >
             <Users size={14} /> Equipo
           </button>
@@ -193,7 +193,7 @@ export default function RolesManager() {
           <div className="flex justify-end">
              <button 
                onClick={() => setShowRoleModal(true)}
-               className="bg-[var(--color-neon-blue)] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-600 transition-all shadow-[0_0_15px_rgba(0,112,243,0.3)] flex items-center gap-2"
+               className="bg-[#1E3A8A] text-[#1F2937] px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-600 transition-all shadow-[0_0_15px_rgba(0,112,243,0.3)] flex items-center gap-2"
              >
                 <Plus size={14} /> Nuevo Rol Dinámico
              </button>
@@ -201,18 +201,18 @@ export default function RolesManager() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {customRoles.map(role => (
-              <div key={role.id} className="glass p-5 rounded-2xl border border-white/5 flex flex-col group relative">
+              <div key={role.id} className="bg-white shadow-sm border border-gray-200 p-5 rounded-2xl border border-gray-100 flex flex-col group relative">
                 <button 
                   onClick={() => handleDeleteRole(role.id)}
                   className="absolute top-4 right-4 text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Trash2 size={14} />
                 </button>
-                <h3 className="text-white font-bold mb-1 group-hover:text-[var(--color-neon-cyan)] transition-colors">{role.name}</h3>
-                <p className="text-xs text-gray-400 mb-4 h-8">{role.description}</p>
-                <div className="flex flex-wrap gap-1.5 mt-auto pt-4 border-t border-white/5">
+                <h3 className="text-[#1F2937] font-bold mb-1 group-hover:text-[#10B981] transition-colors">{role.name}</h3>
+                <p className="text-xs text-gray-500 mb-4 h-8">{role.description}</p>
+                <div className="flex flex-wrap gap-1.5 mt-auto pt-4 border-t border-gray-100">
                   {role.permissions.map(p => (
-                    <span key={p} className="px-2 py-0.5 rounded-md bg-white/5 text-[9px] uppercase font-mono text-gray-300 tracking-wider">
+                    <span key={p} className="px-2 py-0.5 rounded-md bg-gray-50 text-[9px] uppercase font-mono text-gray-600 tracking-wider">
                       {p}
                     </span>
                   ))}
@@ -220,7 +220,7 @@ export default function RolesManager() {
               </div>
             ))}
             {customRoles.length === 0 && (
-              <div className="col-span-full py-12 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-2xl bg-white/5">
+              <div className="col-span-full py-12 flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-2xl bg-gray-50">
                 <ShieldCheck size={48} className="mb-4 opacity-10" />
                 <p className="text-gray-500 text-sm">No has creado roles personalizados aún.</p>
                 <p className="text-gray-600 text-xs">Usa "Nuevo Rol Dinámico" para definir permisos a medida.</p>
@@ -233,19 +233,19 @@ export default function RolesManager() {
       {activeSubTab === 'users' && (
         <div className="space-y-6">
            <div className="flex justify-between items-center">
-             <h3 className="text-sm font-medium text-gray-300">Usuarios Invitados en el Tenant</h3>
+             <h3 className="text-sm font-medium text-gray-600">Usuarios Invitados en el Tenant</h3>
              <button 
                onClick={() => setShowUserModal(true)}
-               className="bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-500 transition-all flex items-center gap-2"
+               className="bg-purple-600 text-[#1F2937] px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-500 transition-all flex items-center gap-2"
              >
                 <UserPlus size={14} /> Nuevo Usuario
              </button>
           </div>
 
-          <div className="bg-black/20 border border-white/5 rounded-2xl overflow-hidden">
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl overflow-hidden">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="bg-white/5 text-gray-400 font-mono text-[10px] uppercase tracking-widest border-b border-white/5">
+                <tr className="bg-gray-50 text-gray-500 font-mono text-[10px] uppercase tracking-widest border-b border-gray-100">
                   <th className="py-3 px-4">Usuario</th>
                   <th className="py-3 px-4">Email de Acceso</th>
                   <th className="py-3 px-4">Rol Asignado</th>
@@ -261,10 +261,10 @@ export default function RolesManager() {
 
                   return (
                     <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-3 px-4 font-bold text-white">{u.name}</td>
-                      <td className="py-3 px-4 text-gray-400">{u.email}</td>
+                      <td className="py-3 px-4 font-bold text-[#1F2937]">{u.name}</td>
+                      <td className="py-3 px-4 text-gray-500">{u.email}</td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${customRole ? 'bg-purple-500/10 text-purple-400' : 'bg-[var(--color-neon-blue)]/10 text-[var(--color-neon-blue)]'}`}>
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${customRole ? 'bg-purple-500/10 text-purple-400' : 'bg-[#1E3A8A]/10 text-[#1E3A8A]'}`}>
                           {roleName}
                         </span>
                       </td>
@@ -288,20 +288,20 @@ export default function RolesManager() {
       {/* Role Creation Modal */}
       {showRoleModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-strong w-full max-w-lg rounded-3xl p-6 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-            <h2 className="text-xl font-bold text-white mb-4">Constructor de Roles Dinámicos</h2>
+          <div className="bg-white shadow-xl border-gray-200 w-full max-w-lg rounded-3xl p-6 border border-gray-200 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <h2 className="text-xl font-bold text-[#1F2937] mb-4">Constructor de Roles Dinámicos</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nombre del Rol</label>
-                <input value={newRole.name} onChange={e => setNewRole({...newRole, name: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-[var(--color-neon-cyan)] outline-none" placeholder="Ej. Analista Reclamos" />
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre del Rol</label>
+                <input value={newRole.name} onChange={e => setNewRole({...newRole, name: e.target.value})} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-[#10B981] outline-none" placeholder="Ej. Analista Reclamos" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Descripción</label>
-                <input value={newRole.description} onChange={e => setNewRole({...newRole, description: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-[var(--color-neon-cyan)] outline-none" placeholder="Propósito de este rol..." />
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Descripción</label>
+                <input value={newRole.description} onChange={e => setNewRole({...newRole, description: e.target.value})} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] focus:border-[#10B981] outline-none" placeholder="Propósito de este rol..." />
               </div>
 
-              <div className="pt-4 border-t border-white/5">
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Permisos de Módulos (Habilitar)</label>
+              <div className="pt-4 border-t border-gray-100">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Permisos de Módulos (Habilitar)</label>
                 <div className="space-y-2">
                   {[
                     { id: 'crm', label: 'CRM (Prospectos y Negociaciones)' },
@@ -310,12 +310,12 @@ export default function RolesManager() {
                     { id: 'analitica', label: 'Analítica y Rendimiento Financiero' },
                     { id: 'configuracion', label: 'Configuración Administrativa' }
                   ].map(perm => (
-                    <label key={perm.id} className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors hover:bg-white/5 border-white/5">
+                    <label key={perm.id} className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors hover:bg-gray-50 border-gray-100">
                       <input 
                         type="checkbox" 
                         checked={newRole.permissions.includes(perm.id as Permission)} 
                         onChange={() => togglePermission(perm.id as Permission)}
-                        className="w-4 h-4 rounded text-[var(--color-neon-cyan)] focus:ring-[var(--color-neon-cyan)] bg-black/40 border-white/20"
+                        className="w-4 h-4 rounded text-[#10B981] focus:ring-[#10B981] bg-gray-50 border-gray-300"
                       />
                       <span className="text-sm font-medium text-gray-200">{perm.label}</span>
                     </label>
@@ -324,8 +324,8 @@ export default function RolesManager() {
               </div>
 
               <div className="flex gap-3 justify-end pt-4">
-                <button onClick={() => setShowRoleModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-gray-400 hover:text-white">Cancelar</button>
-                <button onClick={saveRole} className="px-6 py-2 bg-[var(--color-neon-cyan)] text-black rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(0,255,255,0.4)]">Crear Rol</button>
+                <button onClick={() => setShowRoleModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:text-[#1F2937]">Cancelar</button>
+                <button onClick={saveRole} className="px-6 py-2 bg-[#10B981] text-black rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(0,255,255,0.4)]">Crear Rol</button>
               </div>
             </div>
           </div>
@@ -335,26 +335,26 @@ export default function RolesManager() {
       {/* User Creation Modal */}
       {showUserModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-strong w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-            <h2 className="text-xl font-bold text-white mb-4">Invitar Miembro del Equipo</h2>
+          <div className="bg-white shadow-xl border-gray-200 w-full max-w-md rounded-3xl p-6 border border-gray-200 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <h2 className="text-xl font-bold text-[#1F2937] mb-4">Invitar Miembro del Equipo</h2>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nombre</label>
-                  <input value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="Ej. Camila" />
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Nombre</label>
+                  <input value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] outline-none focus:border-purple-500" placeholder="Ej. Camila" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Apellido</label>
-                  <input value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="Ej. Motlak" />
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Apellido</label>
+                  <input value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} type="text" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] outline-none focus:border-purple-500" placeholder="Ej. Motlak" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Correo Electrónico</label>
-                <input value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="camila@agencia.com" />
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Correo Electrónico</label>
+                <input value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} type="email" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] outline-none focus:border-purple-500" placeholder="camila@agencia.com" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Asignar Rol</label>
-                <select value={newUser.roleId} onChange={e => setNewUser({...newUser, roleId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-purple-500 appearance-none">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Asignar Rol</label>
+                <select value={newUser.roleId} onChange={e => setNewUser({...newUser, roleId: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm text-[#1F2937] outline-none focus:border-purple-500 appearance-none">
                   <option value="">Seleccione un Rol...</option>
                   <optgroup label="Roles del Sistema">
                     {SYSTEM_ROLES.map(r => (
@@ -372,11 +372,11 @@ export default function RolesManager() {
               </div>
 
               <div className="flex gap-3 justify-end pt-4">
-                <button onClick={() => setShowUserModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-gray-400 hover:text-white">Cancelar</button>
+                <button onClick={() => setShowUserModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:text-[#1F2937]">Cancelar</button>
                 <button 
                   onClick={saveUser} 
                   disabled={!newUser.roleId}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(168,85,247,0.4)] ${!newUser.roleId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-500'}`}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(168,85,247,0.4)] ${!newUser.roleId ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-[#1F2937] hover:bg-purple-500'}`}
                 >
                   Invitar Empleado
                 </button>

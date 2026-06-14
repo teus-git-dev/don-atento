@@ -43,13 +43,13 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const user = authService.getUser();
-  const isAdmin = user ? (user.role === 'ADMIN_TENANT' || user.role === 'SUPERADMIN') : false;
+  const canAssignAgent = user ? (user.role === 'ADMIN_TENANT' || user.role === 'SUPERADMIN' || user.role === 'COORDINATOR') : false;
 
   useEffect(() => {
-    if (isOpen && isAdmin) {
+    if (isOpen && canAssignAgent) {
       fetchAgents();
     }
-  }, [isOpen, isAdmin]);
+  }, [isOpen, canAssignAgent]);
 
   const fetchAgents = async () => {
     try {
@@ -57,7 +57,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
       if (res.ok) {
         const allUsers = await res.json();
         // Filter those who can be agents (AGENT role)
-        setAgents(allUsers.filter((u: Agent) => u.role === 'AGENT' || u.role === 'ADMIN_TENANT'));
+        setAgents(allUsers.filter((u: Agent) => u.role === 'AGENT' || u.role === 'ADMIN_TENANT' || u.role === 'COORDINATOR'));
       }
     } catch (err) {
       console.error("Error fetching agents:", err);
@@ -131,7 +131,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
         ...formData,
         phone: cleanPhone,
         tenantId: TENANT_ID,
-        assignedAgentId: isAdmin ? (formData.assignedAgentId || null) : (user?.id || null),
+        assignedAgentId: canAssignAgent ? (formData.assignedAgentId || null) : (user?.id || null),
         propertyIds: selectedProperties.map(p => p.id),
         status: 'NEW'
       };
@@ -166,13 +166,13 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="glass w-full max-w-lg rounded-3xl border border-white/10 overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <User className="text-[var(--color-neon-cyan)]" size={20} />
+      <div className="bg-white shadow-sm border border-gray-200 w-full max-w-lg rounded-3xl border border-gray-200 overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <h3 className="text-xl font-bold text-[#1F2937] flex items-center gap-2">
+            <User className="text-[#10B981]" size={20} />
             Nuevo Prospecto (Lead)
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-gray-500 hover:text-[#1F2937] transition-colors">
             <X size={24} />
           </button>
         </div>
@@ -187,7 +187,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 required
                 value={formData.firstName}
                 onChange={e => setFormData({...formData, firstName: e.target.value})}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[var(--color-neon-blue)]/50 focus:outline-none transition-all"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none transition-all"
                 placeholder="Ej: Camilo"
               />
             </div>
@@ -198,7 +198,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 required
                 value={formData.lastName}
                 onChange={e => setFormData({...formData, lastName: e.target.value})}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[var(--color-neon-blue)]/50 focus:outline-none transition-all"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none transition-all"
                 placeholder="Ej: Restrepo"
               />
             </div>
@@ -213,7 +213,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 required
                 value={formData.email}
                 onChange={e => setFormData({...formData, email: e.target.value})}
-                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:border-[var(--color-neon-blue)]/50 focus:outline-none transition-all"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none transition-all"
                 placeholder="camilo@email.com"
               />
             </div>
@@ -228,7 +228,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 required
                 value={formData.phone}
                 onChange={handlePhoneChange}
-                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:border-[var(--color-neon-blue)]/50 focus:outline-none transition-all font-mono"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none transition-all font-mono"
                 placeholder="+57 300 000 0000"
               />
             </div>
@@ -242,14 +242,18 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 <select 
                   value={formData.source}
                   onChange={e => setFormData({...formData, source: e.target.value})}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:border-[var(--color-neon-blue)]/50 focus:outline-none appearance-none"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none appearance-none"
                 >
                   <option value="WHATSAPP">WhatsApp</option>
                   <option value="INSTAGRAM">Instagram</option>
                   <option value="FACEBOOK">Facebook</option>
                   <option value="WEB">Sitio Web</option>
                   <option value="MANUAL">Referido / Manual</option>
-                  <option value="RADAR_IA">Radar IA</option>
+                  {/* <option value="RADAR_IA">Radar IA</option> */}
+                  <option value="VITRINA">Vitrina</option>
+                  <option value="FINCA_RAIZ">Finca Raíz</option>
+                  <option value="METRO_CUADRADO">Metro Cuadrado</option>
+                  <option value="CIEN_CUADRAS">100 Cuadras</option>
                 </select>
               </div>
             </div>
@@ -259,7 +263,7 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 type="text" 
                 value={formData.interestedIn}
                 onChange={e => setFormData({...formData, interestedIn: e.target.value})}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[var(--color-neon-blue)]/50 focus:outline-none transition-all"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none transition-all"
                 placeholder="Ej: Apartamentos zona norte"
               />
             </div>
@@ -273,24 +277,24 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
                 type="text" 
                 value={propertySearch}
                 onChange={e => handlePropertySearch(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:border-[var(--color-neon-cyan)]/50 focus:outline-none transition-all"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-[#1F2937] focus:border-[#10B981]/50 focus:outline-none transition-all"
                 placeholder="Buscar por Nombre o ID (ej: CC-101)..."
               />
               {isSearching && <Loader2 className="absolute right-3 top-3 animate-spin text-cyan-500" size={16} />}
               
               {searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1c1e] border border-white/10 rounded-xl overflow-hidden z-50 shadow-2xl">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1c1e] border border-gray-200 rounded-xl overflow-hidden z-50 shadow-2xl">
                   {searchResults.map(p => (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => addProperty(p)}
-                      className="w-full p-3 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-none transition-colors"
+                      className="w-full p-3 text-left hover:bg-gray-50 flex items-center justify-between border-b border-gray-100 last:border-none transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <Building2 size={16} className="text-cyan-400" />
                         <div>
-                          <p className="text-xs font-bold text-white leading-none">{p.title}</p>
+                          <p className="text-xs font-bold text-[#1F2937] leading-none">{p.title}</p>
                           <p className="text-[10px] text-gray-500 mt-1">{p.propertyCode || "Sin Código"}</p>
                         </div>
                       </div>
@@ -302,10 +306,10 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
             </div>
 
             {selectedProperties.length > 0 && (
-              <div className="flex flex-wrap gap-2 p-3 bg-white/5 rounded-2xl border border-dotted border-white/10">
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-2xl border border-dotted border-gray-200">
                 {selectedProperties.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 px-3 py-1 bg-[var(--color-neon-cyan)]/10 border border-[var(--color-neon-cyan)]/30 rounded-full group">
-                    <span className="text-[10px] font-black text-white uppercase tracking-tighter">{p.propertyCode || p.title.substring(0, 8)}</span>
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-1 bg-[#10B981]/10 border border-[#10B981]/30 rounded-full group">
+                    <span className="text-[10px] font-black text-[#1F2937] uppercase tracking-tighter">{p.propertyCode || p.title.substring(0, 8)}</span>
                     <button 
                       type="button" 
                       onClick={() => removeProperty(p.id)}
@@ -319,22 +323,22 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
             )}
           </div>
 
-          {isAdmin && (
+          {canAssignAgent && (
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
-              <label className="text-[10px] text-[var(--color-neon-cyan)] uppercase tracking-widest font-black ml-1">Asignar Agente Comercial</label>
+              <label className="text-[10px] text-[#10B981] uppercase tracking-widest font-black ml-1">Asignar Agente Comercial</label>
               <select 
                 value={formData.assignedAgentId}
                 onChange={e => setFormData({...formData, assignedAgentId: e.target.value})}
-                className="w-full bg-white/5 border border-[var(--color-neon-cyan)]/30 rounded-xl px-4 py-3 text-sm text-white focus:border-[var(--color-neon-cyan)] focus:outline-none appearance-none font-bold"
+                className="w-full bg-gray-50 border border-[#10B981]/30 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:border-[#10B981] focus:outline-none appearance-none font-bold"
               >
                 <option value="">-- Seleccionar Agente --</option>
                 {agents.map(agent => (
                   <option key={agent.id} value={agent.id}>
-                    {agent.firstName} {agent.lastName} ({agent.role === 'ADMIN_TENANT' ? 'Admin' : 'Asesor'})
+                    {agent.firstName} {agent.lastName} ({['ADMIN_TENANT', 'SUPERADMIN'].includes(agent.role) ? 'Admin' : agent.role === 'COORDINATOR' ? 'Coordinador' : 'Asesor'})
                   </option>
                 ))}
               </select>
-              <p className="text-[9px] text-gray-500 italic ml-1">Como administrador, puedes delegar este prospecto a un asesor específico.</p>
+              <p className="text-[9px] text-gray-500 italic ml-1">Como administrador/coordinador, puedes delegar este prospecto a un asesor específico.</p>
             </div>
           )}
 
@@ -342,14 +346,14 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
             <button 
               type="button"
               onClick={onClose}
-              className="flex-1 glass py-3 rounded-xl text-xs font-bold text-gray-400 hover:text-white border border-white/10 hover:bg-white/5 transition-all uppercase tracking-widest"
+              className="flex-1 bg-white shadow-sm border border-gray-200 py-3 rounded-xl text-xs font-bold text-gray-500 hover:text-[#1F2937] border border-gray-200 hover:bg-gray-50 transition-all uppercase tracking-widest"
             >
               Cancelar
             </button>
             <button 
               type="submit"
               disabled={loading}
-              className="flex-1 bg-[var(--color-neon-cyan)] text-black py-3 rounded-xl text-xs font-black hover:bg-cyan-400 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] flex items-center justify-center gap-2 uppercase tracking-widest"
+              className="flex-1 bg-[#10B981] text-black py-3 rounded-xl text-xs font-black hover:bg-cyan-400 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] flex items-center justify-center gap-2 uppercase tracking-widest"
             >
               {loading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
               Registrar Lead

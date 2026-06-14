@@ -33,8 +33,7 @@ export default function Sidebar() {
   const canSeeInmuebles  = currentRole !== 'SUPERADMIN';
 
   const skeleton = (
-    <aside className="w-60 flex-shrink-0 hidden md:flex flex-col"
-      style={{ background: '#0f0f0f', borderRight: '1px solid #1e1e1e' }}>
+    <aside className="w-60 flex-shrink-0 hidden md:flex flex-col bg-[#1E3A8A] border-r border-[#1e3a8a]/20">
     </aside>
   );
 
@@ -42,77 +41,71 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="w-60 flex-shrink-0 hidden md:flex flex-col relative"
-      style={{ background: '#0f0f0f', borderRight: '1px solid #1e1e1e' }}
+      className="w-60 flex-shrink-0 hidden md:flex flex-col relative bg-[#1E3A8A] text-white shadow-xl z-20"
     >
       {/* Logo */}
       <div
-        className="h-14 flex items-center px-5 flex-shrink-0"
-        style={{ borderBottom: '1px solid #1e1e1e' }}
+        className="h-14 flex items-center px-5 flex-shrink-0 border-b border-white/10"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div
-            className="w-6 h-6 flex items-center justify-center"
-            style={{ background: '#ffffff', borderRadius: 0 }}
+            className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm"
           >
-            <span className="text-[10px] font-black text-black tracking-tight">IQ</span>
+            <span className="text-[11px] font-black text-[#1E3A8A] tracking-tight">DA</span>
           </div>
-          <span className="text-sm font-bold tracking-tight text-white">Don IQ</span>
+          <span className="text-[15px] font-bold tracking-tight text-white">DonAtento</span>
         </div>
       </div>
 
       {/* User Block */}
       <div
-        className="px-5 py-3 flex-shrink-0"
-        style={{ borderBottom: '1px solid #1e1e1e', background: '#0a0a0a' }}
+        className="px-5 py-4 flex-shrink-0 border-b border-white/5 bg-black/10"
       >
-        <p className="text-white text-xs font-semibold truncate leading-none mb-1">
+        <p className="text-white text-xs font-semibold truncate leading-none mb-1.5">
           {user.firstName} {user.lastName}
         </p>
-        <p className="text-[10px] font-mono uppercase tracking-widest"
-          style={{ color: 'rgba(255,255,255,0.35)' }}>
+        <p className="text-[10px] font-medium uppercase tracking-widest text-white/60">
           {user.role?.replace(/_/g, ' ')}
         </p>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
         {canSeeCRM && (
           <>
-            <SidebarLink href="/crm"       icon={<BarChart3 size={15} />} label="CRM"              active={pathname === '/crm'} />
-            <SidebarLink href="/contactos" icon={<Users size={15} />}     label="Contactos"         active={pathname === '/contactos'} />
+            <SidebarLink href="/crm"       icon={<BarChart3 size={16} />} label="CRM"              active={pathname === '/crm'} />
+            <SidebarLink href="/contactos" icon={<Users size={16} />}     label="Contactos"         active={pathname === '/contactos'} />
           </>
         )}
 
         {canSeeInmuebles && (
-          <SidebarLink href="/inmuebles" icon={<Building2 size={15} />} label="Maestro Inmuebles" active={pathname === '/inmuebles'} />
+          <SidebarLink href="/inmuebles" icon={<Building2 size={16} />} label="Maestro Inmuebles" active={pathname === '/inmuebles'} />
         )}
 
         {canSeeTickets && (
           <>
-            <SidebarLink href="/tickets"   icon={<Ticket size={15} />} label="Gestión Tickets"   active={pathname === '/tickets'} />
-            <SidebarLink href="/providers" icon={<Users size={15} />}  label="Proveedores"        active={pathname === '/providers'} />
+            <SidebarLink href="/tickets"   icon={<Ticket size={16} />} label="Gestión Tickets"   active={pathname === '/tickets'} />
+            <SidebarLink href="/providers" icon={<Users size={16} />}  label="Proveedores"        active={pathname === '/providers'} />
           </>
         )}
 
         {canSeeCRM && (
-          <SidebarLink href="/analitica" icon={<BarChart3 size={15} />} label="Centro de Mando 360" active={pathname === '/analitica'} />
+          <SidebarLink href="/analitica" icon={<BarChart3 size={16} />} label="Centro de Mando 360" active={pathname === '/analitica'} />
         )}
 
         {canSeeSuperAdmin && (
-          <div className="mt-4 pt-4" style={{ borderTop: '1px solid #1e1e1e' }}>
-            <p className="px-3 text-[9px] font-mono uppercase tracking-widest mb-2"
-               style={{ color: 'rgba(255,255,255,0.25)' }}>God Mode</p>
+          <div className="mt-6 pt-4 border-t border-white/10">
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider mb-2 text-white/50">God Mode</p>
             <SidebarLink 
               href="/admin" 
-              icon={<ShieldCheck size={15} />} 
+              icon={<ShieldCheck size={16} />} 
               label="Gestión Inmobiliarias" 
               active={pathname === '/admin'}
               accent
             />
             <SidebarLink 
               href="/admin/finops" 
-              icon={<BarChart3 size={15} />} 
+              icon={<BarChart3 size={16} />} 
               label="Rentabilidad FinOps" 
               active={pathname === '/admin/finops'}
               accent
@@ -121,26 +114,22 @@ export default function Sidebar() {
         )}
 
         {canSeeConfig && (
-          <div className="mt-4 pt-4" style={{ borderTop: '1px solid #1e1e1e' }}>
-            <p className="px-3 text-[9px] font-mono uppercase tracking-widest mb-2"
-               style={{ color: 'rgba(255,255,255,0.25)' }}>Administración</p>
-            <SidebarLink href="/ia-config"     icon={<Settings size={15} />} label="Cerebro de Marca"      active={pathname === '/ia-config'} />
-            <SidebarLink href="/importar"      icon={<UploadCloud size={15} />} label="Importar Datos"     active={pathname === '/importar'} />
-            <SidebarLink href="/configuracion" icon={<Settings size={15} />} label="Configuración"          active={pathname === '/configuracion'} />
+          <div className="mt-6 pt-4 border-t border-white/10">
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider mb-2 text-white/50">Administración</p>
+            <SidebarLink href="/ia-config"     icon={<Settings size={16} />} label="Cerebro de Marca"      active={pathname === '/ia-config'} />
+            <SidebarLink href="/importar"      icon={<UploadCloud size={16} />} label="Importar Datos"     active={pathname === '/importar'} />
+            <SidebarLink href="/configuracion" icon={<Settings size={16} />} label="Configuración"          active={pathname === '/configuracion'} />
           </div>
         )}
       </nav>
 
       {/* Logout */}
-      <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid #1e1e1e' }}>
+      <div className="p-3 flex-shrink-0 border-t border-white/10">
         <button
           onClick={() => authService.logout()}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium transition-colors group"
-          style={{ color: 'rgba(239,68,68,0.7)' }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,68,68,0.7)')}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium rounded-md transition-colors group text-red-200 hover:bg-red-500/20 hover:text-white"
         >
-          <LogOut size={13} />
+          <LogOut size={15} />
           Cerrar Sesión
         </button>
       </div>
@@ -160,31 +149,19 @@ function SidebarLink({
   return (
     <Link
       href={href}
-      className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium transition-all duration-150 group relative"
-      style={{
-        background:   active ? '#1c1c1c' : 'transparent',
-        color:        active ? '#ffffff' : 'rgba(255,255,255,0.50)',
-        borderRadius: 0,
-        borderLeft:   active ? '2px solid #ffffff' : '2px solid transparent',
-      }}
-      onMouseEnter={e => {
-        if (!active) {
-          (e.currentTarget as HTMLElement).style.background = '#141414';
-          (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.80)';
-        }
-      }}
-      onMouseLeave={e => {
-        if (!active) {
-          (e.currentTarget as HTMLElement).style.background = 'transparent';
-          (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.50)';
-        }
-      }}
+      className={`flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium rounded-md transition-all duration-200 group relative ${
+        active 
+          ? 'bg-white/10 text-white' 
+          : 'text-white/70 hover:bg-white/5 hover:text-white'
+      }`}
     >
-      <span className="flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5">
+      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full transition-all duration-200 ${active ? 'bg-[#10B981]' : 'bg-transparent group-hover:bg-white/20'}`} />
+      
+      <span className={`flex-shrink-0 transition-transform duration-200 ${active ? 'text-[#10B981]' : 'group-hover:text-white'} ${!active && 'group-hover:translate-x-0.5'}`}>
         {icon}
       </span>
       <span className="truncate tracking-tight">{label}</span>
-      {active && <ChevronRight size={10} className="ml-auto opacity-50" />}
+      {active && <ChevronRight size={14} className="ml-auto opacity-70 text-[#10B981]" />}
     </Link>
   );
 }

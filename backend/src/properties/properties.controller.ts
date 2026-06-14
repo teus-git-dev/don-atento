@@ -53,7 +53,7 @@ export class PropertiesController {
   ) {}
 
   @Get()
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Obtener todos los inmuebles de un tenant' })
   async findAll(
     @Req() req: Request,
@@ -74,14 +74,14 @@ export class PropertiesController {
   }
 
   @Get(':id')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Obtener detalle de un inmueble por UUID' })
   async findOne(@Req() req: Request, @Param('id') id: string) {
     return this.propertiesService.findOne(id, req.tenantId!);
   }
 
   @Get('search/:code')
-  @Roles('AGENT', 'ADMIN_TENANT', 'SUPERADMIN', 'OWNER')
+  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER')
   @ApiOperation({ summary: 'Buscar inmueble por ID Inmueble (propertyCode)' })
   @ApiQuery({ name: 'tenantId', required: true })
   @ApiParam({
@@ -93,7 +93,7 @@ export class PropertiesController {
   }
 
   @Post()
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Crear nuevo inmueble' })
   async create(@Req() req: Request, @Body() data: CreatePropertyDto) {
     data.tenantId = req.tenantId!;
@@ -101,7 +101,7 @@ export class PropertiesController {
   }
 
   @Post('bulk')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Importación masiva con Smart Mapper' })
   @ApiBody({
     type: [CreatePropertyDto],
@@ -125,7 +125,7 @@ export class PropertiesController {
   }
 
   @Patch(':id/status')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Activar/Desactivar inmueble' })
   async patchStatus(
     @Req() req: Request,
@@ -136,7 +136,7 @@ export class PropertiesController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({ summary: 'Actualizar datos de un inmueble' })
   async update(
     @Req() req: Request,
@@ -147,7 +147,7 @@ export class PropertiesController {
   }
 
   @Post(':id/transfer')
-  @Roles('ADMIN_TENANT', 'SUPERADMIN')
+  @Roles('ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN')
   @ApiOperation({
     summary: 'Realizar cesión (transferencia) de titularidad o arrendatario',
   })

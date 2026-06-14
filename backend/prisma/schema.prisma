@@ -510,6 +510,7 @@ model Tenant {
   whatsappAccessToken    String?
   whatsappPhoneNumberId  String?                @unique
   whatsappProvider       String?                @default("meta")
+  crmDefaultAssigneeEmail String?
   AccountingAccount      AccountingAccount[]
   AccountingThirdParty   AccountingThirdParty[]
   BillingItem            BillingItem[]
@@ -564,6 +565,10 @@ model Ticket {
   clientSignature      String?
   inventoryItemId      String?
   shortId              String?
+  parentTicketId       String?
+
+  parentTicket         Ticket?             @relation("SubTickets", fields: [parentTicketId], references: [id])
+  subTickets           Ticket[]            @relation("SubTickets")
   provider             Provider?           @relation(fields: [assignedProviderId], references: [id])
   assignedTechnician   User?               @relation("Ticket_assignedTechnicianIdToUser", fields: [assignedTechnicianId], references: [id])
   currentState         WorkflowState?      @relation(fields: [currentStateId], references: [id])
@@ -977,6 +982,10 @@ enum ProspectSource {
   MANUAL
   WEB
   RADAR_IA
+  VITRINA
+  FINCA_RAIZ
+  METRO_CUADRADO
+  CIEN_CUADRAS
 }
 
 enum ProspectStatus {
@@ -995,6 +1004,12 @@ enum ProviderSpecialty {
   PAINTING
   AC_HEATING
   GENERAL
+  LOCKSMITH
+  BLINDS_CURTAINS
+  ROOFING
+  ELECTRONICS
+  GARDENING
+  OTHERS
 }
 
 enum ProviderStatus {
@@ -1047,6 +1062,7 @@ enum TicketSeverity {
 enum UserRole {
   SUPERADMIN
   ADMIN_TENANT
+  COORDINATOR
   AGENT
   TECHNICIAN
   OWNER

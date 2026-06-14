@@ -253,6 +253,7 @@ Your response must exactly follow this structure:
 Sentiment: {Level Name}
 Intensity Score: {1-5}
 Action: {CREATE_TICKET | DE_ESCALATE | GENERAL_REPLY}
+Issues: {List of distinct, independent technical issues reported, separated by "|". E.g. Humedad en techo | Toma corriente quemado. If no specific issue or Action is not CREATE_TICKET, leave empty.}
 [/METADATA]
 {Your empathetic and helpful response in Spanish to the user here}
 

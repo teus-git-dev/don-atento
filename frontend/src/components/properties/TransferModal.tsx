@@ -69,21 +69,21 @@ export default function TransferModal({ isOpen, onClose, property, onSuccess }: 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="glass w-full max-w-lg rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="bg-white shadow-sm border border-gray-200 w-full max-w-lg rounded-3xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-orange-500/20 flex items-center justify-center text-orange-400 border border-orange-500/30">
               <UserPlus size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white uppercase tracking-tight">Realizar Cesión</h2>
+              <h2 className="text-xl font-bold text-[#1F2937] uppercase tracking-tight">Realizar Cesión</h2>
               <p className="text-xs text-gray-500 font-mono italic">{property.title} • {property.propertyCode}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-            <X size={20} className="text-gray-400" />
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <X size={20} className="text-gray-500" />
           </button>
         </div>
 
@@ -95,7 +95,7 @@ export default function TransferModal({ isOpen, onClose, property, onSuccess }: 
               <select 
                 value={formData.newOwnerId}
                 onChange={(e) => setFormData({ ...formData, newOwnerId: e.target.value })}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-orange-500/50 outline-none transition-all text-white"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-orange-500/50 outline-none transition-all text-[#1F2937]"
                 required
               >
                 <option value="">Seleccionar Propietario...</option>
@@ -111,7 +111,7 @@ export default function TransferModal({ isOpen, onClose, property, onSuccess }: 
               <select 
                 value={formData.newTenantId}
                 onChange={(e) => setFormData({ ...formData, newTenantId: e.target.value })}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all text-white"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all text-[#1F2937]"
               >
                 <option value="">Mantener vacante / Sin cambio</option>
                 {tenants.map(t => (
@@ -129,7 +129,7 @@ export default function TransferModal({ isOpen, onClose, property, onSuccess }: 
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-[var(--color-neon-blue)]/50 outline-none transition-all text-white"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#1E3A8A]/50 outline-none transition-all text-[#1F2937]"
                 required
               />
             </div>
@@ -146,14 +146,14 @@ export default function TransferModal({ isOpen, onClose, property, onSuccess }: 
             <button 
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 rounded-2xl border border-white/10 text-sm font-bold text-gray-400 hover:bg-white/5 transition-all"
+              className="flex-1 px-6 py-3 rounded-2xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition-all"
             >
               Cancelar
             </button>
             <button 
               type="submit"
               disabled={loading}
-              className="flex-[2] bg-gradient-to-r from-orange-600 to-orange-400 text-white px-6 py-3 rounded-2xl text-sm font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-[2] bg-gradient-to-r from-orange-600 to-orange-400 text-[#1F2937] px-6 py-3 rounded-2xl text-sm font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : "Confirmar Cesión"}
             </button>
