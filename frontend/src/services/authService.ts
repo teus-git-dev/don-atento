@@ -6,7 +6,7 @@
 
 import { API_URL } from '@/lib/config';
 
-export type UserRole = 'SUPERADMIN' | 'ADMIN_TENANT' | 'AGENT' | 'TECHNICIAN' | 'OWNER';
+export type UserRole = 'SUPERADMIN' | 'ADMIN_TENANT' | 'AGENT' | 'TECHNICIAN' | 'OWNER' | 'COORDINATOR';
 
 export interface AuthUser {
   id: string;
