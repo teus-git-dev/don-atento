@@ -1,7 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import * as dotenv from 'dotenv';
 dotenv.config(); // MUST BE BEFORE IMPORTING APP.MODULE TO SET JWT_SECRET!
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -41,8 +43,10 @@ async function bootstrap() {
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
-      // Allow requests with no origin (mobile apps, Postman, curl, Swagger)
-      if (!origin || allowedOrigins.includes(origin)) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      // Allow requests with no origin only in dev (Postman, curl, Swagger)
+      const allowNoOrigin = !isProduction && !origin;
+      if (allowNoOrigin || (origin && allowedOrigins.includes(origin))) {
         callback(null, true);
       } else {
         callback(new Error(`CORS policy: origin '${origin}' not allowed`));
