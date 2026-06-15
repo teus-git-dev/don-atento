@@ -55,30 +55,30 @@ export default function ContactosDashboard() {
     <div className="space-y-6 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
             <Users className="text-[var(--color-neon-cyan)]" /> Contactos
           </h1>
-          <p className="text-gray-400 mt-1">
+          <p className="text-gray-500 mt-1">
             Gestión de Arrendatarios y Propietarios con contratos activos
           </p>
         </div>
         <div className="flex gap-3">
-            <div className="bg-white/5 p-1 rounded-xl border border-white/10 flex gap-1">
+            <div className="bg-gray-50 p-1 rounded-xl border border-gray-200 flex gap-1">
                 <button 
                   onClick={() => setActiveTab('TENANT_USER')}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'TENANT_USER' ? 'bg-[var(--color-neon-blue)] text-white shadow-[0_0_10px_rgba(45,185,255,0.3)]' : 'text-gray-500 hover:text-white'}`}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'TENANT_USER' ? 'bg-[var(--color-neon-blue)] text-gray-900 shadow-[0_0_10px_rgba(45,185,255,0.3)]' : 'text-gray-500 hover:text-gray-900'}`}
                 >
                   Arrendatarios
                 </button>
                 <button 
                   onClick={() => setActiveTab('OWNER')}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'OWNER' ? 'bg-[var(--color-neon-cyan)] text-black shadow-[0_0_10px_rgba(0,255,255,0.3)]' : 'text-gray-500 hover:text-white'}`}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'OWNER' ? 'bg-[var(--color-neon-cyan)] text-black shadow-[0_0_10px_rgba(0,255,255,0.3)]' : 'text-gray-500 hover:text-gray-900'}`}
                 >
                   Propietarios
                 </button>
             </div>
             <button 
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm transition-all border border-white/10"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold rounded-xl text-sm transition-all border border-gray-200"
             >
                 <Plus size={16} /> Exportar
             </button>
@@ -91,9 +91,9 @@ export default function ContactosDashboard() {
           <StatCard title="Contratos Activos" value={users.length.toString()} sub="Sincronizados" icon={<FileText className="text-purple-400" />} />
       </div>
 
-      <div className="glass rounded-[2rem] p-8 border border-white/5 overflow-hidden">
+      <div className="glass rounded-[2rem] p-8 border border-gray-200 overflow-hidden">
         <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-white uppercase tracking-widest text-sm opacity-70">
+            <h3 className="text-lg font-bold text-gray-900 uppercase tracking-widest text-sm opacity-70">
               Listado de {activeTab === 'TENANT_USER' ? 'Arrendatarios' : 'Propietarios'}
             </h3>
             <div className="relative">
@@ -103,7 +103,7 @@ export default function ContactosDashboard() {
                     placeholder="Buscar por nombre, cédula o email..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-[var(--color-neon-cyan)]/50 transition-all w-72"
+                    className="bg-gray-50 border border-gray-200 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-[var(--color-neon-cyan)]/50 transition-all w-72"
                 />
             </div>
         </div>
@@ -111,7 +111,7 @@ export default function ContactosDashboard() {
         <div className="overflow-x-auto">
           <table className="w-full text-left">
               <thead>
-                  <tr className="border-b border-white/10 text-xs font-mono text-gray-500 uppercase">
+                  <tr className="border-b border-gray-200 text-xs font-mono text-gray-500 uppercase">
                       <th className="pb-4 font-medium pl-4">Cliente</th>
                       <th className="pb-4 font-medium">Documento</th>
                       <th className="pb-4 font-medium">Teléfono</th>
@@ -119,7 +119,7 @@ export default function ContactosDashboard() {
                       <th className="pb-4 font-medium text-right pr-4">Fecha Creación</th>
                   </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-gray-200">
                   {loading ? (
                     <TableRowSkeleton columns={5} />
                   ) : filteredUsers.length === 0 ? (
@@ -129,15 +129,15 @@ export default function ContactosDashboard() {
                       </td>
                     </tr>
                   ) : filteredUsers.map((user, i) => (
-                      <tr key={i} className="group hover:bg-white/5 transition-all text-sm cursor-pointer" onClick={() => setSelectedUser(user)}>
+                      <tr key={i} className="group hover:bg-gray-50 transition-all text-sm cursor-pointer" onClick={() => setSelectedUser(user)}>
                           <td className="py-4 pl-4 font-medium flex flex-col">
-                              <span className="text-white">{user.firstName} {user.lastName}</span>
+                              <span className="text-gray-900">{user.firstName} {user.lastName}</span>
                               <span className="text-[10px] text-gray-500 font-mono">{user.email}</span>
                           </td>
-                          <td className="py-4 text-gray-300 font-mono text-xs">
+                          <td className="py-4 text-gray-600 font-mono text-xs">
                               {user.governmentId || 'N/A'}
                           </td>
-                          <td className="py-4 text-gray-300 font-mono text-xs">
+                          <td className="py-4 text-gray-600 font-mono text-xs">
                               {user.phone || 'Sin número'}
                           </td>
                           <td className="py-4">
@@ -175,12 +175,12 @@ export default function ContactosDashboard() {
 
 function StatCard({ title, value, sub, icon }: any) {
     return (
-        <div className="glass p-6 rounded-2xl border border-white/5 hover:border-[var(--color-neon-cyan)]/30 transition-all group">
+        <div className="glass p-6 rounded-2xl border border-gray-200 hover:border-[var(--color-neon-cyan)]/30 transition-all group">
             <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-white/5 rounded-lg group-hover:scale-110 transition-transform">{icon}</div>
+                <div className="p-2 bg-gray-50 rounded-lg group-hover:scale-110 transition-transform">{icon}</div>
             </div>
-            <p className="text-xs text-gray-400 mb-1">{title}</p>
-            <p className="text-2xl font-bold text-white">{value}</p>
+            <p className="text-xs text-gray-500 mb-1">{title}</p>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
             <p className="text-[10px] text-gray-500 mt-1">{sub}</p>
         </div>
     );
