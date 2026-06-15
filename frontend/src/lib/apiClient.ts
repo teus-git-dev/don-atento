@@ -23,12 +23,20 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    credentials: 'include', // Also send cookies for same-origin / local dev
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      credentials: 'include', // Also send cookies for same-origin / local dev
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err: any) {
+    if (typeof window !== 'undefined') {
+      alert(`Fallo crítico de conexión con el servidor. Verifica tu internet o recarga la página.`);
+    }
+    throw new Error('Fallo de conexión: ' + err?.message);
+  }
 
   // Si el servidor rechaza el token (y no es el endpoint de refresh/login)
   if (res.status === 401 && !path.startsWith('/auth/')) {
@@ -91,6 +99,10 @@ async function request<T>(
       }
     }
     
+    if (typeof window !== 'undefined' && res.status >= 500) {
+      alert(`Error del servidor (${res.status}): ${errorMessage}. Por favor, recarga la página o contacta soporte.`);
+    }
+
     throw new Error(errorMessage);
   }
 
