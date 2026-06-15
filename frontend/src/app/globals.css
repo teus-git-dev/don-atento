@@ -14,6 +14,11 @@
   --color-surface:    #FFFFFF; /* Blanco */
   --color-text:       #1F2937; /* Gris Oscuro */
 
+  /* Theme Aliases for Legacy/Neon Components */
+  --color-neon-blue:  #1E3A8A; /* Mapped to primary */
+  --color-neon-cyan:  #0284c7; /* Mapped to a readable sky blue/cyan for light theme */
+  --color-neon-purple: #7C3AED; /* Mapped to violet for legibility */
+
   /* Neutral palette mapping for general use */
   --color-neutral-50: #f9fafb;
   --color-neutral-100: #f3f4f6;
