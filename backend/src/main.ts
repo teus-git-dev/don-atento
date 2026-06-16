@@ -35,7 +35,8 @@ async function bootstrap() {
     'http://localhost:3001',
     'http://localhost:3002', // Next.js fallback port when 3000 is taken
     'https://doniq-rho.vercel.app',
-    'https://doniq-ax0tc21ll-teus-git-devs-projects.vercel.app'
+    'https://doniq-ax0tc21ll-teus-git-devs-projects.vercel.app',
+    'https://don-atento.vercel.app'
   ];
 
   app.enableCors({
@@ -61,7 +62,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // Strip properties not in DTO
-      forbidNonWhitelisted: true, // Reject requests with unknown fields
+      forbidNonWhitelisted: false, // Don't reject requests with unknown fields, just strip them
       transform: true, // Auto-transform payloads to DTO instances
     }),
   );
