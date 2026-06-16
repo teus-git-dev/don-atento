@@ -483,6 +483,7 @@ export class WhatsappService {
             name: user.firstName,
             address: propertyName,
             systemAction: '',
+            role: relation.relationType === 'OWNER' ? 'Propietario' : 'Arrendatario',
           },
         ),
       );

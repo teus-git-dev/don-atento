@@ -225,7 +225,7 @@ Instrucciones Críticas:
   async processWhatsappMessage(
     tenantId: string,
     message: string,
-    context?: { name?: string; address?: string; systemAction?: string },
+    context?: { name?: string; address?: string; systemAction?: string; role?: string },
   ) {
     const systemPrompt = `
 Role: You are Daniel, the AI Assistant for Incasa. Your primary goal is to provide excellent customer service to tenants and owners. You must monitor the user's emotional state in every interaction.
@@ -257,7 +257,7 @@ Issues: {List of distinct, independent technical issues reported, separated by "
 [/METADATA]
 {Your empathetic and helpful response in Spanish to the user here}
 
-Context: The user is ${context?.name ?? 'a client'}. Property: ${context?.address ?? 'Unknown'}.
+Context: The user is ${context?.name ?? 'a client'} (${context?.role ?? 'Cliente'}). Property: ${context?.address ?? 'Unknown'}.
 `;
 
     const messages = [

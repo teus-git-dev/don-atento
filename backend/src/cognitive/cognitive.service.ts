@@ -46,7 +46,7 @@ export class CognitiveService {
   async processWhatsappWithAi(
     tenantId: string,
     message: string,
-    context?: { name?: string; address?: string; systemAction?: string },
+    context?: { name?: string; address?: string; systemAction?: string; role?: string },
   ) {
     return this.aiChatService.processWhatsappMessage(
       tenantId,
