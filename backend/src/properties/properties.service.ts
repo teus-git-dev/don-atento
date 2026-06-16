@@ -416,6 +416,7 @@ export class PropertiesService {
     tenantId: string,
     page: number = 1,
     limit: number = 10,
+    search?: string,
   ) {
     // Defense in depth: controller already caps `limit`, but enforce here too
     // so internal callers can't bypass the cap.
@@ -424,9 +425,17 @@ export class PropertiesService {
     const skip = (safePage - 1) * safeLimit;
 
     try {
+      const where: Prisma.PropertyWhereInput = { tenantId };
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { propertyCode: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
       const [data, totalRecords] = await Promise.all([
         this.prisma.property.findMany({
-          where: { tenantId },
+          where,
           include: {
             relations: {
               include: {
@@ -445,7 +454,7 @@ export class PropertiesService {
           take: safeLimit,
           orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         }),
-        this.prisma.property.count({ where: { tenantId } }),
+        this.prisma.property.count({ where }),
       ]);
 
       return {

@@ -84,14 +84,11 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`${API_URL}/properties?tenantId=${TENANT_ID}`);
+        const res = await fetch(`${API_URL}/properties?tenantId=${TENANT_ID}&search=${encodeURIComponent(val)}`);
         if (res.ok) {
-          const all = await res.json();
-          const filtered = (all as Property[]).filter((p: Property) => 
-            p.title.toLowerCase().includes(val.toLowerCase()) || 
-            (p.propertyCode && p.propertyCode.toLowerCase().includes(val.toLowerCase()))
-          );
-          setSearchResults(filtered.slice(0, 5));
+          const result = await res.json();
+          const properties = Array.isArray(result.data) ? result.data : [];
+          setSearchResults(properties.slice(0, 5));
         }
       } catch (err) {
         console.error("Search error:", err);

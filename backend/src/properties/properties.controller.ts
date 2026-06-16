@@ -59,6 +59,7 @@ export class PropertiesController {
     @Req() req: Request,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
   ) {
     const pageNum = Math.max(1, page ? parseInt(page, 10) : 1);
     const requestedLimit = limit ? parseInt(limit, 10) : 10;
@@ -70,6 +71,7 @@ export class PropertiesController {
       req.tenantId!,
       pageNum,
       limitNum,
+      search,
     );
   }
 
