@@ -258,19 +258,19 @@ export default function CreateProspectModal({ isOpen, onClose, onSuccess }: Crea
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">Interés General</label>
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">Descripción General</label>
               <input 
                 type="text" 
                 value={formData.interestedIn}
                 onChange={e => setFormData({...formData, interestedIn: e.target.value})}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#1F2937] focus:border-[#1E3A8A]/50 focus:outline-none transition-all"
-                placeholder="Ej: Apartamentos zona norte"
+                placeholder="Ej: Busco apartamento zona norte..."
               />
             </div>
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">Inmuebles Específicos (BD)</label>
+            <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold ml-1">Interés General (Inmuebles BD)</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
               <input 
