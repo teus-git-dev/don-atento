@@ -22,7 +22,7 @@ describe('FilesController', () => {
   };
 
   const fakeReq = (tenantId = 't1'): Request =>
-    ({ tenantId }) as unknown as Request;
+    ({ tenantId, user: { tenantId } }) as unknown as Request;
   const fakeRes = (): Response => ({ set: jest.fn() }) as unknown as Response;
 
   const assetWithBucket = {

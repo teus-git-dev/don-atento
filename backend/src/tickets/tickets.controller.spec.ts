@@ -140,7 +140,7 @@ describe('TicketsController', () => {
     it('legacy: no params → calls findAllByTenant(tenantId) without opts', async () => {
       mockTicketsService.findAllByTenant.mockResolvedValue([]);
       await controller.findAll(fakeReq('t1'));
-      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1');
+      expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', undefined, undefined);
       expect(mockTicketsService.findAllByOwner).not.toHaveBeenCalled();
     });
 
@@ -150,6 +150,8 @@ describe('TicketsController', () => {
       expect(mockTicketsService.findAllByOwner).toHaveBeenCalledWith(
         'owner-7',
         't1',
+        undefined,
+        undefined,
       );
       expect(mockTicketsService.findAllByTenant).not.toHaveBeenCalled();
     });
@@ -165,7 +167,7 @@ describe('TicketsController', () => {
       expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
         page: 1,
         limit: 20,
-      });
+      }, undefined);
     });
 
     it('paginated: ?limit=50 → calls findAllByTenant with { page: 1, limit: 50 }', async () => {
@@ -179,7 +181,7 @@ describe('TicketsController', () => {
       expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
         page: 1,
         limit: 50,
-      });
+      }, undefined);
     });
 
     it('paginated: ?limit=200 → caps limit at 100', async () => {
@@ -193,7 +195,7 @@ describe('TicketsController', () => {
       expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
         page: 1,
         limit: 100,
-      });
+      }, undefined);
     });
 
     it('paginated: ?limit=0 → coerces to default 20', async () => {
@@ -207,7 +209,7 @@ describe('TicketsController', () => {
       expect(mockTicketsService.findAllByTenant).toHaveBeenCalledWith('t1', {
         page: 1,
         limit: 20,
-      });
+      }, undefined);
     });
 
     it('paginated: ?ownerId + ?page + ?limit → calls findAllByOwner with opts', async () => {
@@ -222,6 +224,7 @@ describe('TicketsController', () => {
         'owner-7',
         't1',
         { page: 2, limit: 10 },
+        undefined,
       );
     });
   });
@@ -238,6 +241,8 @@ describe('TicketsController', () => {
       expect(mockTicketsService.findAllByTechnician).toHaveBeenCalledWith(
         'tech-1',
         't1',
+        undefined,
+        undefined,
       );
     });
 
@@ -253,6 +258,7 @@ describe('TicketsController', () => {
         'tech-1',
         't1',
         { page: 3, limit: 5 },
+        undefined,
       );
     });
   });

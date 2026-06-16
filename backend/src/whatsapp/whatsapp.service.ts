@@ -405,7 +405,7 @@ export class WhatsappService {
             originalText: originalText,
             issues: issues,
           });
-          const short = newTicket.id.split('-')[0].toUpperCase();
+          const short = newTicket.shortId || newTicket.id.split('-')[0].toUpperCase();
           const response =
             finalCleanResponse +
             `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;
@@ -627,7 +627,7 @@ export class WhatsappService {
             originalText: text,
             issues: parsedMetadata.issues,
           });
-          const short = newTicket.id.split('-')[0].toUpperCase();
+          const short = newTicket.shortId || newTicket.id.split('-')[0].toUpperCase();
           finalResponse =
             finalCleanResponse +
             `\n\nTu número de ticket es: ${short}. Estaremos en contacto pronto por este medio.`;

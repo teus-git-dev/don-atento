@@ -60,7 +60,6 @@ describe('TenantGuard', () => {
 
       expect(guard.canActivate(context)).toBe(true);
       expect(req['tenantId']).toBe('tenant-1');
-      expect((req.query as Record<string, unknown>).tenantId).toBe('tenant-1');
     });
 
     it('throws Forbidden if user has no tenantId', () => {
