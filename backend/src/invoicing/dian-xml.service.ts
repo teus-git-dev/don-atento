@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /**
  * @fileoverview DIAN XML Builder — UBL 2.1 / Anexo Técnico 1.8
  *
@@ -103,9 +102,15 @@ export class DianXmlService {
       .ele('sts:InvoiceAuthorization', resolution.resolutionNumber)
       .up()
       .ele('sts:AuthorizationPeriod')
-      .ele('cbc:StartDate', new Date(resolution.validFrom).toISOString().split('T')[0])
+      .ele(
+        'cbc:StartDate',
+        new Date(resolution.validFrom).toISOString().split('T')[0],
+      )
       .up()
-      .ele('cbc:EndDate', new Date(resolution.validTo).toISOString().split('T')[0])
+      .ele(
+        'cbc:EndDate',
+        new Date(resolution.validTo).toISOString().split('T')[0],
+      )
       .up()
       .up()
       .ele('sts:AuthorizedInvoices')
@@ -123,13 +128,15 @@ export class DianXmlService {
         '@schemeID': '4',
         '@schemeName': '31',
         '@schemeAgencyID': '195',
-        '@schemeAgencyName': 'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)',
+        '@schemeAgencyName':
+          'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)',
         '#': tenant.nit,
       } as XmlObj)
       .up()
       .ele('sts:SoftwareID', {
         '@schemeAgencyID': '195',
-        '@schemeAgencyName': 'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)',
+        '@schemeAgencyName':
+          'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)',
         '#': resolution.softwareId ?? 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
       } as XmlObj)
       .up();
@@ -153,7 +160,10 @@ export class DianXmlService {
         '#': invoice.cufe ?? 'CUFE-PENDING-GENERATION',
       } as XmlObj)
       .up()
-      .ele('cbc:IssueDate', new Date(invoice.issueDate).toISOString().split('T')[0])
+      .ele(
+        'cbc:IssueDate',
+        new Date(invoice.issueDate).toISOString().split('T')[0],
+      )
       .up()
       .ele(
         'cbc:IssueTime',
@@ -169,7 +179,8 @@ export class DianXmlService {
     const DIAN_AGENCY: XmlObj = {
       '@schemeName': '31',
       '@schemeAgencyID': '195',
-      '@schemeAgencyName': 'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)',
+      '@schemeAgencyName':
+        'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)',
     };
 
     const supplier = xmlDoc.ele('cac:AccountingSupplierParty').ele('cac:Party');
@@ -177,7 +188,11 @@ export class DianXmlService {
       .ele('cac:PartyTaxScheme')
       .ele('cbc:RegistrationName', tenant.name)
       .up()
-      .ele('cbc:CompanyID', { '@schemeID': '1', ...DIAN_AGENCY, '#': tenant.nit } as XmlObj)
+      .ele('cbc:CompanyID', {
+        '@schemeID': '1',
+        ...DIAN_AGENCY,
+        '#': tenant.nit,
+      } as XmlObj)
       .up()
       .ele('cbc:TaxLevelCode', { '@listName': '48', '#': 'O-47' } as XmlObj)
       .up()
@@ -190,7 +205,11 @@ export class DianXmlService {
       .ele('cac:PartyLegalEntity')
       .ele('cbc:RegistrationName', tenant.name)
       .up()
-      .ele('cbc:CompanyID', { '@schemeID': '1', ...DIAN_AGENCY, '#': tenant.nit } as XmlObj);
+      .ele('cbc:CompanyID', {
+        '@schemeID': '1',
+        ...DIAN_AGENCY,
+        '#': tenant.nit,
+      } as XmlObj);
 
     // 5. Adquiriente (AccountingCustomerParty / ThirdParty)
     const customerSchemeID = thirdParty.documentType === 'NIT' ? '1' : '3';
@@ -228,13 +247,22 @@ export class DianXmlService {
     // 6. Tax Totals (IVA General)
     const taxTotal = xmlDoc.ele('cac:TaxTotal');
     taxTotal
-      .ele('cbc:TaxAmount', { '@currencyID': 'COP', '#': invoice.taxAmount.toString() } as XmlObj)
+      .ele('cbc:TaxAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.taxAmount.toString(),
+      } as XmlObj)
       .up();
     taxTotal
       .ele('cac:TaxSubtotal')
-      .ele('cbc:TaxableAmount', { '@currencyID': 'COP', '#': invoice.subtotal.toString() } as XmlObj)
+      .ele('cbc:TaxableAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.subtotal.toString(),
+      } as XmlObj)
       .up()
-      .ele('cbc:TaxAmount', { '@currencyID': 'COP', '#': invoice.taxAmount.toString() } as XmlObj)
+      .ele('cbc:TaxAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.taxAmount.toString(),
+      } as XmlObj)
       .up()
       .ele('cac:TaxCategory')
       .ele('cbc:Percent', '19.00')
@@ -246,28 +274,62 @@ export class DianXmlService {
 
     // 7. Legal Totals
     const legalTotal = xmlDoc.ele('cac:LegalMonetaryTotal');
-    legalTotal.ele('cbc:LineExtensionAmount', { '@currencyID': 'COP', '#': invoice.subtotal.toString() } as XmlObj).up();
-    legalTotal.ele('cbc:TaxExclusiveAmount', { '@currencyID': 'COP', '#': invoice.subtotal.toString() } as XmlObj).up();
-    legalTotal.ele('cbc:TaxInclusiveAmount', { '@currencyID': 'COP', '#': invoice.total.toString() } as XmlObj).up();
-    legalTotal.ele('cbc:PayableAmount', { '@currencyID': 'COP', '#': invoice.total.toString() } as XmlObj).up();
+    legalTotal
+      .ele('cbc:LineExtensionAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.subtotal.toString(),
+      } as XmlObj)
+      .up();
+    legalTotal
+      .ele('cbc:TaxExclusiveAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.subtotal.toString(),
+      } as XmlObj)
+      .up();
+    legalTotal
+      .ele('cbc:TaxInclusiveAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.total.toString(),
+      } as XmlObj)
+      .up();
+    legalTotal
+      .ele('cbc:PayableAmount', {
+        '@currencyID': 'COP',
+        '#': invoice.total.toString(),
+      } as XmlObj)
+      .up();
 
     // 8. Invoice Lines
     lines.forEach((line, i) => {
       const qty = line.quantity.toString();
       const unitP = line.unitPrice.toString();
       const lineTax = line.taxAmount.toString();
-      const lineSubtotal = (Number(line.total) - Number(line.taxAmount)).toString();
+      const lineSubtotal = (
+        Number(line.total) - Number(line.taxAmount)
+      ).toString();
 
       const itemLine = xmlDoc.ele('cac:InvoiceLine');
       itemLine.ele('cbc:ID', (i + 1).toString()).up();
-      itemLine.ele('cbc:InvoicedQuantity', { '@unitCode': 'EA', '#': qty } as XmlObj).up();
-      itemLine.ele('cbc:LineExtensionAmount', { '@currencyID': 'COP', '#': lineSubtotal } as XmlObj).up();
+      itemLine
+        .ele('cbc:InvoicedQuantity', { '@unitCode': 'EA', '#': qty } as XmlObj)
+        .up();
+      itemLine
+        .ele('cbc:LineExtensionAmount', {
+          '@currencyID': 'COP',
+          '#': lineSubtotal,
+        } as XmlObj)
+        .up();
 
       const lineTaxTotal = itemLine.ele('cac:TaxTotal');
-      lineTaxTotal.ele('cbc:TaxAmount', { '@currencyID': 'COP', '#': lineTax } as XmlObj).up();
+      lineTaxTotal
+        .ele('cbc:TaxAmount', { '@currencyID': 'COP', '#': lineTax } as XmlObj)
+        .up();
       lineTaxTotal
         .ele('cac:TaxSubtotal')
-        .ele('cbc:TaxableAmount', { '@currencyID': 'COP', '#': lineSubtotal } as XmlObj)
+        .ele('cbc:TaxableAmount', {
+          '@currencyID': 'COP',
+          '#': lineSubtotal,
+        } as XmlObj)
         .up()
         .ele('cbc:TaxAmount', { '@currencyID': 'COP', '#': lineTax } as XmlObj)
         .up()
@@ -279,7 +341,10 @@ export class DianXmlService {
         .up()
         .ele('cbc:Name', 'IVA');
 
-      itemLine.ele('cac:Item').ele('cbc:Description', line.billingItem?.name ?? 'Concepto').up();
+      itemLine
+        .ele('cac:Item')
+        .ele('cbc:Description', line.billingItem?.name ?? 'Concepto')
+        .up();
 
       itemLine
         .ele('cac:Price')
@@ -289,6 +354,6 @@ export class DianXmlService {
         .up();
     });
 
-    return xmlDoc.end({ prettyPrint: true }) as string;
+    return xmlDoc.end({ prettyPrint: true });
   }
 }

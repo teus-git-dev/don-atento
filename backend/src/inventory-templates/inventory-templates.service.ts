@@ -21,20 +21,22 @@ export class InventoryTemplatesService {
         status: dto.status ?? TemplateStatus.ACTIVE,
         // Support structured zones
         zones: {
-          create: (dto.zones ?? []).map((zone: CreateInventoryTemplateZoneDto) => ({
-            name: zone.name,
-            type: zone.type ?? 'ZONAS_COMUNES',
-            templateItems: {
-              create: (zone.items ?? []).map(
-                (item: CreateInventoryTemplateItemDto) => ({
-                  name: item.name,
-                  category: item.category ?? 'GENERAL',
-                  description: item.description,
-                  material: item.material,
-                }),
-              ),
-            },
-          })),
+          create: (dto.zones ?? []).map(
+            (zone: CreateInventoryTemplateZoneDto) => ({
+              name: zone.name,
+              type: zone.type ?? 'ZONAS_COMUNES',
+              templateItems: {
+                create: (zone.items ?? []).map(
+                  (item: CreateInventoryTemplateItemDto) => ({
+                    name: item.name,
+                    category: item.category ?? 'GENERAL',
+                    description: item.description,
+                    material: item.material,
+                  }),
+                ),
+              },
+            }),
+          ),
         },
         // Support top-level items (flat structure)
         items: {
@@ -84,23 +86,30 @@ export class InventoryTemplatesService {
     });
   }
 
-  async update(id: string, dto: UpdateInventoryTemplateDto) {
+  async update(id: string, tenantId: string, dto: UpdateInventoryTemplateDto) {
+    const template = await this.prisma.inventoryTemplate.findUnique({
+      where: { id },
+    });
+    if (!template || template.tenantId !== tenantId)
+      throw new Error('Template not found or unauthorized');
+
     // Basic update for name/description/status
     return this.prisma.inventoryTemplate.update({
       where: { id },
       data: {
         name: dto.name,
         description: dto.description,
-        status: dto.status as TemplateStatus | undefined,
+        status: dto.status,
       },
     });
   }
 
-  async toggleStatus(id: string) {
+  async toggleStatus(id: string, tenantId: string) {
     const template = await this.prisma.inventoryTemplate.findUnique({
       where: { id },
     });
-    if (!template) throw new Error('Template not found');
+    if (!template || template.tenantId !== tenantId)
+      throw new Error('Template not found');
 
     return this.prisma.inventoryTemplate.update({
       where: { id },
@@ -110,7 +119,14 @@ export class InventoryTemplatesService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, tenantId: string) {
+    // Verify ownership
+    const template = await this.prisma.inventoryTemplate.findUnique({
+      where: { id },
+    });
+    if (!template || template.tenantId !== tenantId)
+      throw new Error('Template not found');
+
     // Delete hierarchical data
     const zones = await this.prisma.zone.findMany({
       where: { templateId: id },

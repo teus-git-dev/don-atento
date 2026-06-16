@@ -57,13 +57,13 @@ export class PrismaService
          @typescript-eslint/no-unsafe-member-access
          -- Pool and PrismaPg are dynamically require()d above; their
             constructors/methods are any-typed by design. */
-      
+
       let connString = process.env.DATABASE_URL || '';
       try {
         const url = new URL(connString);
         url.searchParams.delete('sslmode');
         connString = url.toString();
-      } catch (e) {
+      } catch {
         // Fallback if URL parsing fails
       }
 
@@ -99,6 +99,7 @@ export class PrismaService
          @typescript-eslint/no-unsafe-call,
          @typescript-eslint/no-unsafe-member-access */
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       super({ adapter });
     } else {
       /* eslint-disable
@@ -126,6 +127,7 @@ export class PrismaService
          @typescript-eslint/no-unsafe-call,
          @typescript-eslint/no-unsafe-assignment */
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       super({ adapter });
     }
   }

@@ -13,10 +13,7 @@ import { CreateResolutionDto } from './dto/create-resolution.dto';
 import { CreateBillingItemDto } from './dto/create-billing-item.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { encryptDianSecret } from './dian-encryption.util';
-import {
-  DianInvoiceData,
-  DianInvoiceLine,
-} from './dian-xml.service';
+import { DianInvoiceLine } from './dian-xml.service';
 
 /** Shape of an InvoiceLine row to create inside the $transaction. */
 interface InvoiceLineCreateData {

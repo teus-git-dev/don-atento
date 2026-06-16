@@ -926,7 +926,9 @@ export class TicketsService {
     }
   }
 
-  private getSearchFilter(search?: string): Prisma.TicketWhereInput | undefined {
+  private getSearchFilter(
+    search?: string,
+  ): Prisma.TicketWhereInput | undefined {
     if (!search) return undefined;
     return {
       OR: [
@@ -936,12 +938,30 @@ export class TicketsService {
         { description: { contains: search, mode: 'insensitive' } },
         { propertyId: { contains: search, mode: 'insensitive' } },
         { property: { title: { contains: search, mode: 'insensitive' } } },
-        { property: { propertyCode: { contains: search, mode: 'insensitive' } } },
-        { reportedByUser: { firstName: { contains: search, mode: 'insensitive' } } },
-        { reportedByUser: { lastName: { contains: search, mode: 'insensitive' } } },
-        { assignedTechnician: { firstName: { contains: search, mode: 'insensitive' } } },
-        { assignedTechnician: { lastName: { contains: search, mode: 'insensitive' } } },
-      ]
+        {
+          property: { propertyCode: { contains: search, mode: 'insensitive' } },
+        },
+        {
+          reportedByUser: {
+            firstName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          reportedByUser: {
+            lastName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          assignedTechnician: {
+            firstName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          assignedTechnician: {
+            lastName: { contains: search, mode: 'insensitive' },
+          },
+        },
+      ],
     };
   }
 
@@ -1031,7 +1051,10 @@ export class TicketsService {
     opts?: PageOpts,
     search?: string,
   ) {
-    let where: Prisma.TicketWhereInput = { tenantId, assignedTechnicianId: technicianId };
+    let where: Prisma.TicketWhereInput = {
+      tenantId,
+      assignedTechnicianId: technicianId,
+    };
     const searchFilter = this.getSearchFilter(search);
     if (searchFilter) {
       where = { ...where, ...searchFilter };
@@ -1090,7 +1113,12 @@ export class TicketsService {
    * because the owner view shows the same payload shape as the tenant-
    * admin view (just filtered to properties they own).
    */
-  async findAllByOwner(ownerId: string, tenantId: string, opts?: PageOpts, search?: string) {
+  async findAllByOwner(
+    ownerId: string,
+    tenantId: string,
+    opts?: PageOpts,
+    search?: string,
+  ) {
     let where: Prisma.TicketWhereInput = {
       tenantId,
       property: {

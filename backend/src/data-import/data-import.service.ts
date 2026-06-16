@@ -13,7 +13,7 @@ import { OnboardingService } from '../tenants/onboarding.service';
  * and why).
  */
 export interface ImportError {
-  record?: Record<string, unknown>;
+  record?: Record<string, string | number | null>;
   recordSummary?: string;
   error: string;
 }
@@ -69,7 +69,7 @@ export class DataImportService {
       );
 
       const previewData = dataRows.map((row) => {
-        const obj: Record<string, unknown> = {};
+        const obj: Record<string, string | number | null> = {};
         headers.forEach((h: string, idx: number) => {
           if (h) {
             obj[h] = row[idx] ?? null;
@@ -156,7 +156,8 @@ export class DataImportService {
     if (!rawArray || rawArray.length === 0) return null;
 
     const headerRowIndex = 0;
-    const headers: (string | null)[] = (rawArray[headerRowIndex] as (string | null)[]) || [];
+    const headers: (string | null)[] =
+      (rawArray[headerRowIndex] as (string | null)[]) || [];
     let dataRows = rawArray.slice(headerRowIndex + 1);
 
     // Block C: keep the `row[0] === '-'` separator filter (universal
@@ -183,7 +184,7 @@ export class DataImportService {
 
     const recordsToImport = dataRows
       .map((row) => {
-        const obj: Record<string, unknown> = {};
+        const obj: Record<string, string | number | null> = {};
         headers.forEach((h, idx) => {
           if (!h) return;
           const targetField = normalizedMapping[normalize(h)] || mapping[h];
@@ -202,12 +203,17 @@ export class DataImportService {
               // For phones/emails concatenate unique values; for other fields keep first.
               if (obj[targetField]) {
                 if (targetField === 'phones' || targetField === 'emails') {
-                  if (!String(obj[targetField]).includes(String(val))) {
-                    obj[targetField] = `${obj[targetField]}, ${val}`;
+                  if (
+                    !String(obj[targetField]).includes(
+                      String(val as string | number),
+                    )
+                  ) {
+                    obj[targetField] =
+                      `${obj[targetField]}, ${val as string | number}`;
                   }
                 }
               } else {
-                obj[targetField] = val;
+                obj[targetField] = val as string | number;
               }
             } else if (obj[targetField] === undefined) {
               obj[targetField] = null;

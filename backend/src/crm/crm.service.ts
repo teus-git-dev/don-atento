@@ -137,25 +137,27 @@ export class CrmService {
       try {
         const tenantInfo = await this.prisma.tenant.findUnique({
           where: { id: data.tenantId },
-          select: { crmDefaultAssigneeEmail: true }
+          select: { crmDefaultAssigneeEmail: true },
         });
-        
+
         if (tenantInfo?.crmDefaultAssigneeEmail) {
           const coordinator = await this.prisma.user.findFirst({
             where: {
               tenantId: data.tenantId,
-              email: tenantInfo.crmDefaultAssigneeEmail
+              email: tenantInfo.crmDefaultAssigneeEmail,
             },
-            select: { id: true }
+            select: { id: true },
           });
-          
+
           if (coordinator) {
             finalAssignedAgentId = coordinator.id;
           }
         }
       } catch (err) {
         // Fallar silenciosamente como se solicitó
-        this.logger.warn(`No se pudo buscar/asignar coordinador por defecto: ${err}`);
+        this.logger.warn(
+          `No se pudo buscar/asignar coordinador por defecto: ${err}`,
+        );
       }
     }
 

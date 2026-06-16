@@ -19,7 +19,6 @@ if (!JWT_SECRET) {
 }
 const ACTIVE_JWT_SECRET = JWT_SECRET + '_v2';
 
-
 @Module({
   imports: [
     PrismaModule,

@@ -50,7 +50,10 @@ export class IntegrationsService {
     private propertiesService: PropertiesService,
   ) {}
 
-  async handleFincaRaizWebhook(tenantId: string, data: FincaRaizWebhookPayload) {
+  async handleFincaRaizWebhook(
+    tenantId: string,
+    data: FincaRaizWebhookPayload,
+  ) {
     this.logger.log(`Received Finca Raiz Webhook for tenant: ${tenantId}`);
 
     // 1. Determine if it's a Property or a Prospect
@@ -62,7 +65,10 @@ export class IntegrationsService {
     }
   }
 
-  private async handleNewListing(tenantId: string, data: FincaRaizWebhookPayload) {
+  private async handleNewListing(
+    tenantId: string,
+    data: FincaRaizWebhookPayload,
+  ) {
     const propertyData = data.propertyData ?? {};
 
     // Map Finca Raiz fields to Don Atento Property

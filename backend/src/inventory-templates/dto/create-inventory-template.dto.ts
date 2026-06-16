@@ -8,6 +8,7 @@ import {
 import { Type } from 'class-transformer';
 import { InventoryCategory, ZoneType, TemplateStatus } from '@prisma/client';
 import { PartialType } from '@nestjs/mapped-types';
+import { ApiHideProperty } from '@nestjs/swagger';
 
 // ─── Nested DTOs ─────────────────────────────────────────────────────────────
 
@@ -47,6 +48,9 @@ export class CreateInventoryTemplateZoneDto {
 
 export class CreateInventoryTemplateDto {
   /** Injected from JWT by the controller — must NOT be trusted from body. */
+  @ApiHideProperty()
+  @IsOptional()
+  @IsString()
   tenantId!: string;
 
   @IsString()

@@ -53,7 +53,10 @@ export class CreateProspectDto {
   @IsEnum(ProspectSource)
   source?: ProspectSource;
 
-  @ApiPropertyOptional({ description: 'Optional assigned agent (User.id). If omitted, falls back to the Tenant default coordinator.' })
+  @ApiPropertyOptional({
+    description:
+      'Optional assigned agent (User.id). If omitted, falls back to the Tenant default coordinator.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(64)

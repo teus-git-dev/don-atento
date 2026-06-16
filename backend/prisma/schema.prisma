@@ -498,43 +498,43 @@ model SubscriptionPlan {
 }
 
 model Tenant {
-  id                     String                 @id @default(cuid())
-  name                   String
-  nit                    String
-  status                 TenantStatus           @default(ACTIVE)
-  subscriptionPlanId     String
-  createdAt              DateTime               @default(now())
-  aiTone                 String?
-  brandManualUrl         String?
-  communicationTemplates Json?
-  whatsappAccessToken    String?
-  whatsappPhoneNumberId  String?                @unique
-  whatsappProvider       String?                @default("meta")
+  id                      String                 @id @default(cuid())
+  name                    String
+  nit                     String
+  status                  TenantStatus           @default(ACTIVE)
+  subscriptionPlanId      String
+  createdAt               DateTime               @default(now())
+  aiTone                  String?
+  brandManualUrl          String?
+  communicationTemplates  Json?
+  whatsappAccessToken     String?
+  whatsappPhoneNumberId   String?                @unique
+  whatsappProvider        String?                @default("meta")
   crmDefaultAssigneeEmail String?
-  AccountingAccount      AccountingAccount[]
-  AccountingThirdParty   AccountingThirdParty[]
-  BillingItem            BillingItem[]
-  BrandBrain             BrandBrain?
-  ContractDocument       ContractDocument[]
-  DianResolution         DianResolution[]
-  DigitalCertificate     DigitalCertificate?
-  fileAssets             FileAsset[]
-  InventoryTemplate      InventoryTemplate[]
-  Invoice                Invoice[]
-  JournalEntry           JournalEntry[]
-  interestedProperties   Property[]
-  Prospect               Prospect[]
-  prospectInteractions   ProspectInteraction[]
-  prospectTasks          ProspectTask[]
-  Provider               Provider[]
-  Role                   Role[]
-  subscriptionPlan       SubscriptionPlan       @relation(fields: [subscriptionPlanId], references: [id])
-  tenantSubscription     TenantSubscription?
-  tickets                Ticket[]
-  ticketInteractions     TicketInteraction[]
-  tokenUsageLogs         TokenUsageLog[]
-  technicians            User[]
-  Workflow               Workflow[]
+  AccountingAccount       AccountingAccount[]
+  AccountingThirdParty    AccountingThirdParty[]
+  BillingItem             BillingItem[]
+  BrandBrain              BrandBrain?
+  ContractDocument        ContractDocument[]
+  DianResolution          DianResolution[]
+  DigitalCertificate      DigitalCertificate?
+  fileAssets              FileAsset[]
+  InventoryTemplate       InventoryTemplate[]
+  Invoice                 Invoice[]
+  JournalEntry            JournalEntry[]
+  interestedProperties    Property[]
+  Prospect                Prospect[]
+  prospectInteractions    ProspectInteraction[]
+  prospectTasks           ProspectTask[]
+  Provider                Provider[]
+  Role                    Role[]
+  subscriptionPlan        SubscriptionPlan       @relation(fields: [subscriptionPlanId], references: [id])
+  tenantSubscription      TenantSubscription?
+  tickets                 Ticket[]
+  ticketInteractions      TicketInteraction[]
+  tokenUsageLogs          TokenUsageLog[]
+  technicians             User[]
+  Workflow                Workflow[]
 }
 
 model Ticket {
@@ -566,13 +566,12 @@ model Ticket {
   inventoryItemId      String?
   shortId              String?
   parentTicketId       String?
-
-  parentTicket         Ticket?             @relation("SubTickets", fields: [parentTicketId], references: [id])
-  subTickets           Ticket[]            @relation("SubTickets")
   provider             Provider?           @relation(fields: [assignedProviderId], references: [id])
   assignedTechnician   User?               @relation("Ticket_assignedTechnicianIdToUser", fields: [assignedTechnicianId], references: [id])
   currentState         WorkflowState?      @relation(fields: [currentStateId], references: [id])
   InventoryItem        InventoryItem?      @relation(fields: [inventoryItemId], references: [id])
+  parentTicket         Ticket?             @relation("SubTickets", fields: [parentTicketId], references: [id])
+  subTickets           Ticket[]            @relation("SubTickets")
   property             Property            @relation(fields: [propertyId], references: [id])
   reportedByUser       User                @relation("Ticket_reportedByUserIdToUser", fields: [reportedByUserId], references: [id])
   tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -697,15 +696,15 @@ model User {
 }
 
 /// *
-///  * UserPhoneContact — additional WhatsApp / phone numbers authorized to
-///  * speak on behalf of a User. Replaces the legacy CSV string in
-///  * `User.additionalContacts` (which is preserved during the backfill
-///  * window; cutover and column drop happen in Phase E.2).
-///  * `verified=false` is the default for new rows written by the WA
-///  * enrolment flow — verification arrives in Phase E.2 via an OTP sent
-///  * to the user's primary `phone`. The unique constraint
-///  * `@@unique([userId, phone])` closes the race where two concurrent
-///  * webhooks both append the same number.
+/// * UserPhoneContact — additional WhatsApp / phone numbers authorized to
+/// * speak on behalf of a User. Replaces the legacy CSV string in
+/// * `User.additionalContacts` (which is preserved during the backfill
+/// * window; cutover and column drop happen in Phase E.2).
+/// * `verified=false` is the default for new rows written by the WA
+/// * enrolment flow — verification arrives in Phase E.2 via an OTP sent
+/// * to the user's primary `phone`. The unique constraint
+/// * `@@unique([userId, phone])` closes the race where two concurrent
+/// * webhooks both append the same number.
 model UserPhoneContact {
   id         String    @id @default(cuid())
   userId     String
@@ -1004,12 +1003,6 @@ enum ProviderSpecialty {
   PAINTING
   AC_HEATING
   GENERAL
-  LOCKSMITH
-  BLINDS_CURTAINS
-  ROOFING
-  ELECTRONICS
-  GARDENING
-  OTHERS
 }
 
 enum ProviderStatus {
@@ -1062,11 +1055,11 @@ enum TicketSeverity {
 enum UserRole {
   SUPERADMIN
   ADMIN_TENANT
-  COORDINATOR
   AGENT
   TECHNICIAN
   OWNER
   TENANT_USER
+  COORDINATOR
 }
 
 enum ZoneType {

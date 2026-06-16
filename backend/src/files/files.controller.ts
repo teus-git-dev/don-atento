@@ -50,7 +50,7 @@ export class FilesController {
     const asset = await this.prisma.fileAsset.findUnique({
       where: { filename },
     });
-    if (!asset || asset.tenantId !== req.tenantId) {
+    if (!asset || asset.tenantId !== (req.user as any).tenantId) {
       throw new NotFoundException('File not found');
     }
 
@@ -91,7 +91,7 @@ export class FilesController {
     const asset = await this.prisma.fileAsset.findUnique({
       where: { filename },
     });
-    if (!asset || asset.tenantId !== req.tenantId) {
+    if (!asset || asset.tenantId !== (req.user as any).tenantId) {
       throw new NotFoundException('File not found');
     }
 

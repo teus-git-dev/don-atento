@@ -142,7 +142,7 @@ describe('TicketsService', () => {
     }).compile();
 
     service = module.get<TicketsService>(TicketsService);
-    whatsappMock = module.get(WhatsappService) as unknown as ReturnType<typeof makeWhatsappMock>;
+    whatsappMock = module.get(WhatsappService);
   });
 
   afterEach(() => jest.clearAllMocks());

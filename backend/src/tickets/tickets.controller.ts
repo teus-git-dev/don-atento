@@ -66,7 +66,14 @@ export class TicketsController {
   }
 
   @Post()
-  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
+  @Roles(
+    'AGENT',
+    'ADMIN_TENANT',
+    'COORDINATOR',
+    'SUPERADMIN',
+    'OWNER',
+    'MAINTENANCE',
+  )
   @ApiOperation({ summary: 'Reportar nueva novedad de mantenimiento' })
   async create(@Req() req: Request, @Body() createTicketDto: CreateTicketDto) {
     createTicketDto.tenantId = req.tenantId!;
@@ -74,7 +81,14 @@ export class TicketsController {
   }
 
   @Get()
-  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
+  @Roles(
+    'AGENT',
+    'ADMIN_TENANT',
+    'COORDINATOR',
+    'SUPERADMIN',
+    'OWNER',
+    'MAINTENANCE',
+  )
   @ApiOperation({
     summary: 'Listar todos los tickets por tenant o propietario (paginado)',
   })
@@ -97,7 +111,12 @@ export class TicketsController {
         `[deprecation] GET /tickets without pagination — tenant=${tenantId} ownerId=${ownerId ?? '-'}`,
       );
       return ownerId
-        ? this.ticketsService.findAllByOwner(ownerId, tenantId, undefined, search)
+        ? this.ticketsService.findAllByOwner(
+            ownerId,
+            tenantId,
+            undefined,
+            search,
+          )
         : this.ticketsService.findAllByTenant(tenantId, undefined, search);
     }
 
@@ -125,7 +144,12 @@ export class TicketsController {
       this.logger.warn(
         `[deprecation] GET /tickets/technician/:id without pagination — tenant=${tenantId} technicianId=${id}`,
       );
-      return this.ticketsService.findAllByTechnician(id, tenantId, undefined, search);
+      return this.ticketsService.findAllByTechnician(
+        id,
+        tenantId,
+        undefined,
+        search,
+      );
     }
 
     const opts = this.parsePagination(pageStr, limitStr);
@@ -133,7 +157,14 @@ export class TicketsController {
   }
 
   @Get(':id')
-  @Roles('AGENT', 'ADMIN_TENANT', 'COORDINATOR', 'SUPERADMIN', 'OWNER', 'MAINTENANCE')
+  @Roles(
+    'AGENT',
+    'ADMIN_TENANT',
+    'COORDINATOR',
+    'SUPERADMIN',
+    'OWNER',
+    'MAINTENANCE',
+  )
   @ApiOperation({ summary: 'Ver detalle de un ticket' })
   async findOne(@Req() req: Request, @Param('id') id: string) {
     return this.ticketsService.findOne(id, req.tenantId!);

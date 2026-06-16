@@ -72,7 +72,7 @@ export class InventoryMasterService {
                         ),
                       },
                     }) as Prisma.InventoryItemUncheckedCreateWithoutZoneInput,
-                ) as Prisma.InventoryItemUncheckedCreateWithoutZoneInput[],
+                ),
               },
             },
             include: { items: true },
@@ -93,15 +93,13 @@ export class InventoryMasterService {
 
       if (data.accessItems) {
         await tx.propertyAccessItem.createMany({
-          data: data.accessItems.map(
-            (access: CreatePropertyAccessItemDto) => ({
-              propertyId,
-              type: access.type,
-              description: access.description,
-              quantity: access.quantity ?? 1,
-              photoUrl: access.photoUrl,
-            }),
-          ),
+          data: data.accessItems.map((access: CreatePropertyAccessItemDto) => ({
+            propertyId,
+            type: access.type,
+            description: access.description,
+            quantity: access.quantity ?? 1,
+            photoUrl: access.photoUrl,
+          })),
         });
       }
 

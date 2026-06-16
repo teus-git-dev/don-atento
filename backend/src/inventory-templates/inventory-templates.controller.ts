@@ -11,11 +11,13 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { InventoryTemplatesService } from './inventory-templates.service';
-import { CreateInventoryTemplateDto, UpdateInventoryTemplateDto } from './dto/create-inventory-template.dto';
+import {
+  CreateInventoryTemplateDto,
+  UpdateInventoryTemplateDto,
+} from './dto/create-inventory-template.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
-import { FeatureDisabledGuard } from './feature-disabled.guard';
 
 @ApiTags('inventory-templates')
 @ApiBearerAuth()
@@ -39,32 +41,33 @@ export class InventoryTemplatesController {
   // ── Write endpoints (disabled in v1; full remediation deferred post-v1) ───
 
   @Post()
-  @UseGuards(FeatureDisabledGuard)
-  @ApiOperation({ summary: 'Crea una plantilla (deshabilitado en v1)' })
-  async create(@Body() dto: CreateInventoryTemplateDto) {
+  @ApiOperation({ summary: 'Crea una plantilla' })
+  async create(@Req() req: Request, @Body() dto: CreateInventoryTemplateDto) {
+    dto.tenantId = req.tenantId!;
     return this.service.create(dto);
   }
 
   @Patch(':id')
-  @UseGuards(FeatureDisabledGuard)
-  @ApiOperation({ summary: 'Actualiza una plantilla (deshabilitado en v1)' })
-  async update(@Param('id') id: string, @Body() data: UpdateInventoryTemplateDto) {
-    return this.service.update(id, data);
+  @ApiOperation({ summary: 'Actualiza una plantilla' })
+  async update(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() data: UpdateInventoryTemplateDto,
+  ) {
+    return this.service.update(id, req.tenantId!, data);
   }
 
   @Patch(':id/toggle-status')
-  @UseGuards(FeatureDisabledGuard)
   @ApiOperation({
-    summary: 'Activa o desactiva una plantilla (deshabilitado en v1)',
+    summary: 'Activa o desactiva una plantilla',
   })
-  async toggleStatus(@Param('id') id: string) {
-    return this.service.toggleStatus(id);
+  async toggleStatus(@Req() req: Request, @Param('id') id: string) {
+    return this.service.toggleStatus(id, req.tenantId!);
   }
 
   @Delete(':id')
-  @UseGuards(FeatureDisabledGuard)
-  @ApiOperation({ summary: 'Elimina una plantilla (deshabilitado en v1)' })
-  async remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  @ApiOperation({ summary: 'Elimina una plantilla' })
+  async remove(@Req() req: Request, @Param('id') id: string) {
+    return this.service.remove(id, req.tenantId!);
   }
 }

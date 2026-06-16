@@ -7,7 +7,6 @@ import { FilesController } from './files/files.controller';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { TicketsModule } from './tickets/tickets.module';
-import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
 import { WorkflowsModule } from './workflows/workflows.module';
@@ -25,7 +24,6 @@ import { TenantsModule } from './tenants/tenants.module';
 import { DataImportModule } from './data-import/data-import.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { StorageModule } from './storage/storage.module';
-import { TokenCleanupModule } from './token-cleanup/token-cleanup.module';
 
 @Module({
   imports: [
@@ -39,7 +37,7 @@ import { TokenCleanupModule } from './token-cleanup/token-cleanup.module';
     PrismaModule,
     AuthModule,
     TicketsModule,
-    WhatsappModule,
+    // WhatsappModule,
     PropertiesModule,
     WorkflowsModule,
     UsersModule,
@@ -55,7 +53,7 @@ import { TokenCleanupModule } from './token-cleanup/token-cleanup.module';
     TenantsModule,
     DataImportModule,
     StorageModule,
-    TokenCleanupModule,
+    // TokenCleanupModule,
   ],
   controllers: [AppController, FilesController],
   providers: [

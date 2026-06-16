@@ -120,15 +120,23 @@ export class WhatsappService {
   }
 
   /** Get conversation state from Redis (returns null on miss or Redis error) */
-  private async getState(
-    key: string,
-  ): Promise<{ step: string; timestamp: number; data?: Record<string, unknown> } | null> {
+  private async getState(key: string): Promise<{
+    step: string;
+    timestamp: number;
+    data?: Record<string, unknown>;
+  } | null> {
     try {
       const raw = await this.withRedisTimeout(
         this.redis.get(`wa:state:${key}`),
         null,
       );
-      return raw ? (JSON.parse(raw) as { step: string; timestamp: number; data?: Record<string, unknown> }) : null;
+      return raw
+        ? (JSON.parse(raw) as {
+            step: string;
+            timestamp: number;
+            data?: Record<string, unknown>;
+          })
+        : null;
     } catch {
       return null;
     }
@@ -150,7 +158,9 @@ export class WhatsappService {
         null,
       );
     } catch (err) {
-      this.logger.warn(`[Redis] setState failed for ${key}: ${(err as Error).message}`);
+      this.logger.warn(
+        `[Redis] setState failed for ${key}: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -465,15 +475,17 @@ export class WhatsappService {
         text.length > MAX_LLM_INPUT_CHARS
           ? text.substring(0, MAX_LLM_INPUT_CHARS) + '…[truncated]'
           : text;
-      aiResponse = String(await this.cognitiveService.processWhatsappWithAi(
-        resolvedTenantId,
-        safeText,
-        {
-          name: user.firstName,
-          address: propertyName,
-          systemAction: '',
-        },
-      ));
+      aiResponse = String(
+        await this.cognitiveService.processWhatsappWithAi(
+          resolvedTenantId,
+          safeText,
+          {
+            name: user.firstName,
+            address: propertyName,
+            systemAction: '',
+          },
+        ),
+      );
 
       const match = aiResponse.match(/\[METADATA\]([\s\S]*?)\[\/METADATA\]/);
       if (match) {
@@ -488,7 +500,12 @@ export class WhatsappService {
         if (sentimentMatch) parsedMetadata.sentiment = sentimentMatch[1].trim();
         if (issuesMatch) {
           const issuesStr = issuesMatch[1].trim();
-          parsedMetadata.issues = issuesStr ? issuesStr.split('|').map(i => i.trim()).filter(Boolean) : [];
+          parsedMetadata.issues = issuesStr
+            ? issuesStr
+                .split('|')
+                .map((i) => i.trim())
+                .filter(Boolean)
+            : [];
         }
         if (intensityMatch)
           parsedMetadata.intensity = parseInt(intensityMatch[1].trim(), 10);
@@ -628,8 +645,8 @@ export class WhatsappService {
         );
         if (latestTicket) {
           const status =
-            (latestTicket as unknown as { currentState?: { name?: string } }).currentState?.name ??
-            'Pendiente de asignación';
+            (latestTicket as unknown as { currentState?: { name?: string } })
+              .currentState?.name ?? 'Pendiente de asignación';
           finalResponse = `Hola ${user.firstName}. Sobre tu reporte (Ticket #${latestTicket.id.split('-')[0].toUpperCase()}), te informo que actualmente se encuentra en estado: *${status}*. ¿Te puedo ayudar con algo más?`;
         } else {
           finalResponse = `Hola ${user.firstName}. No encontré ningún ticket reciente asociado a tu cuenta. ¿Necesitas reportar un problema en *${propertyName}*?`;
@@ -796,11 +813,15 @@ export class WhatsappService {
     const workflow = await this.prisma.workflow.findFirst({
       where: { tenantId: params.tenantId },
     });
-    
+
     // Si hay multiples issues, el ticket principal es un "Reporte Múltiple"
     const isMultiple = Array.isArray(params.issues) && params.issues.length > 1;
-    const titleText = isMultiple && params.issues ? `Reporte Múltiple: ${params.issues.length} daños reportados` : params.originalText;
-    const title = titleText.length > 50 ? titleText.substring(0, 47) + '...' : titleText;
+    const titleText =
+      isMultiple && params.issues
+        ? `Reporte Múltiple: ${params.issues.length} daños reportados`
+        : params.originalText;
+    const title =
+      titleText.length > 50 ? titleText.substring(0, 47) + '...' : titleText;
 
     const parentTicket = await this.ticketsService.createTicket({
       tenantId: params.tenantId,
@@ -816,7 +837,8 @@ export class WhatsappService {
 
     if (isMultiple && params.issues) {
       for (const issue of params.issues) {
-        const childTitle = issue.length > 50 ? issue.substring(0, 47) + '...' : issue;
+        const childTitle =
+          issue.length > 50 ? issue.substring(0, 47) + '...' : issue;
         await this.ticketsService.createTicket({
           tenantId: params.tenantId,
           propertyId: params.propertyId,
@@ -830,7 +852,7 @@ export class WhatsappService {
         });
       }
     }
-    
+
     return parentTicket;
   }
 }

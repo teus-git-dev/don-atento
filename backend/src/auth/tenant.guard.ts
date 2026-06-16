@@ -32,7 +32,7 @@ export class TenantGuard implements CanActivate {
     if (isBypassed) return true;
 
     const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user;
+    const user: any = request.user;
 
     // Public routes (no user) — skip tenant enforcement
     if (!user) return true;
@@ -53,10 +53,7 @@ export class TenantGuard implements CanActivate {
         );
       }
 
-      request.tenantId = resolvedTenant;
-      if (request.query) request.query['tenantId'] = resolvedTenant;
-      if (request.body && typeof request.body === 'object')
-        (request.body as Record<string, unknown>)['tenantId'] = resolvedTenant;
+      (request as any).tenantId = resolvedTenant;
       return true;
     }
 
@@ -68,10 +65,7 @@ export class TenantGuard implements CanActivate {
     }
 
     // Override any client-supplied tenantId with the JWT's tenantId
-    request.tenantId = user.tenantId;
-    if (request.query) request.query['tenantId'] = user.tenantId;
-    if (request.body && typeof request.body === 'object')
-      (request.body as Record<string, unknown>)['tenantId'] = user.tenantId;
+    (request as any).tenantId = user.tenantId;
 
     return true;
   }

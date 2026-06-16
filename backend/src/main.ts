@@ -17,8 +17,7 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- cookie-parser is CJS-only; require() is the documented Nest pattern
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
   const cookieParser = require('cookie-parser');
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   app.use(cookieParser());
@@ -28,16 +27,6 @@ async function bootstrap() {
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // For static uploads
     }),
   );
-
-  const allowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002', // Next.js fallback port when 3000 is taken
-    'https://doniq-rho.vercel.app',
-    'https://doniq-ax0tc21ll-teus-git-devs-projects.vercel.app',
-    'https://don-atento.vercel.app'
-  ];
 
   app.enableCors({
     origin: '*',
@@ -82,4 +71,4 @@ async function bootstrap() {
     logger.log(`Swagger docs at http://localhost:${port}/api/docs`);
   }
 }
-bootstrap();
+void bootstrap();

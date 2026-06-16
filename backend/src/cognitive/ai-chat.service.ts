@@ -152,7 +152,7 @@ Instrucciones Críticas:
       if (!apiKey || apiKey === 'FILL_ME')
         throw new Error('OpenAI API key missing or invalid');
 
-      const response = (await axios.post(
+      const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
           model: 'gpt-4o-mini', // or gpt-3.5-turbo fallback
@@ -167,7 +167,7 @@ Instrucciones Críticas:
           },
           timeout: 10000,
         },
-      )) as OpenAiChatResponse;
+      );
 
       return {
         reply: response.data.choices[0].message.content,
@@ -266,69 +266,108 @@ Context: The user is ${context?.name ?? 'a client'}. Property: ${context?.addres
     ];
 
     try {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey || apiKey === 'FILL_ME')
-        throw new Error('OpenAI API key missing or invalid');
-
-      // 1. Pre-flight Check: short-circuit if the tenant's monthly token
-      // quota is exhausted. Returns a structured WhatsApp-format message
-      // (parsed by the WhatsApp pipeline) instead of silently calling the
-      // LLM and over-spending.
-      if (tenantId) {
-        const subscription = await this.prisma.tenantSubscription.findUnique({
-          where: { tenantId },
-        });
-        if (subscription) {
-          const totalUsed =
-            subscription.currentTokensInput + subscription.currentTokensOutput;
-          if (totalUsed >= subscription.monthlyTokenQuota) {
-            console.warn(
-              `[FinOps] Tenant ${tenantId} quota exceeded — returning degraded WA response.`,
-            );
-            return `[METADATA]
+      // ── Intento 1: OpenAI ──────────────────────────────────────────────────
+      const openAiKey = process.env.OPENAI_API_KEY;
+      if (openAiKey && openAiKey !== 'FILL_ME') {
+        // 1. Pre-flight Check: short-circuit if the tenant's monthly token
+        // quota is exhausted. Returns a structured WhatsApp-format message
+        // (parsed by the WhatsApp pipeline) instead of silently calling the
+        // LLM and over-spending.
+        if (tenantId) {
+          const subscription = await this.prisma.tenantSubscription.findUnique({
+            where: { tenantId },
+          });
+          if (subscription) {
+            const totalUsed =
+              subscription.currentTokensInput +
+              subscription.currentTokensOutput;
+            if (totalUsed >= subscription.monthlyTokenQuota) {
+              console.warn(
+                `[FinOps] Tenant ${tenantId} quota exceeded — returning degraded WA response.`,
+              );
+              return `[METADATA]
 Sentiment: 2 - NEUTRAL
 Intensity Score: 2
 Action: QUOTA_EXCEEDED
 [/METADATA]
 Hola, en este momento no puedo procesar tu mensaje por IA (cupo mensual agotado). Un agente humano te contactará pronto.`;
+            }
           }
         }
-      }
 
-      const response = (await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-4o-mini',
-          messages,
-          temperature: 0.7,
-          max_tokens: 500,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+        const response = await axios.post(
+          'https://api.openai.com/v1/chat/completions',
+          {
+            model: 'gpt-4o-mini',
+            messages,
+            temperature: 0.7,
+            max_tokens: 500,
           },
-          timeout: 15000,
-        },
-      )) as OpenAiChatResponse;
+          {
+            headers: {
+              Authorization: `Bearer ${openAiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+          },
+        );
 
-      // 2. Token Metering & FinOps Logic
-      const usage = response.data.usage;
-      if (usage && tenantId) {
-        const costIn = (usage.prompt_tokens / 1000000) * 0.15;
-        const costOut = (usage.completion_tokens / 1000000) * 0.6;
-        const totalCostUsd = costIn + costOut;
+        const usage = response.data.usage;
+        if (usage && tenantId) {
+          const costIn = (usage.prompt_tokens / 1000000) * 0.15;
+          const costOut = (usage.completion_tokens / 1000000) * 0.6;
+          this.logTokenUsageAsync(
+            tenantId,
+            usage.prompt_tokens,
+            usage.completion_tokens,
+            costIn + costOut,
+          ).catch((e) => console.error('[FinOps] Error logging tokens:', e));
+        }
 
-        // Async fire-and-forget to avoid blocking the user response
-        this.logTokenUsageAsync(
-          tenantId,
-          usage.prompt_tokens,
-          usage.completion_tokens,
-          totalCostUsd,
-        ).catch((e) => console.error('[FinOps] Error logging tokens:', e));
+        return response.data.choices[0].message.content;
       }
 
-      return response.data.choices[0].message.content;
+      // ── Intento 2: Gemini (fallback cuando no hay OpenAI) ─────────────────
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (geminiKey && geminiKey !== 'FILL_ME') {
+        console.log('[AiChatService] Using Gemini as LLM for WA message.');
+        // Convertir el formato OpenAI messages a Gemini contents
+        const geminiContents = messages
+          .filter((m) => m.role !== 'system')
+          .map((m) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          }));
+        // Prepend el system prompt como primer turno user si existe
+        const systemMsg = messages.find((m) => m.role === 'system');
+        if (systemMsg) {
+          geminiContents.unshift({
+            role: 'user',
+            parts: [{ text: systemMsg.content }],
+          });
+          geminiContents.splice(1, 0, {
+            role: 'model',
+            parts: [{ text: 'Entendido. Actuaré según esas instrucciones.' }],
+          });
+        }
+
+        const geminiRes = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            contents: geminiContents,
+            generationConfig: { maxOutputTokens: 500, temperature: 0.7 },
+          },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 20000 },
+        );
+
+        const geminiText =
+          geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (geminiText) return geminiText;
+      }
+
+      throw new Error(
+        'No LLM provider available (OpenAI key missing, Gemini key missing or empty)',
+      );
     } catch (error) {
       console.warn(
         '[AiChatService] Error connecting to LLM for WA message:',

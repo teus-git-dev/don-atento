@@ -27,11 +27,13 @@ export class RolesGuard implements CanActivate {
     // and RolesGuard is active, it MUST explicitly define allowed roles.
     // Use @Public() to bypass auth completely instead.
     if (!requiredRoles || requiredRoles.length === 0) {
-      throw new ForbiddenException('Acceso denegado: el endpoint requiere explícitamente definir @Roles().');
+      throw new ForbiddenException(
+        'Acceso denegado: el endpoint requiere explícitamente definir @Roles().',
+      );
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user;
+    const user: any = request.user;
 
     if (!user || !user.role) {
       throw new ForbiddenException('Acceso denegado: rol no determinado.');

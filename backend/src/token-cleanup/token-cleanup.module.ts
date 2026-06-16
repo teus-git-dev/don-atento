@@ -24,11 +24,21 @@ import { TokenCleanupService } from './token-cleanup.service';
       // (Render, Railway, etc.). Fall back to individual host/port for bare
       // local Redis instances that don't expose a URL.
       connection: process.env.REDIS_URL
-        ? { url: process.env.REDIS_URL, lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false }
-        : { host: process.env.REDIS_HOST ?? 'localhost', port: Number(process.env.REDIS_PORT ?? 6379), lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false },
+        ? {
+            url: process.env.REDIS_URL,
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+            enableOfflineQueue: false,
+          }
+        : {
+            host: process.env.REDIS_HOST ?? 'localhost',
+            port: Number(process.env.REDIS_PORT ?? 6379),
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+            enableOfflineQueue: false,
+          },
     }),
   ],
   providers: [TokenCleanupService, TokenCleanupProcessor],
 })
 export class TokenCleanupModule {}
-

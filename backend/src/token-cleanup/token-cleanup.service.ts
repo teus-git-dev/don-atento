@@ -17,9 +17,7 @@ import { Queue } from 'bullmq';
 export class TokenCleanupService implements OnModuleInit {
   private readonly logger = new Logger(TokenCleanupService.name);
 
-  constructor(
-    @InjectQueue('token-cleanup') private readonly queue: Queue,
-  ) {}
+  constructor(@InjectQueue('token-cleanup') private readonly queue: Queue) {}
 
   async onModuleInit() {
     // Remove any stale repeatable job entries (e.g., old cron patterns left
@@ -29,7 +27,9 @@ export class TokenCleanupService implements OnModuleInit {
     for (const job of repeatableJobs) {
       if (job.name === 'purge-stale-tokens') {
         await this.queue.removeRepeatableByKey(job.key);
-        this.logger.log('Removed stale repeatable job entry before re-registration.');
+        this.logger.log(
+          'Removed stale repeatable job entry before re-registration.',
+        );
       }
     }
 

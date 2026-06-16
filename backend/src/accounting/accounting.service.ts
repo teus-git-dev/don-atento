@@ -74,7 +74,11 @@ export class AccountingService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createJournalEntry(tenantId: string, data: CreateJournalEntryDto, userId: string) {
+  async createJournalEntry(
+    tenantId: string,
+    data: CreateJournalEntryDto,
+    userId: string,
+  ) {
     // 1. Cross-tenant FK validation. Prisma checks the FK row exists
     // but NOT that the referenced row belongs to the caller's tenant.
     // Without this, a tenant-A caller could insert lines pointing at
