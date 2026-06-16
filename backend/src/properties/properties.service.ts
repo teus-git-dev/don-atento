@@ -20,6 +20,7 @@ import {
   InventoryCategory,
   InventoryCondition,
   Prisma,
+  RelationStatus,
 } from '@prisma/client';
 
 // These mirror the shapes sent from the frontend form / CSV import. They are
@@ -438,6 +439,7 @@ export class PropertiesService {
           where,
           include: {
             relations: {
+              where: { status: RelationStatus.ACTIVE },
               include: {
                 user: {
                   select: {
@@ -445,6 +447,10 @@ export class PropertiesService {
                     firstName: true,
                     lastName: true,
                     role: true,
+                    email: true,
+                    phone: true,
+                    personType: true,
+                    governmentId: true,
                   },
                 },
               },
