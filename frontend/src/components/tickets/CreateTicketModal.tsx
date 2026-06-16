@@ -81,6 +81,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const filteredProperties = Array.isArray(properties) ? properties.filter(p => 
     p.isActive !== false && (
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      p.propertyCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.address?.toLowerCase().includes(searchQuery.toLowerCase())
     )
