@@ -49,11 +49,15 @@ export default function PropertyMasterTable() {
     }
   };
 
-  const filteredProperties = properties.filter(prop => 
-    prop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    prop.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    prop.address.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProperties = properties.filter(prop => {
+    const term = searchTerm.toLowerCase();
+    return (
+      prop.title?.toLowerCase().includes(term) ||
+      prop.id?.toLowerCase().includes(term) ||
+      prop.address?.toLowerCase().includes(term) ||
+      prop.propertyCode?.toString().toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="bg-white shadow-sm border border-gray-200 rounded-2xl border border-gray-100 overflow-hidden flex flex-col">
