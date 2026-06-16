@@ -17,13 +17,15 @@ if (!JWT_SECRET) {
     'FATAL: JWT_SECRET environment variable is required. Server cannot start without it.',
   );
 }
+const ACTIVE_JWT_SECRET = JWT_SECRET + '_v2';
+
 
 @Module({
   imports: [
     PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: JWT_SECRET,
+      secret: ACTIVE_JWT_SECRET,
       signOptions: { expiresIn: '1h' },
     }),
   ],
