@@ -7,7 +7,7 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'test') {
       /* eslint-disable
          @typescript-eslint/no-require-imports,
          @typescript-eslint/no-unsafe-assignment
@@ -57,8 +57,18 @@ export class PrismaService
          @typescript-eslint/no-unsafe-member-access
          -- Pool and PrismaPg are dynamically require()d above; their
             constructors/methods are any-typed by design. */
+      
+      let connString = process.env.DATABASE_URL || '';
+      try {
+        const url = new URL(connString);
+        url.searchParams.delete('sslmode');
+        connString = url.toString();
+      } catch (e) {
+        // Fallback if URL parsing fails
+      }
+
       const pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: connString,
         max: poolMax,
         min: poolMin,
         idleTimeoutMillis,
