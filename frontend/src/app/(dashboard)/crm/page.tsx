@@ -251,7 +251,7 @@ export default function CrmDashboard() {
       {selectedProspect && (
         <>
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-md z-[190] animate-in fade-in duration-300"
+            className="fixed inset-0 bg-[#0B1121]/40 backdrop-blur-sm z-[190] animate-in fade-in duration-300"
             onClick={() => setSelectedProspect(null)}
           />
           <ProspectTaskSidebar 
