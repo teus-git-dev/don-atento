@@ -40,22 +40,9 @@ async function bootstrap() {
   ];
 
   app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      const isProduction = process.env.NODE_ENV === 'production';
-      // Allow requests with no origin only in dev (Postman, curl, Swagger)
-      const allowNoOrigin = !isProduction && !origin;
-      if (allowNoOrigin || (origin && allowedOrigins.includes(origin))) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS policy: origin '${origin}' not allowed`));
-      }
-    },
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
   });
 
   // ── Global validation pipe (strips unknown fields, validates DTOs) ──────────
