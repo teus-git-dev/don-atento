@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, Target, Search, Plus, UserPlus, FileText, CheckCircle2 } from "lucide-react";
+import { Users, Target, Search, Plus, UserPlus, FileText, CheckCircle2, Eye } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
@@ -43,12 +43,12 @@ export default function ContactosDashboard() {
   };
 
   const filteredUsers = users.filter((u) => {
+    if (!searchQuery) return true;
     const term = searchQuery.toLowerCase();
-    return (
-      u.firstName?.toLowerCase().includes(term) ||
-      u.email?.toLowerCase().includes(term) ||
-      u.governmentId?.toLowerCase().includes(term)
-    );
+    const name = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+    const email = (u.email || '').toLowerCase();
+    const doc = (u.governmentId || '').toLowerCase();
+    return name.includes(term) || email.includes(term) || doc.includes(term);
   });
 
   return (
@@ -116,22 +116,27 @@ export default function ContactosDashboard() {
                       <th className="pb-4 font-medium">Documento</th>
                       <th className="pb-4 font-medium">Teléfono</th>
                       <th className="pb-4 font-medium">Origen / Fase</th>
-                      <th className="pb-4 font-medium text-right pr-4">Fecha Creación</th>
+                      <th className="pb-4 font-medium text-right">Fecha Creación</th>
+                      <th className="pb-4 font-medium text-right pr-4">Acciones</th>
                   </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                   {loading ? (
-                    <TableRowSkeleton columns={5} />
+                    <TableRowSkeleton columns={6} />
                   ) : filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-20 text-center text-gray-500 font-mono text-xs uppercase tracking-widest opacity-50">
+                      <td colSpan={6} className="py-20 text-center text-gray-500 font-mono text-xs uppercase tracking-widest opacity-50">
                         No se encontraron registros
                       </td>
                     </tr>
                   ) : filteredUsers.map((user, i) => (
                       <tr key={i} className="group hover:bg-gray-50 transition-all text-sm cursor-pointer" onClick={() => setSelectedUser(user)}>
                           <td className="py-4 pl-4 font-medium flex flex-col">
-                              <span className="text-gray-900">{user.firstName} {user.lastName}</span>
+                              {user.firstName || user.lastName ? (
+                                <span className="text-gray-900">{user.firstName} {user.lastName}</span>
+                              ) : (
+                                <span className="text-gray-400 italic text-[11px]">Sin nombre registrado</span>
+                              )}
                               <span className="text-[10px] text-gray-500 font-mono">{user.email}</span>
                           </td>
                           <td className="py-4 text-gray-600 font-mono text-xs">
@@ -145,8 +150,21 @@ export default function ContactosDashboard() {
                                   {user.sourceTag || 'Phase: CLIENT'}
                               </span>
                           </td>
-                          <td className="py-4 text-right pr-4 text-gray-500 text-xs font-mono">
+                          <td className="py-4 text-right text-gray-500 text-xs font-mono">
                             {new Date(user.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-4 text-right pr-4">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedUser(user);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold text-[#10B981] bg-[#10B981]/10 border border-[#10B981]/20 rounded-lg hover:bg-[#10B981] hover:text-black transition-all group/btn shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                                title="Ver Detalle"
+                              >
+                                <Eye size={12} className="group-hover/btn:scale-110 transition-transform" />
+                                <span>Ver</span>
+                              </button>
                           </td>
                       </tr>
                   ))}
