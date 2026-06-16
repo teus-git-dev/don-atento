@@ -439,7 +439,7 @@ export class PropertiesService {
           where,
           include: {
             relations: {
-              where: { status: RelationStatus.ACTIVE },
+              orderBy: { startDate: 'desc' },
               include: {
                 user: {
                   select: {
