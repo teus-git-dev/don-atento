@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Building2, Search, Plus, MoreVertical, Edit2, MapPin, Eye, Loader2, Clock, Zap, UserPlus, ClipboardCheck } from "lucide-react";
+import { Building2, Search, Plus, MoreVertical, Edit2, MapPin, Eye, Loader2, Clock, Zap, UserPlus, ClipboardCheck, Info } from "lucide-react";
 import Link from "next/link";
 import { TENANT_ID } from "@/lib/config";
 import { apiClient } from "@/lib/apiClient";
 import TransferModal from "./TransferModal";
+import PropertyDetailModal from "./PropertyDetailModal";
 import { Pagination } from "@/components/ui/Pagination";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
 
@@ -15,6 +16,7 @@ export default function PropertyMasterTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProperty, setSelectedProperty] = useState<any>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -60,7 +62,7 @@ export default function PropertyMasterTable() {
   });
 
   return (
-    <div className="bg-white shadow-sm border border-gray-200 rounded-2xl border border-gray-100 overflow-hidden flex flex-col">
+    <div className="bg-white shadow-sm border border-gray-200 rounded-2xl overflow-hidden flex flex-col">
       {/* Table Toolbar */}
       <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between bg-gray-50">
         <div className="flex flex-1 w-full relative max-w-md">
@@ -70,17 +72,13 @@ export default function PropertyMasterTable() {
             placeholder="Buscar por ID, nombre, dirección..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:border-[#1E3A8A]/50 focus:outline-none transition-colors text-[#1F2937] placeholder:text-gray-500"
+            className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:border-[#1E3A8A]/50 focus:outline-none transition-colors text-[#1F2937] placeholder:text-gray-500"
           />
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
-          <button className="flex-1 sm:flex-none bg-white shadow-sm border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors border border-gray-200 text-gray-600">
+          <button className="flex-1 sm:flex-none bg-white shadow-sm border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors text-gray-600">
             Filtros
           </button>
-          <Link href="/inmuebles/nuevo" className="flex-1 sm:flex-none bg-[#1E3A8A] text-[#1F2937] px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors shadow-[0_0_15px_rgba(0,112,243,0.4)] flex items-center justify-center gap-2">
-            <Plus size={16} />
-            Nuevo Inmueble
-          </Link>
         </div>
       </div>
 
@@ -89,16 +87,16 @@ export default function PropertyMasterTable() {
         <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-gray-50 text-gray-500 font-medium">
                 <tr>
-                <th className="px-6 py-4 rounded-tl-xl border-b border-gray-100">ID Inmueble</th>
+                <th className="px-6 py-4 border-b border-gray-100">ID Inmueble</th>
                 <th className="px-6 py-4 border-b border-gray-100">Nombre</th>
                 <th className="px-6 py-4 border-b border-gray-100">Tipo</th>
                 <th className="px-6 py-4 border-b border-gray-100">Ubicación</th>
                 <th className="px-6 py-4 border-b border-gray-100">Estado</th>
                 <th className="px-6 py-4 border-b border-gray-100">Operación</th>
-                <th className="px-6 py-4 rounded-tr-xl border-b border-gray-100 text-right">Acciones</th>
+                <th className="px-6 py-4 border-b border-gray-100 text-right">Acciones</th>
                 </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-gray-100">
                 {loading ? (
                     <>
                         <TableRowSkeleton columns={7} />
@@ -129,7 +127,7 @@ export default function PropertyMasterTable() {
                     <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${
                       prop.isVip 
                         ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]' 
-                        : 'bg-gray-50 text-gray-500 border-gray-200 group-hover:bg-[#1E3A8A]/20 group-hover:text-[#1E3A8A] group-hover:border-[#1E3A8A]/30'
+                        : 'bg-white text-gray-500 border-gray-200 group-hover:bg-[#1E3A8A]/20 group-hover:text-[#1E3A8A] group-hover:border-[#1E3A8A]/30'
                     }`}>
                         <Building2 size={16} />
                     </div>
@@ -150,9 +148,9 @@ export default function PropertyMasterTable() {
                     <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                             <span className={`px-3 py-1 rounded-full text-[10px] uppercase font-bold border w-fit ${
-                                prop.status === "AVAILABLE" ? "bg-green-500/10 text-green-400 border-green-500/20" :
-                                prop.status === "UNDER_MAINTENANCE" ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20 shadow-[0_0_10px_rgba(250,204,21,0.2)]" :
-                                "bg-gray-500/10 text-gray-500 border-gray-500/20"
+                                prop.status === "AVAILABLE" ? "bg-green-500/10 text-green-600 border-green-500/20" :
+                                prop.status === "UNDER_MAINTENANCE" ? "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" :
+                                "bg-gray-500/10 text-gray-600 border-gray-500/20"
                             }`}>
                                 {prop.status}
                             </span>
@@ -165,13 +163,13 @@ export default function PropertyMasterTable() {
                                     
                                     if (diffMonths <= 4 && diffMonths >= 0) {
                                         return (
-                                            <span className="flex items-center gap-1 text-[9px] text-orange-400 font-bold animate-pulse">
+                                            <span className="flex items-center gap-1 text-[9px] text-orange-500 font-bold animate-pulse">
                                                 <Clock size={10} /> Vence en {diffMonths} meses
                                             </span>
                                         );
                                     } else if (diffMonths < 0) {
                                         return (
-                                            <span className="flex items-center gap-1 text-[9px] text-red-400 font-bold">
+                                            <span className="flex items-center gap-1 text-[9px] text-red-500 font-bold">
                                                 <Clock size={10} /> CONTRATO VENCIDO
                                             </span>
                                         );
@@ -184,7 +182,7 @@ export default function PropertyMasterTable() {
                     <td className="px-6 py-4">
                         <button 
                             onClick={() => handleToggleActive(prop.id, prop.isActive)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${prop.isActive ? 'bg-[#1E3A8A]' : 'bg-gray-100'}`}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${prop.isActive ? 'bg-[#1E3A8A]' : 'bg-gray-200'}`}
                         >
                             <span 
                                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${prop.isActive ? 'translate-x-6' : 'translate-x-1'}`} 
@@ -193,6 +191,13 @@ export default function PropertyMasterTable() {
                     </td>
                     <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => { setSelectedProperty(prop); setIsDetailModalOpen(true); }}
+                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                          title="Ver Detalle"
+                        >
+                          <Info size={16} />
+                        </button>
                         <Link 
                         href={`/inmuebles/${prop.id}/inspeccion`} 
                         className="p-2 text-gray-500 hover:text-[#1F2937] hover:bg-gray-100 rounded-lg transition-colors" 
@@ -202,21 +207,21 @@ export default function PropertyMasterTable() {
                         </Link>
                         <Link 
                             href={`/inmuebles/${prop.id}/editar`}
-                            className="p-2 text-gray-500 hover:text-[#1E3A8A] hover:bg-[#1E3A8A]/10 rounded-lg transition-colors" 
+                            className="p-2 text-gray-500 hover:text-[#1E3A8A] hover:bg-blue-50 rounded-lg transition-colors" 
                             title="Editar"
                         >
                             <Edit2 size={16} />
                         </Link>
                         <button 
                           onClick={() => { setSelectedProperty(prop); setIsTransferModalOpen(true); }}
-                          className="p-2 text-gray-500 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors" 
+                          className="p-2 text-gray-500 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors" 
                           title="Realizar Cesión"
                         >
                           <UserPlus size={16} />
                         </button>
                         <Link 
                           href={`/inmuebles/${prop.id}/inventario`}
-                          className="p-2 text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" 
+                          className="p-2 text-gray-500 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors" 
                           title="Inventario y Ciclo de Vida"
                         >
                           <ClipboardCheck size={16} />
@@ -238,6 +243,12 @@ export default function PropertyMasterTable() {
         onClose={() => setIsTransferModalOpen(false)}
         property={selectedProperty}
         onSuccess={() => fetchProperties(currentPage)}
+      />
+      
+      <PropertyDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
+        property={selectedProperty}
       />
       
       {/* Pagination Footer */}
