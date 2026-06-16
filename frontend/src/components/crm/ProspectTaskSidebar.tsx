@@ -23,7 +23,11 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
   const [loading, setLoading] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [completionNotes, setCompletionNotes] = useState("");
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +40,7 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTaskTitle,
+          description: newTaskDescription ? newTaskDescription : undefined,
           dueDate: newTaskDate ? new Date(newTaskDate).toISOString() : undefined,
         }),
       });
@@ -43,6 +48,7 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
       if (!res.ok) throw new Error("Failed to add task");
       
       setNewTaskTitle("");
+      setNewTaskDescription("");
       setNewTaskDate("");
       onRefresh();
     } catch (error) {
@@ -52,17 +58,44 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
     }
   };
 
-  const toggleTask = async (task: Task) => {
+  const toggleTask = async (taskId: string, isCompleted: boolean, updatedDescription?: string) => {
+    setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/crm/tasks/${task.id}`, {
+      const res = await fetch(`${API_URL}/crm/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isCompleted: !task.isCompleted }),
+        body: JSON.stringify({ isCompleted, description: updatedDescription }),
       });
-      if (res.ok) onRefresh();
+      if (res.ok) {
+        setCompletingTaskId(null);
+        setCompletionNotes("");
+        onRefresh();
+      }
     } catch (error) {
       console.error("Error toggling task:", error);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleInitiateComplete = (task: Task) => {
+    if (task.isCompleted) {
+      toggleTask(task.id, false, task.description);
+    } else {
+      if (completingTaskId === task.id) {
+        setCompletingTaskId(null);
+      } else {
+        setCompletingTaskId(task.id);
+        setCompletionNotes("");
+      }
+    }
+  };
+
+  const confirmComplete = (task: Task) => {
+    const finalDescription = completionNotes 
+       ? (task.description ? `${task.description}\n\n[Resolución]: ${completionNotes}` : completionNotes)
+       : task.description;
+    toggleTask(task.id, true, finalDescription);
   };
 
   return (
@@ -132,21 +165,55 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
           
           <div className="space-y-3">
             {prospect.tasks?.map((task: any) => (
-              <div key={task.id} className={`group flex items-start gap-3 p-3 rounded-xl border border-white/5 transition-all ${task.isCompleted ? 'bg-white/5 opacity-50' : 'bg-white/5 hover:bg-white/10'}`}>
-                <button 
-                  onClick={() => toggleTask(task)}
-                  className={`mt-0.5 transition-colors ${task.isCompleted ? 'text-[var(--color-neon-cyan)]' : 'text-gray-500 hover:text-[var(--color-neon-cyan)]'}`}
-                >
-                  {task.isCompleted ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{task.title}</p>
-                  {task.dueDate && (
-                    <p className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 font-mono uppercase">
-                      <Calendar size={10} /> {new Date(task.dueDate).toLocaleDateString()}
-                    </p>
-                  )}
+              <div key={task.id} className="space-y-2">
+                <div className={`group flex items-start gap-3 p-3 rounded-xl border border-white/5 transition-all ${task.isCompleted ? 'bg-white/5 opacity-50' : 'bg-white/5 hover:bg-white/10'}`}>
+                  <button 
+                    onClick={() => handleInitiateComplete(task)}
+                    className={`mt-0.5 transition-colors ${task.isCompleted ? 'text-[var(--color-neon-cyan)]' : 'text-gray-500 hover:text-[var(--color-neon-cyan)]'}`}
+                  >
+                    {task.isCompleted ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-200'}`}>{task.title}</p>
+                    {task.description && (
+                      <p className={`text-[10px] mt-1 whitespace-pre-line ${task.isCompleted ? 'text-gray-600 line-through' : 'text-gray-400'}`}>
+                        {task.description}
+                      </p>
+                    )}
+                    {task.dueDate && (
+                      <p className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 font-mono uppercase">
+                        <Calendar size={10} /> {new Date(task.dueDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                {completingTaskId === task.id && !task.isCompleted && (
+                  <div className="p-3 bg-[#0B1121] border border-white/10 rounded-xl space-y-2 ml-8 animate-in slide-in-from-top-2">
+                     <textarea
+                       autoFocus
+                       placeholder="Notas de resolución (ej: El cliente confirmó visita...)"
+                       value={completionNotes}
+                       onChange={e => setCompletionNotes(e.target.value)}
+                       className="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-xs text-white placeholder:text-gray-600 focus:border-[var(--color-neon-cyan)]/50 focus:outline-none resize-none min-h-[60px]"
+                     />
+                     <div className="flex justify-end gap-2">
+                       <button 
+                         onClick={() => setCompletingTaskId(null)}
+                         className="text-[10px] text-gray-500 hover:text-white px-3 py-1.5 transition-colors"
+                       >
+                         Cancelar
+                       </button>
+                       <button 
+                         onClick={() => confirmComplete(task)}
+                         disabled={loading}
+                         className="bg-[var(--color-neon-cyan)] text-black text-[10px] font-bold px-4 py-1.5 rounded-lg hover:bg-[var(--color-neon-cyan)]/80 transition-colors"
+                       >
+                         {loading ? <Loader2 size={12} className="animate-spin inline-block mr-1" /> : <CheckCircle2 size={12} className="inline-block mr-1" />}
+                         Completar Tarea
+                       </button>
+                     </div>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -181,13 +248,19 @@ export default function ProspectTaskSidebar({ prospect, onClose, onRefresh }: Pr
       {/* New Task Form */}
       <div className="p-6 border-t border-white/10 bg-white/5">
         <form onSubmit={addTask} className="space-y-3">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <input 
               type="text" 
               placeholder="Nueva tarea (ej: Llamar para visita)"
               value={newTaskTitle}
               onChange={e => setNewTaskTitle(e.target.value)}
               className="w-full bg-[#0B1121] border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder:text-gray-600 focus:border-[var(--color-neon-cyan)]/50 focus:outline-none transition-all"
+            />
+            <textarea
+              placeholder="Descripción (opcional)..."
+              value={newTaskDescription}
+              onChange={e => setNewTaskDescription(e.target.value)}
+              className="w-full bg-[#0B1121] border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder:text-gray-600 focus:border-[var(--color-neon-cyan)]/50 focus:outline-none transition-all resize-none min-h-[60px]"
             />
           </div>
           <div className="flex gap-2">
